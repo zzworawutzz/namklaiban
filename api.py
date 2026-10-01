@@ -8,11 +8,12 @@ Run:  pip install -r requirements.txt
 import hmac
 import json
 import os
+import urllib.parse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, Header, HTTPException, Query, Request
+from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -121,6 +122,16 @@ def province_report(province: str, days: int = Query(14, ge=2, le=30)):
     if not rep:
         raise HTTPException(404, "ไม่พบจังหวัดนี้")
     return rep
+
+
+@app.get("/api/line/add-friend", include_in_schema=False)
+def line_add_friend(response: Response):
+    """Link for the website's "add the LINE bot" button; 404 when LINE is not configured."""
+    basic = notify.bot_basic_id()
+    if not basic:
+        raise HTTPException(404, "LINE bot is not configured")
+    response.headers["Cache-Control"] = "public, max-age=86400"
+    return {"url": "https://line.me/R/ti/p/" + urllib.parse.quote(basic, safe="")}
 
 
 @app.get("/api/cron/ingest", include_in_schema=False)

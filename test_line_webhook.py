@@ -123,3 +123,32 @@ def test_endpoint_passes_cards_and_buttons_through_to_line(tmp_path, monkeypatch
     status, settings = got[1], got[2]
     assert status[1]["type"] == "bubble" and [q["action"]["text"] for q in status[2]] == ["สถานะ", "รายงาน", "ตั้งค่า"]
     assert settings[1] is None and "แจ้งเฉพาะเตือนภัย" in [q["action"]["text"] for q in settings[2]]
+
+
+def test_add_friend_link_endpoint(tmp_path, monkeypatch):
+    monkeypatch.setenv("WATER_DB", str(tmp_path / "a.db"))
+    cl = TestClient(api.app)
+    monkeypatch.setattr(api.notify, "bot_basic_id", lambda: None)
+    assert cl.get("/api/line/add-friend").status_code == 404
+    monkeypatch.setattr(api.notify, "bot_basic_id", lambda: "@123abcde")
+    r = cl.get("/api/line/add-friend")
+    assert r.status_code == 200 and r.json() == {"url": "https://line.me/R/ti/p/%40123abcde"}
+    assert "max-age" in r.headers["cache-control"]
+
+
+def test_bot_basic_id_is_cached_and_failures_are_not(monkeypatch):
+    import io
+    import notify
+    notify._basic_id_cache.clear()
+    monkeypatch.setenv("LINE_CHANNEL_TOKEN", "t" * 40)
+    calls = []
+
+    class R(io.BytesIO):
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+    monkeypatch.setattr(notify.urllib.request, "urlopen", lambda *a, **k: (calls.append(1), R(b'{"basicId": "@abc"}'))[1])
+    assert notify.bot_basic_id() == "@abc" and notify.bot_basic_id() == "@abc" and len(calls) == 1
+    notify._basic_id_cache.clear()
+    monkeypatch.setattr(notify.urllib.request, "urlopen", lambda *a, **k: (_ for _ in ()).throw(OSError("down")))
+    assert notify.bot_basic_id() is None and "id" not in notify._basic_id_cache
+    notify._basic_id_cache.clear()

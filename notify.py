@@ -96,6 +96,25 @@ def reply_line(reply_token, text, flex=None, quick=None):
     _post_with_fallback("https://api.line.me/v2/bot/message/reply", {"replyToken": reply_token}, text, flex, quick, 10)
 
 
+_basic_id_cache = {}
+
+
+def bot_basic_id():
+    """The official account's public ID (e.g. "@123abcde") from LINE's bot-info API, cached in memory.
+    Used for the website's "add friend" button. None if it cannot be fetched."""
+    if "id" in _basic_id_cache:
+        return _basic_id_cache["id"]
+    try:
+        req = urllib.request.Request("https://api.line.me/v2/bot/info", headers={"Authorization": f"Bearer {_line_token()}"})
+        with urllib.request.urlopen(req, timeout=8) as r:
+            basic = json.load(r).get("basicId")
+    except Exception as e:
+        print(f"bot info failed: {e}", file=sys.stderr)
+        return None   # not cached, so a later request can retry
+    _basic_id_cache["id"] = basic
+    return basic
+
+
 def send_stdout(target, text, flex=None):
     print(f"--> {target}{' [card]' if flex else ''}\n{text}\n")
 
