@@ -91,3 +91,8 @@ def digest_card(rep, when_text, url=None):
 def quick(labels):
     """Quick-reply buttons: tapping one sends its label as a message (LINE allows <= 13, label <= 20 chars)."""
     return [{"type": "action", "action": {"type": "message", "label": l[:20], "text": l}} for l in labels[:13]]
+
+
+def locate_button(label="ส่งตำแหน่งจุดที่ท่วม"):
+    """Quick-reply button that opens LINE's location picker."""
+    return {"type": "action", "action": {"type": "location", "label": label[:20]}}

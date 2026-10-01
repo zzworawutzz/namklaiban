@@ -18,9 +18,11 @@ from typing import Optional
 from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 import core
 import db
+import floodreports
 import ingest
 import line_webhook
 import notify
@@ -29,7 +31,7 @@ import report
 HEALTH_MAX_INGEST_AGE_MIN = 60  # ingest runs every ~20 min; this long means it is stuck
 
 app = FastAPI(title="น้ำใกล้บ้านฉัน API", version="0.2")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"])
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST"])
 
 
 @app.middleware("http")
@@ -124,6 +126,45 @@ def province_report(province: str, days: int = Query(14, ge=2, le=30)):
     if not rep:
         raise HTTPException(404, "ไม่พบจังหวัดนี้")
     return rep
+
+
+class FloodReport(BaseModel):
+    lat: float = Field(..., ge=-90, le=90)
+    lng: float = Field(..., ge=-180, le=180)
+    level: int = Field(..., ge=1, le=4)
+    note: Optional[str] = Field(None, max_length=300)
+
+
+def client_id(request: Request):
+    fwd = request.headers.get("x-forwarded-for", "")
+    return floodreports.who(fwd.split(",")[0].strip() or (request.client.host if request.client else "?"))
+
+
+@app.get("/api/flood-reports")
+def flood_reports_list(response: Response):
+    """Spots people reported as flooded in the last 12 hours (unverified)."""
+    response.headers["Cache-Control"] = "public, max-age=30"
+    with conn() as c:
+        return floodreports.active(c, now())
+
+
+@app.post("/api/flood-reports", status_code=201)
+def flood_reports_add(body: FloodReport, request: Request):
+    try:
+        with conn() as c:
+            floodreports.add(c, body.lat, body.lng, body.level, body.note, "web", client_id(request), now())
+    except floodreports.Rejected as e:
+        raise HTTPException(e.code, e.message)
+    return {"ok": True}
+
+
+@app.post("/api/flood-reports/{report_id}/flag")
+def flood_reports_flag(report_id: int, request: Request):
+    """"This is not true / already dry": three different people hide a report."""
+    with conn() as c:
+        if not floodreports.flag(c, report_id, client_id(request)):
+            raise HTTPException(404, "ไม่พบรายงานนี้")
+    return {"ok": True}
 
 
 @app.get("/api/line/add-friend", include_in_schema=False)

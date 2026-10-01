@@ -48,6 +48,12 @@ CREATE TABLE IF NOT EXISTS subscriptions(
   digest INTEGER NOT NULL DEFAULT 1, last_digest TEXT,
   notify_level TEXT NOT NULL DEFAULT 'all', quiet INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS locks(name TEXT PRIMARY KEY, until TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS flood_reports(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, lat REAL NOT NULL, lng REAL NOT NULL, level INTEGER NOT NULL,
+  note TEXT, src TEXT, who TEXT NOT NULL, created_at TEXT NOT NULL, flags INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX IF NOT EXISTS idx_flood_reports_ts ON flood_reports(created_at);
+CREATE TABLE IF NOT EXISTS flood_flags(report_id INTEGER NOT NULL, who TEXT NOT NULL, PRIMARY KEY(report_id, who));
+CREATE TABLE IF NOT EXISTS line_pending(target TEXT PRIMARY KEY, level INTEGER NOT NULL, ts TEXT NOT NULL);
 """
 # Same tables for Postgres: REAL there is 4-byte float, which would blur coordinates.
 SCHEMA_PG = (SCHEMA.replace("REAL", "DOUBLE PRECISION")
@@ -215,6 +221,8 @@ def prune(conn, keep_days=KEEP_DAYS):
     cutoff = (datetime.now(timezone.utc) - timedelta(days=keep_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
     cur = conn.execute("DELETE FROM readings WHERE ts < ?", (cutoff,))
     conn.commit()
+    import floodreports  # local import: floodreports needs core, which imports this module
+    floodreports.prune(conn, datetime.now(timezone.utc))
     return cur.rowcount
 
 

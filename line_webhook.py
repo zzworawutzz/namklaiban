@@ -25,6 +25,7 @@ import os
 
 import cards
 import core
+import floodreports
 import report
 from ingest import utc_now
 from notify import _invoke, message, province_of, report_link
@@ -37,7 +38,9 @@ DIGEST_OFF = {"ปิดสรุป", "หยุดสรุป"}
 DIGEST_ON = {"เปิดสรุป"}
 SETTINGS = {"ตั้งค่า", "settings"}
 GROUP_HELP_WORDS = {"ช่วยเหลือ", "help"}
-MENU = ["สถานะ", "รายงาน", "ตั้งค่า"]
+MENU = ["สถานะ", "รายงาน", "แจ้งน้ำท่วม", "ตั้งค่า"]
+FLOOD_CMD = "แจ้งน้ำท่วม"
+FLOOD_BUTTONS = {"ท่วม" + label.replace("ท่วมถึง", "").replace("ท่วม", ""): lvl for lvl, label in floodreports.LEVELS.items()}
 # command -> (column, value, confirmation)
 CHANGES = {
     "แจ้งทุกระดับ": ("notify_level", "all", "จะแจ้งเตือนทุกครั้งที่สถานะสถานีใกล้บ้านเปลี่ยน"),
@@ -48,7 +51,7 @@ CHANGES = {
 HELP = ("น้ำใกล้บ้านฉัน: ส่งตำแหน่งบ้านของคุณมาที่นี่ (กด + แล้วเลือก \"ตำแหน่งที่ตั้ง\") "
         "เพื่อรับแจ้งเตือนเมื่อสถานีวัดน้ำที่ใกล้ที่สุดเปลี่ยนสถานะ\n"
         "พิมพ์ \"สถานะ\" ดูค่าล่าสุด · \"รายงาน\" ดูสรุปทั้งจังหวัด · \"ตั้งค่า\" เลือกระดับแจ้งเตือน/ช่วงไม่รบกวน · "
-        "\"ปิดสรุป\" หยุดสรุปทุกเช้า 07:00 · \"ยกเลิก\" หยุดทุกอย่างและลบตำแหน่งที่เก็บไว้\n"
+        "\"แจ้งน้ำท่วม\" รายงานจุดที่ท่วมแถวคุณ · \"ปิดสรุป\" หยุดสรุปทุกเช้า 07:00 · \"ยกเลิก\" หยุดทุกอย่างและลบตำแหน่งที่เก็บไว้\n"
         "ข้อมูลจาก ThaiWater ใช้ประกอบการตัดสินใจเท่านั้น ให้ยึดประกาศ ปภ. เป็นหลัก")
 GROUP_HELP = ("น้ำใกล้บ้านฉัน: พิมพ์ \"ติดตาม <ชื่อจังหวัด>\" เช่น ติดตาม อยุธยา "
               "เพื่อให้บอตส่งสรุปสถานการณ์น้ำของจังหวัดนั้นเข้ากลุ่มนี้ทุกเช้า 07:00\n"
@@ -110,8 +113,19 @@ def handle_event(conn, ev, at, reply):
         return
     m = ev.get("message") or {}
     if m.get("type") == "location":
+        level = floodreports.pop_pending(conn, user, at)
+        if level:
+            return _flood_report(conn, user, token, m, level, at, reply)
         return _subscribe(conn, user, token, m, at, reply)
     text = (m.get("text") or "").strip().lower() if m.get("type") == "text" else ""
+    if text == FLOOD_CMD:
+        return _reply(reply, token, "ตอนนี้น้ำท่วมระดับไหน? เลือกด้านล่าง แล้วส่งตำแหน่งจุดที่ท่วมมา\n"
+                      "(รายงานจะแสดงบนแผนที่ 12 ชม. เป็นข้อมูลจากผู้ใช้ ยังไม่ผ่านการตรวจสอบ)",
+                      quick=cards.quick(list(FLOOD_BUTTONS)))
+    if text in FLOOD_BUTTONS:
+        floodreports.set_pending(conn, user, FLOOD_BUTTONS[text], at)
+        return _reply(reply, token, "รับทราบ กดปุ่มด้านล่างแล้วเลือกจุดที่ท่วม (ภายใน 10 นาที)",
+                      quick=[cards.locate_button()])
     if text in CANCEL:
         _delete(conn, user)
         return _reply(reply, token, "หยุดแจ้งเตือนและลบตำแหน่งของคุณแล้ว ส่งตำแหน่งมาใหม่ได้ทุกเมื่อ")
@@ -142,6 +156,19 @@ def handle_event(conn, ev, at, reply):
                       else "หยุดส่งสรุปทุกเช้าแล้ว ยังแจ้งเตือนเมื่อสถานะเปลี่ยนตามเดิม (พิมพ์ \"เปิดสรุป\" เพื่อเปิดใหม่)",
                       quick=cards.quick(MENU))
     _reply(reply, token, HELP, quick=cards.quick(MENU))
+
+
+def _flood_report(conn, user, token, m, level, at, reply):
+    try:
+        lat, lng = float(m["latitude"]), float(m["longitude"])
+    except (KeyError, TypeError, ValueError):
+        return _reply(reply, token, "อ่านตำแหน่งไม่ได้ ลองแจ้งใหม่อีกครั้ง", quick=cards.quick(MENU))
+    try:
+        floodreports.add(conn, lat, lng, level, None, "line", floodreports.who("line:" + user), at)
+    except floodreports.Rejected as e:
+        return _reply(reply, token, e.message, quick=cards.quick(MENU))
+    _reply(reply, token, f"ขอบคุณ บันทึกแล้ว: {floodreports.LEVELS[level]} จะแสดงบนแผนที่ 12 ชม. "
+                         "(ข้อมูลจากผู้ใช้ ยังไม่ผ่านการตรวจสอบ)", quick=cards.quick(MENU))
 
 
 def _send_report(conn, reply, token, prov, at):

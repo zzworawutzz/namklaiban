@@ -205,3 +205,19 @@ def test_line_settings_and_group_on_postgres(pg):
         assert notify.run_digest(c, tl.AT, {"line": lambda t, m, flex=None: out.append(t)}) == (2, 0)
         assert sorted(out) == ["C123", "U1"]
         assert notify.run(c, tl.AT, {"line": lambda t, m: 1 / 0}) == (0, 0)
+
+
+def test_flood_reports_on_postgres(pg):
+    import floodreports as fr
+    cl = TestClient(api.app)
+    h = {"x-forwarded-for": "3.3.3.3"}
+    assert cl.post("/api/flood-reports", json={"lat": 14.35, "lng": 100.57, "level": 3, "note": "ทดสอบ"}, headers=h).status_code == 201
+    assert cl.post("/api/flood-reports", json={"lat": 14.35, "lng": 100.57, "level": 3}, headers=h).status_code == 429
+    rows = cl.get("/api/flood-reports").json()
+    assert len(rows) == 1 and rows[0]["lat"] == 14.35 and rows[0]["confirmed"] == 1
+    for ip in ("4.4.4.4", "5.5.5.5", "5.5.5.5", "6.6.6.6"):
+        assert cl.post(f"/api/flood-reports/{rows[0]['id']}/flag", headers={"x-forwarded-for": ip}).status_code == 200
+    assert cl.get("/api/flood-reports").json() == []
+    with api.conn() as c:
+        fr.set_pending(c, "U1", 2, AT)
+        assert fr.pop_pending(c, "U1", AT) == 2 and fr.pop_pending(c, "U1", AT) is None
