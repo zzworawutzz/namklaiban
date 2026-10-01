@@ -57,6 +57,12 @@ svg.chart{width:100%;height:auto;display:block}
 .sharebar{display:flex;gap:8px;align-items:center;margin-top:12px}
 .foot{color:var(--muted);font-size:12px;margin-top:14px}
 .leaflet-container{font-family:inherit}
+.replay{margin:10px 0 4px}
+.replay label{font-size:13px;font-weight:600}
+.replay input[type=range]{width:100%;margin:6px 0 0}
+.tlrow{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;color:var(--muted);min-height:34px}
+.replay.on .tlrow span{color:var(--alert);font-weight:600}
+.chk{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--muted);margin:6px 0}
 .pp{min-width:220px;color:#10252f;font-family:inherit}
 .pp b{display:block;margin-bottom:4px}
 .pp .pprow{display:flex;width:100%;justify-content:space-between;align-items:center;gap:10px;background:none;border:0;border-top:1px solid #d3dfe5;padding:6px 0;text-align:left;cursor:pointer;color:inherit;font:inherit}
@@ -75,17 +81,23 @@ svg.chart{width:100%;height:auto;display:block}
     <div id="err" class="err" hidden></div>
     <div class="controls">
       <select id="prov" aria-label="เลือกจังหวัด"></select>
-      <input id="q" type="search" placeholder="ค้นหาสถานีหรือจังหวัด" aria-label="ค้นหาสถานี">
+      <input id="q" type="search" placeholder="ค้นหาสถานี จังหวัด หรือสถานที่ (กด Enter)" aria-label="ค้นหาสถานี จังหวัด หรือสถานที่">
       <button class="btn primary" id="btnMe" type="button">ใกล้ฉัน</button>
       <button class="btn" id="btnPin" type="button" aria-pressed="false">ปักหมุดบ้านฉัน</button>
       <button class="btn" id="btnClear" type="button" hidden>ล้างตำแหน่ง</button>
     </div>
     <p class="note"><a id="repLink" href="report.html">ดูรายงานสถานการณ์น้ำ →</a></p>
+    <div class="replay" id="replayBox">
+      <label for="tl">ย้อนดูสถานการณ์บนแผนที่ (สูงสุด 72 ชม.)</label>
+      <input id="tl" type="range" min="0" max="24" value="24" step="1" aria-describedby="tlLabel">
+      <div class="tlrow"><span id="tlLabel" aria-live="polite">ตอนนี้</span><button class="btn" id="tlNow" type="button" hidden>กลับมาปัจจุบัน</button></div>
+    </div>
+    <label class="chk"><input type="checkbox" id="chkRiver" checked> แสดงเส้นเชื่อมสถานีตามแม่น้ำ (ประมาณจากชื่อแม่น้ำและระดับท้องน้ำ)</label>
     <p class="note" id="originNote">กด "ใกล้ฉัน" หรือปักหมุดบ้านบนแผนที่ เพื่อดูสถานีที่ใกล้ที่สุด</p>
     <section id="results" hidden><h2 id="resTitle"></h2><ul id="resList"></ul></section>
     <section id="detail" aria-live="polite" hidden></section>
     <div class="legend" id="legend"></div>
-    <p class="foot" id="foot">ข้อมูลระดับน้ำจาก ThaiWater (สสน.) ใช้ประกอบการตัดสินใจเท่านั้น ไม่ใช่ประกาศทางการ ให้ยึดคำสั่งของ ปภ. ในพื้นที่เป็นหลัก</p>
+    <p class="foot" id="foot">ข้อมูลระดับน้ำจาก ThaiWater (สสน.) ใช้ประกอบการตัดสินใจเท่านั้น ไม่ใช่ประกาศทางการ ให้ยึดคำสั่งของ ปภ. ในพื้นที่เป็นหลัก การค้นหาสถานที่ใช้บริการ Nominatim ของ OpenStreetMap (คำที่ค้นหาจะถูกส่งไปยังบริการนั้น)</p>
   </div>
   <div id="map" role="region" aria-label="แผนที่สถานีวัดน้ำ"></div>
 </main>
@@ -165,31 +177,105 @@ function getJSON(path){
   return fetch(API+path).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); });
 }
 
+var replay = {idx:null, data:null, prov:null, loading:null};
+function pctStatus(p,w,a){ return p>=a ? "alert" : p>=w ? "watch" : "normal"; }
+function view(s){
+  if(replay.idx===null || !replay.data) return s;
+  var arr = replay.data.stations[s.id], p = arr ? arr[replay.idx] : null, v = Object.assign({}, s);
+  v.pct_of_bank = p==null ? null : p;
+  v.status = p==null ? "unknown" : pctStatus(p, s.watch_pct, s.alert_pct);
+  v.stale = p==null; v.trend = null;
+  return v;
+}
 function inProv(s){ return !province || s.province===province; }
 function visible(s){
   if(!inProv(s)) return false;
   if(!filter) return true;
-  return filter==="stale" ? s.stale : s.status===filter;
+  var v = view(s);
+  return filter==="stale" ? v.stale : v.status===filter;
 }
 function drawMarkers(){
   layer.clearLayers(); markers = {};
   stations.forEach(function(s){
     if(!visible(s) && s.id!==sel) return;
-    var m = L.marker([s.lat,s.lng],{icon:icon(s,s.id===sel),keyboard:true,title:s.name+" "+statusText(s),zIndexOffset:(s.id===sel?1000:Z[s.status]||0)}).addTo(layer);
+    var v = view(s);
+    var m = L.marker([s.lat,s.lng],{icon:icon(v,s.id===sel),keyboard:true,title:s.name+" "+statusText(v),zIndexOffset:(s.id===sel?1000:Z[v.status]||0)}).addTo(layer);
     m.on("click",function(){ select(s.id,false); });
     markers[s.id] = m;
   });
 }
 function drawChips(){
   var c = {alert:0,watch:0,normal:0,unknown:0}, stale = 0;
-  stations.filter(inProv).forEach(function(s){ c[s.status]=(c[s.status]||0)+1; if(s.stale) stale++; });
+  stations.filter(inProv).forEach(function(s0){ var s = view(s0); c[s.status]=(c[s.status]||0)+1; if(s.stale) stale++; });
   var html = ["alert","watch","normal","unknown"].map(function(k){
     return '<button type="button" class="chip" data-f="'+k+'" aria-pressed="'+(filter===k)+'">'+shapeSvg(k,16,false)+LABEL[k]+" "+c[k]+'</button>';
   }).join("");
   html += '<button type="button" class="chip" data-f="stale" aria-pressed="'+(filter==="stale")+'">'+shapeSvg("unknown",16,true)+'ข้อมูลค้าง '+stale+'</button>';
   $("chips").innerHTML = html;
-  $("legend").innerHTML = '<span>เขียว วงกลม = ปกติ (&lt;70% ของตลิ่ง)</span><span>เหลือง สี่เหลี่ยมข้าวหลามตัด = เฝ้าระวัง (70–90%)</span><span>แดง สามเหลี่ยม = เตือนภัย (≥90%)</span><span>เส้นประรอบจุด = ข้อมูลเก่าเกิน 2 ชม.</span>';
+  $("legend").innerHTML = '<span>เขียว วงกลม = ปกติ (&lt;70% ของตลิ่ง)</span><span>เหลือง สี่เหลี่ยมข้าวหลามตัด = เฝ้าระวัง (70–90%)</span><span>แดง สามเหลี่ยม = เตือนภัย (≥90%)</span><span>เส้นประรอบจุด = ข้อมูลเก่าเกิน 2 ชม.</span><span>เส้นสีระหว่างสถานี = แม่น้ำเดียวกัน เรียงจากต้นน้ำไปปลายน้ำตามระดับท้องน้ำ (เส้นตรงเชื่อมสถานี ไม่ใช่แนวแม่น้ำจริง)</span>';
 }
+
+function redraw(){ drawMarkers(); drawChips(); drawRivers(); }
+
+var RIVER_MAX_KM = 80, RANK = {unknown:0, normal:1, watch:2, alert:3};
+var riverLayer = L.layerGroup().addTo(map);
+function kmBetween(a,b){
+  var p = Math.PI/180, x = Math.sin((b.lat-a.lat)*p/2), y = Math.sin((b.lng-a.lng)*p/2);
+  return 12742*Math.asin(Math.sqrt(x*x + Math.cos(a.lat*p)*Math.cos(b.lat*p)*y*y));
+}
+function riverSeg(a,b){
+  var va = view(a), vb = view(b), st = RANK[va.status]>=RANK[vb.status] ? va.status : vb.status;
+  L.polyline([[a.lat,a.lng],[b.lat,b.lng]],{color:COLOR[st]||COLOR.unknown,weight:4,opacity:.7,lineCap:"round"}).addTo(riverLayer)
+    .bindTooltip(esc(a.river)+": "+esc(a.name)+" → "+esc(b.name)+" ("+Math.round(kmBetween(a,b))+" กม.)",{sticky:true});
+}
+function drawRivers(){
+  riverLayer.clearLayers();
+  if(!$("chkRiver").checked) return;
+  var groups = {};
+  stations.forEach(function(s){
+    if(!s.river || s.ground_level==null || !inProv(s)) return;
+    var k = s.river+"|"+(s.basin||""); (groups[k] = groups[k]||[]).push(s);
+  });
+  Object.keys(groups).forEach(function(k){
+    var prev = null;
+    groups[k].sort(function(a,b){ return b.ground_level-a.ground_level; }).forEach(function(s){  // high bed first = upstream
+      if(prev){
+        var d = kmBetween(prev,s);
+        if(d<0.5) return;                       // the same site reported by two agencies
+        if(d<=RIVER_MAX_KM) riverSeg(prev,s);   // farther apart: start a new stretch instead of joining
+      }
+      prev = s;
+    });
+  });
+}
+$("chkRiver").addEventListener("change", drawRivers);
+
+function tlLabel(){
+  var d = replay.data;
+  if(!d || replay.idx===null){ $("tlLabel").textContent = "ตอนนี้"; $("tlNow").hidden = true; $("replayBox").classList.remove("on"); return; }
+  var hrs = (d.times.length-1-replay.idx)*d.step_h;
+  $("tlLabel").textContent = "ย้อนหลัง "+hrs+" ชม. · "+fmtTs(d.times[replay.idx]);
+  $("tlNow").hidden = false; $("replayBox").classList.add("on");
+}
+function loadReplay(){
+  if(replay.data && replay.prov===province) return Promise.resolve();
+  if(replay.loading) return replay.loading;
+  var p = province;
+  $("tlLabel").textContent = "กำลังโหลดข้อมูลย้อนหลัง…";
+  replay.loading = getJSON("/history/snapshots?hours=72&step=3"+(p?"&province="+encodeURIComponent(p):"")).then(function(d){
+    replay.loading = null; replay.data = d; replay.prov = p; $("tl").max = d.times.length-1;
+  }, function(e){ replay.loading = null; $("tlLabel").textContent = "โหลดข้อมูลย้อนหลังไม่ได้ ลองใหม่อีกครั้ง"; throw e; });
+  return replay.loading;
+}
+function resetReplay(){ replay.idx = null; replay.data = null; $("tl").value = $("tl").max; tlLabel(); }
+$("tl").addEventListener("input",function(e){
+  var v = +e.target.value, input = e.target;
+  loadReplay().then(function(){
+    replay.idx = v >= replay.data.times.length-1 ? null : v;
+    tlLabel(); redraw();
+  }).catch(function(){ input.value = input.max; });
+});
+$("tlNow").addEventListener("click",function(){ replay.idx = null; $("tl").value = $("tl").max; tlLabel(); redraw(); });
 
 function rowHtml(s, extra){
   return '<li><button class="row" type="button" data-id="'+esc(s.id)+'"><span>'+esc(s.name)+'<small>'+esc(s.province||"")+(extra?" · "+esc(extra):"")+(s.stale?" · ข้อมูลไม่อัปเดต":"")+(s.twin_conflict?" · ⚠ สองแหล่งขัดกัน":"")+(s.trend==="rising"?" · ▲ สูงขึ้น":s.trend==="falling"?" · ▼ ลดลง":"")+'</small></span><span class="badge '+s.status+'">'+esc(statusText(s))+" "+pctText(s)+'</span></button></li>';
@@ -255,8 +341,8 @@ function drawDetail(s, rs, rel){
 }
 function select(id, fly){
   var prev = sel; sel = id; var s = byId[id]; if(!s) return;
-  if(prev && markers[prev]){ markers[prev].setIcon(icon(byId[prev],false)); markers[prev].setZIndexOffset(Z[byId[prev].status]||0); }
-  if(markers[id]){ markers[id].setIcon(icon(s,true)); markers[id].setZIndexOffset(1000); }
+  if(prev && markers[prev]){ markers[prev].setIcon(icon(view(byId[prev]),false)); markers[prev].setZIndexOffset(Z[view(byId[prev]).status]||0); }
+  if(markers[id]){ markers[id].setIcon(icon(view(s),true)); markers[id].setZIndexOffset(1000); }
   if(fly) map.flyTo([s.lat,s.lng], Math.max(map.getZoom(),11));
   drawDetail(s,null);
   try{ var u = new URL(location.href); u.searchParams.set("station",id); history.replaceState(null,"",u); }catch(e){}
@@ -284,7 +370,7 @@ function setOrigin(o){
   getJSON("/stations/nearby?lat="+o.lat+"&lng="+o.lng+"&limit=3").then(function(list){
     list.forEach(function(s){ byId[s.id]=Object.assign(byId[s.id]||{},s); });
     if(province && list.some(function(s){ return s.province!==province; })){  // don't hide the stations near the user
-      province = ""; $("prov").value = ""; drawMarkers(); drawChips(); updateRepLink();
+      province = ""; $("prov").value = ""; resetReplay(); redraw(); updateRepLink();
     }
     showResults("สถานีใกล้ที่สุด 3 แห่ง", list, function(s){return s.distance_km+" กม.";});
     if(list[0]) select(list[0].id,false);
@@ -316,7 +402,7 @@ function showProvince(fit){
 function load(){
   return getJSON("/stations").then(function(list){
     stations = list; byId = {}; list.forEach(function(s){byId[s.id]=s;});
-    showErr(""); drawProvinceSelect(); drawMarkers(); drawChips();
+    showErr(""); drawProvinceSelect(); redraw();
     if(sel && byId[sel]) select(sel,false);
   }).catch(function(e){
     showErr("เชื่อมต่อ API ที่ "+API+" ไม่ได้ ("+e.message+") ตรวจว่า uvicorn ยังรันอยู่ แล้วโหลดหน้านี้ใหม่");
@@ -326,18 +412,43 @@ function load(){
 $("chips").addEventListener("click",function(e){
   var b = e.target.closest ? e.target.closest(".chip") : null; if(!b) return;
   var f = b.getAttribute("data-f"); filter = (filter===f) ? null : f;
-  drawMarkers(); drawChips();
+  redraw();
 });
 $("prov").addEventListener("change",function(e){
   province = e.target.value; store("nkb-prov", province || "all");
-  drawMarkers(); drawChips(); showProvince(true); updateRepLink();
+  resetReplay(); redraw(); showProvince(true); updateRepLink();
 });
+var geoSeq = 0;
+function geocode(q){
+  var my = ++geoSeq;
+  $("results").hidden = false; $("resTitle").textContent = 'ค้นหาสถานที่ "'+q+'"';
+  $("resList").innerHTML = '<li class="note">กำลังค้นหา…</li>';
+  fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&countrycodes=th&accept-language=th&q="+encodeURIComponent(q))
+    .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+    .then(function(list){
+      if(my!==geoSeq) return;
+      $("resTitle").textContent = 'สถานที่ที่ตรงกับ "'+q+'" ('+list.length+')';
+      $("resList").innerHTML = list.length ? list.map(function(p){
+        var name = p.display_name||"";
+        return '<li><button class="row" type="button" data-lat="'+esc(p.lat)+'" data-lng="'+esc(p.lon)+'"><span>'+esc(name.split(",")[0])+'<small>'+esc(name)+'</small></span><span aria-hidden="true">→</span></button></li>';
+      }).join("") : '<li class="note">ไม่พบสถานที่ ลองพิมพ์ชื่อตำบล อำเภอ หรือจังหวัด</li>';
+    }).catch(function(){ if(my===geoSeq) $("resList").innerHTML = '<li class="note">ค้นหาสถานที่ไม่ได้ในขณะนี้ ลองใหม่อีกครั้ง</li>'; });
+}
+function goToPlace(ll){
+  var done = false, go = function(){ if(done) return; done = true; probe(ll); };
+  map.once("moveend", go); setTimeout(go, 1800); map.flyTo(ll, 12);
+}
 $("q").addEventListener("input",function(e){
   var q = e.target.value.trim();
   if(!q){ if(!origin) $("results").hidden = true; return; }
   var hits = stations.filter(function(s){ return (s.name+" "+(s.province||"")).indexOf(q)>-1; });
   hits.sort(function(a,b){return (b.pct_of_bank||-1)-(a.pct_of_bank||-1);});
   showResults('ผลค้นหา "'+q+'" ('+hits.length+' สถานี)', hits.slice(0,8));
+  $("resList").insertAdjacentHTML("beforeend",'<li><button class="row" type="button" data-geo="'+esc(q)+'"><span>ค้นหา "'+esc(q)+'" เป็นชื่อสถานที่บนแผนที่<small>ใช้ OpenStreetMap หรือกด Enter</small></span><span aria-hidden="true">→</span></button></li>');
+});
+$("q").addEventListener("keydown",function(e){
+  var q = e.target.value.trim();
+  if(e.key==="Enter" && q.length>=2){ e.preventDefault(); geocode(q); }
 });
 $("detail").addEventListener("click",function(e){
   var r = e.target.closest(".row"); if(r){ select(r.getAttribute("data-id"),true); return; }
@@ -350,7 +461,12 @@ $("detail").addEventListener("click",function(e){
     else done(url);
   }
 });
-$("resList").addEventListener("click",function(e){ var b=e.target.closest(".row"); if(b) select(b.getAttribute("data-id"),true); });
+$("resList").addEventListener("click",function(e){
+  var b = e.target.closest(".row"); if(!b) return;
+  if(b.hasAttribute("data-geo")) return geocode(b.getAttribute("data-geo"));
+  if(b.hasAttribute("data-lat")) return goToPlace(L.latLng(+b.getAttribute("data-lat"), +b.getAttribute("data-lng")));
+  select(b.getAttribute("data-id"),true);
+});
 $("btnPin").addEventListener("click",function(){ pinMode=!pinMode; this.setAttribute("aria-pressed",String(pinMode)); this.textContent = pinMode?"ยกเลิกการปักหมุด":"ปักหมุดบ้านฉัน"; if(pinMode) $("originNote").textContent="แตะบนแผนที่ตรงจุดที่ตั้งบ้านของคุณ"; map.getContainer().style.cursor = pinMode?"crosshair":""; });
 map.on("click",function(e){
   if(!pinMode){ probe(e.latlng); return; }
