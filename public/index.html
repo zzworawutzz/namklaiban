@@ -72,6 +72,19 @@ h2{font-size:16px;margin:0 0 8px;font-weight:600}
 #rpt .acts .btn{flex:1}
 #rpt .btn:disabled{opacity:.45}
 
+
+/* ---- shelters, rain radar, emergency numbers ---- */
+.shl{width:14px;height:14px;border-radius:4px;background:#1b8f61;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.4)}
+.shp b{font-size:15px}.shp .note{margin:3px 0}.shp a{font-weight:600}
+.srow{display:flex;justify-content:space-between;gap:10px;align-items:center;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.srow:hover{border-color:var(--accent)}.srow small{display:block;color:var(--muted);font-size:12px}
+.srow .dist{flex:none;font-weight:700;color:var(--normal)}
+#radarCtl{display:flex;gap:8px;align-items:center;margin:0 0 6px 28px;font-size:13px}
+#radarCtl .btn{min-height:34px;padding:4px 12px}
+.sos{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:8px}
+.sos a{display:block;text-decoration:none;border:1px solid var(--line);border-radius:12px;padding:8px 10px;color:var(--ink);background:var(--bg)}
+.sos a b{display:block;font-size:20px;color:var(--accent);line-height:1.2}.sos a span{font-size:12px;color:var(--muted)}
+
 /* ---- top bar ---- */
 #topbar{position:fixed;z-index:1000;left:12px;right:12px;top:calc(12px + env(safe-area-inset-top,0px));display:flex;flex-direction:column;gap:8px;pointer-events:none}
 #topbar>*{pointer-events:auto}
@@ -240,6 +253,9 @@ svg.chart{width:100%;height:auto;display:block}
       <option value="1day">ย้อนหลัง 1 วัน</option><option value="3days">3 วัน</option><option value="7days" selected>7 วัน</option><option value="30days">30 วัน</option>
     </select>
   </div>
+  <label class="chk"><input type="checkbox" id="chkShl"><span>ศูนย์พักพิงชั่วคราว (ปภ.)<br><span class="note">แสดงของจังหวัดที่เลือก ข้อมูลอาจไม่เป็นปัจจุบัน โทรสอบถามก่อนเดินทาง</span></span></label>
+  <label class="chk"><input type="checkbox" id="chkRadar"><span>เรดาร์ฝน (ย้อนหลัง 2 ชม.)<br><span class="note">ภาพจาก RainViewer ความละเอียดต่ำ ใช้ดูทิศทางฝนคร่าวๆ</span></span></label>
+  <div id="radarCtl" hidden><button class="btn" id="radarPlay" type="button">▶ เล่น</button><span id="radarTime" aria-live="polite"></span></div>
   <label class="chk"><input type="checkbox" id="chkRpt" checked><span>จุดน้ำท่วมที่ผู้ใช้รายงาน<br><span class="note">ข้อมูลจากผู้ใช้ ยังไม่ผ่านการตรวจสอบ แสดง 12 ชม. ล่าสุด</span></span></label>
   <h3>ตำแหน่งของฉัน</h3>
   <button class="btn block" id="btnPin" type="button" aria-pressed="false">ปักหมุดบ้านฉัน</button>
@@ -301,9 +317,18 @@ svg.chart{width:100%;height:auto;display:block}
       <a id="lineLink" href="#" target="_blank" rel="noopener">เพิ่มเพื่อน</a>
     </section>
     <p class="note" id="originNote" hidden></p>
+    <section class="card" id="shelterCard" hidden><h2>ศูนย์พักพิงใกล้คุณ</h2><ul id="shelterList" class="rows"></ul><p class="note">ข้อมูลจาก ปภ. อาจไม่เป็นปัจจุบัน โทรสอบถามก่อนเดินทาง</p></section>
     <section id="results" hidden><h2 id="resTitle"></h2><ul id="resList" class="rows"></ul></section>
     <section class="card" id="detail" aria-live="polite" hidden></section>
-    <p class="foot" id="foot">ข้อมูลระดับน้ำจาก ThaiWater (สสน.) ใช้ประกอบการตัดสินใจเท่านั้น ไม่ใช่ประกาศทางการ ให้ยึดคำสั่งของ ปภ. ในพื้นที่เป็นหลัก (สายด่วน 1784) · การค้นหาสถานที่ใช้ Nominatim ของ OpenStreetMap (คำที่ค้นหาจะถูกส่งไปยังบริการนั้น) · แผนที่ © OpenStreetMap contributors</p>
+    <section class="card" id="emergency"><h2>เบอร์ฉุกเฉิน (โทรฟรี)</h2>
+      <div class="sos">
+        <a href="tel:1784"><b>1784</b><span>ปภ. แจ้งภัย/ขอความช่วยเหลือ</span></a>
+        <a href="tel:1669"><b>1669</b><span>การแพทย์ฉุกเฉิน</span></a>
+        <a href="tel:191"><b>191</b><span>แจ้งเหตุด่วนเหตุร้าย</span></a>
+        <a href="tel:1460"><b>1460</b><span>กรมชลประทาน ข้อมูลน้ำ/เขื่อน</span></a>
+        <a href="tel:1182"><b>1182</b><span>กรมอุตุฯ สภาพอากาศ</span></a>
+      </div></section>
+    <p class="foot" id="foot">ข้อมูลระดับน้ำจาก ThaiWater (สสน.) ใช้ประกอบการตัดสินใจเท่านั้น ไม่ใช่ประกาศทางการ ให้ยึดคำสั่งของ ปภ. ในพื้นที่เป็นหลัก (สายด่วน 1784) · การค้นหาสถานที่ใช้ Nominatim ของ OpenStreetMap (คำที่ค้นหาจะถูกส่งไปยังบริการนั้น) · แผนที่ © OpenStreetMap contributors · ศูนย์พักพิง: ปภ. (Open Data Common) · เรดาร์: RainViewer</p>
   </div>
 </aside>
 
@@ -523,7 +548,7 @@ function drawSummary(){
     return '<li><span class="dot" style="background:'+COLOR[r[0]]+'"></span>'+LABEL[r[0]]+'<b>'+r[1]+'</b></li>';
   }).join("")+(k.stale?'<li class="note" style="margin:0">ข้อมูลค้าง '+k.stale+' สถานี</li>':'')+'</ul>';
 }
-function redraw(){ drawMarkers(); drawChips(); drawSummary(); drawRivers(); }
+function redraw(){ drawMarkers(); drawChips(); drawSummary(); drawRivers(); if(typeof refreshShelters==="function") refreshShelters(); }
 
 /* ---------- river lines ---------- */
 var RIVER_MAX_KM = 80;
@@ -695,6 +720,7 @@ function setOrigin(o){
   }
   $("btnClear").hidden = !o;
   say(!o ? "" : (o.kind==="home" ? "ใช้ตำแหน่งบ้านที่ปักไว้ (ใช้เฉพาะตอนเปิดหน้านี้ ไม่ถูกเก็บไว้)" : "ใช้ตำแหน่งปัจจุบันของคุณ"));
+  showNearShelters(o);
   if(!o){ $("results").hidden = true; return; }
   getJSON("/stations/nearby?lat="+o.lat+"&lng="+o.lng+"&limit=3").then(function(list){
     list.forEach(function(s){ byId[s.id]=Object.assign(byId[s.id]||{},s); });
@@ -825,6 +851,74 @@ $("btnMe").addEventListener("click",function(){
     {timeout:10000,maximumAge:300000});
 });
 
+
+/* ---------- shelters (DDPM open data, via our API) ---------- */
+var shelterLayer = L.layerGroup().addTo(map), shelterProv = null, shelterData = [];
+function shelterPopup(s){
+  return '<div class="shp"><b>'+esc(s.name)+'</b><div class="note">ต.'+esc(s.subdistrict)+' อ.'+esc(s.district)+' จ.'+esc(s.province)+'</div>'+
+    (s.capacity?'<div class="note">รองรับประมาณ '+s.capacity+' คน</div>':'')+
+    (s.phone?'<div><a href="tel:'+esc(String(s.phone).split(/[,;\/ ]/)[0])+'">โทร '+esc(s.phone)+'</a></div>':'')+
+    '<div><a target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination='+s.lat+','+s.lng+'">นำทาง</a></div>'+
+    '<div class="note">ข้อมูลจาก ปภ. อาจไม่เป็นปัจจุบัน</div></div>';
+}
+function drawShelters(){
+  shelterLayer.clearLayers();
+  if(!$("chkShl").checked) return;
+  shelterData.forEach(function(s){
+    L.marker([s.lat,s.lng],{icon:L.divIcon({className:"",html:'<div class="shl"></div>',iconSize:[14,14],iconAnchor:[7,7]}),title:"ศูนย์พักพิง: "+s.name,keyboard:true})
+      .bindPopup(shelterPopup(s)).addTo(shelterLayer);
+  });
+}
+function refreshShelters(){
+  if(!$("chkShl").checked) return;
+  if(!province){ shelterData = []; shelterProv = null; drawShelters(); toast("เลือกจังหวัดเพื่อดูศูนย์พักพิง"); return; }
+  if(province===shelterProv){ drawShelters(); return; }
+  var want = province;
+  getJSON("/api/shelters?province="+encodeURIComponent(want)).then(function(l){
+    if(province!==want) return; shelterProv = want; shelterData = l; drawShelters();
+    if(!l.length) toast("ไม่มีข้อมูลศูนย์พักพิงของจังหวัดนี้");
+  }).catch(function(){ toast("โหลดข้อมูลศูนย์พักพิงไม่ได้"); });
+}
+$("chkShl").addEventListener("change", refreshShelters);
+function showNearShelters(o){
+  var card = $("shelterCard"); card.hidden = true; if(!o) return;
+  getJSON("/api/shelters?lat="+o.lat+"&lng="+o.lng+"&limit=3").then(function(l){
+    if(origin!==o || !l.length) return;
+    $("shelterList").innerHTML = l.map(function(s,i){
+      return '<li><button class="srow" type="button" data-i="'+i+'"><span>'+esc(s.name)+'<small>ต.'+esc(s.subdistrict)+' อ.'+esc(s.district)+(s.capacity?' · รองรับ ~'+s.capacity+' คน':'')+'</small></span><span class="dist">'+s.distance_km+' กม.</span></button></li>';
+    }).join("");
+    Array.prototype.forEach.call($("shelterList").querySelectorAll(".srow"),function(b){
+      b.addEventListener("click",function(){ var s = l[+b.getAttribute("data-i")];
+        L.popup({offset:[0,-6]}).setLatLng([s.lat,s.lng]).setContent(shelterPopup(s)).openOn(map);
+        flyToVisible([s.lat,s.lng], Math.max(map.getZoom(),14)); });
+    });
+    card.hidden = false;
+  }).catch(function(){});
+}
+
+/* ---------- rain radar (RainViewer, past 2 h) ---------- */
+var radarFrames = null, radarLayer = null, radarIdx = 0, radarTimer = null;
+function radarShow(i){
+  var f = radarFrames[i], url = radarFrames.host + f.path + "/256/{z}/{x}/{y}/2/1_1.png";
+  var next = L.tileLayer(url,{opacity:.6, maxNativeZoom:7, maxZoom:19, attribution:'ฝน: <a href="https://www.rainviewer.com" target="_blank" rel="noopener">RainViewer</a>'}).addTo(map);
+  if(radarLayer) map.removeLayer(radarLayer); radarLayer = next; radarIdx = i;
+  $("radarTime").textContent = new Date(f.time*1000).toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Bangkok"})+" น.";
+}
+function radarStop(){ clearInterval(radarTimer); radarTimer = null; $("radarPlay").textContent = "▶ เล่น"; }
+function radarOff(){ radarStop(); if(radarLayer){ map.removeLayer(radarLayer); radarLayer = null; } $("radarCtl").hidden = true; $("radarTime").textContent = ""; }
+$("chkRadar").addEventListener("change",function(){
+  if(!this.checked){ radarOff(); return; }
+  fetch("https://api.rainviewer.com/public/weather-maps.json").then(function(r){ return r.json(); }).then(function(j){
+    var past = (j.radar && j.radar.past) || [];
+    if(!past.length || !$("chkRadar").checked){ if($("chkRadar").checked){ toast("ยังไม่มีภาพเรดาร์ฝน"); $("chkRadar").checked = false; } return; }
+    radarFrames = past; radarFrames.host = j.host; $("radarCtl").hidden = false; radarShow(past.length-1);
+  }).catch(function(){ $("chkRadar").checked = false; toast("โหลดเรดาร์ฝนไม่ได้"); });
+});
+$("radarPlay").addEventListener("click",function(){
+  if(radarTimer){ radarStop(); return; }
+  this.textContent = "⏸ หยุด"; radarIdx = -1;
+  radarTimer = setInterval(function(){ radarShow((radarIdx+1) % radarFrames.length); }, 700);
+});
 
 /* ---------- user flood reports ---------- */
 var rptLayer = L.layerGroup().addTo(map), rptPoint = null, rptPicking = false, rptTemp = null;
