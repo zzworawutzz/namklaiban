@@ -27,6 +27,7 @@ import cards
 import core
 import floodreports
 import report
+import shelters
 from ingest import utc_now
 from notify import _invoke, message, province_of, report_link
 
@@ -38,7 +39,8 @@ DIGEST_OFF = {"ปิดสรุป", "หยุดสรุป"}
 DIGEST_ON = {"เปิดสรุป"}
 SETTINGS = {"ตั้งค่า", "settings"}
 GROUP_HELP_WORDS = {"ช่วยเหลือ", "help"}
-MENU = ["สถานะ", "รายงาน", "แจ้งน้ำท่วม", "ตั้งค่า"]
+MENU = ["สถานะ", "รายงาน", "แจ้งน้ำท่วม", "ศูนย์พักพิง", "ตั้งค่า"]
+SHELTER_CMD = {"ศูนย์พักพิง", "ที่พักพิง", "shelter"}
 FLOOD_CMD = "แจ้งน้ำท่วม"
 FLOOD_BUTTONS = {"ท่วม" + label.replace("ท่วมถึง", "").replace("ท่วม", ""): lvl for lvl, label in floodreports.LEVELS.items()}
 # command -> (column, value, confirmation)
@@ -51,7 +53,7 @@ CHANGES = {
 HELP = ("น้ำใกล้บ้านฉัน: ส่งตำแหน่งบ้านของคุณมาที่นี่ (กด + แล้วเลือก \"ตำแหน่งที่ตั้ง\") "
         "เพื่อรับแจ้งเตือนเมื่อสถานีวัดน้ำที่ใกล้ที่สุดเปลี่ยนสถานะ\n"
         "พิมพ์ \"สถานะ\" ดูค่าล่าสุด · \"รายงาน\" ดูสรุปทั้งจังหวัด · \"ตั้งค่า\" เลือกระดับแจ้งเตือน/ช่วงไม่รบกวน · "
-        "\"แจ้งน้ำท่วม\" รายงานจุดที่ท่วมแถวคุณ · \"ปิดสรุป\" หยุดสรุปทุกเช้า 07:00 · \"ยกเลิก\" หยุดทุกอย่างและลบตำแหน่งที่เก็บไว้\n"
+        "\"แจ้งน้ำท่วม\" รายงานจุดที่ท่วมแถวคุณ · \"ศูนย์พักพิง\" ดู 3 แห่งที่ใกล้ที่สุด · \"ปิดสรุป\" หยุดสรุปทุกเช้า 07:00 · \"ยกเลิก\" หยุดทุกอย่างและลบตำแหน่งที่เก็บไว้\n"
         "ข้อมูลจาก ThaiWater ใช้ประกอบการตัดสินใจเท่านั้น ให้ยึดประกาศ ปภ. เป็นหลัก")
 GROUP_HELP = ("น้ำใกล้บ้านฉัน: พิมพ์ \"ติดตาม <ชื่อจังหวัด>\" เช่น ติดตาม อยุธยา "
               "เพื่อให้บอตส่งสรุปสถานการณ์น้ำของจังหวัดนั้นเข้ากลุ่มนี้ทุกเช้า 07:00\n"
@@ -129,6 +131,13 @@ def handle_event(conn, ev, at, reply):
     if text in CANCEL:
         _delete(conn, user)
         return _reply(reply, token, "หยุดแจ้งเตือนและลบตำแหน่งของคุณแล้ว ส่งตำแหน่งมาใหม่ได้ทุกเมื่อ")
+    if text in SHELTER_CMD:
+        sub = _sub(conn, user)
+        if not sub:
+            return _reply(reply, token, "ส่งตำแหน่งของคุณมาก่อน (กด + แล้วเลือก \"ตำแหน่งที่ตั้ง\") แล้วพิมพ์ \"ศูนย์พักพิง\" อีกครั้ง")
+        near = shelters.nearest(sub["lat"], sub["lng"], 3, 50)
+        return _reply(reply, token, shelters.line_text(near) if near else
+                      "ไม่พบศูนย์พักพิงในรัศมี 50 กม. จากตำแหน่งที่บันทึกไว้ ฉุกเฉินโทร 1784 (ปภ.)", quick=cards.quick(MENU))
     if text in STATUS | REPORT | SETTINGS | set(CHANGES) | DIGEST_OFF | DIGEST_ON:
         sub = _sub(conn, user)
         if not sub:

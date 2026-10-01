@@ -27,6 +27,7 @@ import ingest
 import line_webhook
 import notify
 import report
+import shelters
 
 HEALTH_MAX_INGEST_AGE_MIN = 60  # ingest runs every ~20 min; this long means it is stuck
 
@@ -165,6 +166,19 @@ def flood_reports_flag(report_id: int, request: Request):
         if not floodreports.flag(c, report_id, client_id(request)):
             raise HTTPException(404, "ไม่พบรายงานนี้")
     return {"ok": True}
+
+
+@app.get("/api/shelters")
+def shelters_list(response: Response, province: Optional[str] = None,
+                  lat: Optional[float] = Query(None, ge=-90, le=90), lng: Optional[float] = Query(None, ge=-180, le=180),
+                  limit: int = Query(5, ge=1, le=20)):
+    """Temporary flood shelters (DDPM open data): all in a province, or the nearest to lat/lng."""
+    response.headers["Cache-Control"] = "public, max-age=86400"   # static yearly dataset
+    if lat is not None and lng is not None:
+        return shelters.nearest(lat, lng, limit)
+    if province:
+        return shelters.by_province(province)
+    raise HTTPException(422, "give province, or lat and lng")
 
 
 @app.get("/api/line/add-friend", include_in_schema=False)
