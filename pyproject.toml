@@ -1,3 +1,15 @@
+[project]
+name = "nam-klai-baan-chan"
+version = "0.2.0"
+description = "Water level near my home (ThaiWater data)"
+requires-python = ">=3.9"
+# Keep in sync with requirements.txt (Docker/local use that file; Vercel installs from here).
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.30,<1",
+  "psycopg[binary]>=3.2,<4",
+]
+
 # Tells Vercel where the FastAPI instance is (the file is api.py, not one of its default names).
 [tool.vercel]
 entrypoint = "api:app"
