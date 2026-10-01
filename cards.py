@@ -96,3 +96,10 @@ def quick(labels):
 def locate_button(label="ส่งตำแหน่งจุดที่ท่วม"):
     """Quick-reply button that opens LINE's location picker."""
     return {"type": "action", "action": {"type": "location", "label": label[:20]}}
+
+
+def quick_postback(items):
+    """Quick-reply buttons that send hidden data back to the webhook: items = [(label, data)].
+    The label is also shown in the chat as the user's own message."""
+    return [{"type": "action", "action": {"type": "postback", "label": l[:20], "data": d, "displayText": l[:300]}}
+            for l, d in items[:13]]

@@ -56,10 +56,12 @@ def test_location_subscribes_replies_with_current_status_and_does_not_double_sen
     assert notify.run(conn, AT, {"line": lambda t, m: 1 / 0}) == (0, 0)  # baseline == current: stays quiet
 
 
-def test_resend_location_replaces_instead_of_duplicating(conn):
-    run(conn, loc(14.2, 99.0)); run(conn, loc(14.5, 101.0))
+def test_resend_location_asks_before_changing_anything(conn):
+    run(conn, loc(14.2, 99.0))
+    out = run(conn, loc(14.5, 101.0))
+    assert "จะให้ทำอย่างไร" in out[0]
     s = subs(conn)
-    assert len(s) == 1 and s[0]["lat"] == 14.5
+    assert len(s) == 1 and s[0]["lat"] == 14.2                      # nothing changed yet
 
 
 def test_cancel_status_help_and_unfollow(conn):
@@ -79,7 +81,7 @@ def test_rejects_bad_coordinates_and_caps_subscribers(conn, monkeypatch):
     monkeypatch.setattr(lw, "MAX_SUBSCRIBERS", 1)
     run(conn, loc(user="U1"))
     assert "เต็ม" in run(conn, loc(user="U2"))[0]
-    assert "บันทึกตำแหน่งแล้ว" in run(conn, loc(user="U1"))[0]  # existing user can still update
+    assert "จะให้ทำอย่างไร" in run(conn, loc(14.5, 101.0, user="U1"))[0]  # existing user can still add or replace
 
 
 def test_endpoint_signature_and_end_to_end(tmp_path, monkeypatch):
@@ -121,7 +123,7 @@ def test_endpoint_passes_cards_and_buttons_through_to_line(tmp_path, monkeypatch
     post(text("สถานะ"))
     post(text("ตั้งค่า"))
     status, settings = got[1], got[2]
-    assert status[1]["type"] == "bubble" and [q["action"]["text"] for q in status[2]] == ["สถานะ", "รายงาน", "แจ้งน้ำท่วม", "ศูนย์พักพิง", "ตั้งค่า"]
+    assert status[1]["type"] == "bubble" and [q["action"]["text"] for q in status[2]] == ["สถานะ", "รายงาน", "แจ้งน้ำท่วม", "ศูนย์พักพิง", "ตำแหน่งของฉัน", "ตั้งค่า"]
     assert settings[1] is None and "แจ้งเฉพาะเตือนภัย" in [q["action"]["text"] for q in settings[2]]
 
 

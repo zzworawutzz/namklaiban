@@ -139,7 +139,7 @@ class Recorder:
         self.calls = []
 
     def __call__(self, token, text, flex=None, quick=None):
-        self.calls.append(dict(text=text, flex=flex, quick=[q["action"]["text"] for q in quick] if quick else None))
+        self.calls.append(dict(text=text, flex=flex, quick=[q["action"].get("text") or q["action"]["label"] for q in quick] if quick else None))
 
     @property
     def last(self):
@@ -167,12 +167,14 @@ def test_settings_menu_and_changes(conn):
     say(conn, rec, "ไม่รบกวนกลางคืน")
     row = conn.execute("SELECT notify_level, quiet FROM subscriptions").fetchone()
     assert (row["notify_level"], row["quiet"]) == ("alert", 1)
-    lw.handle_event(conn, user_event({"type": "location", "latitude": 14.37, "longitude": 100.56}), AT, rec)  # re-send
-    row = conn.execute("SELECT notify_level, quiet FROM subscriptions").fetchone()
-    assert (row["notify_level"], row["quiet"]) == ("alert", 1)                        # settings survive a new location
+    lw.handle_event(conn, user_event({"type": "location", "latitude": 14.9, "longitude": 100.9}), AT, rec)  # a new place
+    lw.handle_event(conn, {"type": "postback", "replyToken": "r", "source": {"userId": "U1"},
+                           "postback": {"data": "act=add&lat=14.9&lng=100.9"}}, AT, rec)
+    rows = conn.execute("SELECT notify_level, quiet FROM subscriptions").fetchall()
+    assert len(rows) == 2 and all((r["notify_level"], r["quiet"]) == ("alert", 1) for r in rows)   # settings are shared
     say(conn, rec, "แจ้งทุกระดับ"); say(conn, rec, "แจ้งกลางคืน")
-    row = conn.execute("SELECT notify_level, quiet FROM subscriptions").fetchone()
-    assert (row["notify_level"], row["quiet"]) == ("all", 0)
+    rows = conn.execute("SELECT notify_level, quiet FROM subscriptions").fetchall()
+    assert all((r["notify_level"], r["quiet"]) == ("all", 0) for r in rows)    # a change applies to every place
 
 
 def test_status_and_report_replies_carry_cards_and_buttons(conn):

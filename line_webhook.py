@@ -22,6 +22,7 @@ import base64
 import hashlib
 import hmac
 import os
+import urllib.parse
 
 import cards
 import core
@@ -31,7 +32,11 @@ import shelters
 from ingest import utc_now
 from notify import _invoke, message, province_of, report_link
 
-MAX_SUBSCRIBERS = int(os.environ.get("MAX_SUBSCRIBERS", "50"))
+MAX_SUBSCRIBERS = int(os.environ.get("MAX_SUBSCRIBERS", "50"))   # people, not places
+MAX_PLACES = 3
+PLACE_LABELS = ["บ้านของคุณ", "จุดที่ 2", "จุดที่ 3"]
+SAME_PLACE_KM = 0.2
+PLACES_CMD = {"ตำแหน่งของฉัน", "จุดที่บันทึก", "places"}
 CANCEL = {"ยกเลิก", "stop", "cancel", "unsubscribe"}
 STATUS = {"สถานะ", "status"}
 REPORT = {"รายงาน", "report", "สรุป"}
@@ -39,7 +44,7 @@ DIGEST_OFF = {"ปิดสรุป", "หยุดสรุป"}
 DIGEST_ON = {"เปิดสรุป"}
 SETTINGS = {"ตั้งค่า", "settings"}
 GROUP_HELP_WORDS = {"ช่วยเหลือ", "help"}
-MENU = ["สถานะ", "รายงาน", "แจ้งน้ำท่วม", "ศูนย์พักพิง", "ตั้งค่า"]
+MENU = ["สถานะ", "รายงาน", "แจ้งน้ำท่วม", "ศูนย์พักพิง", "ตำแหน่งของฉัน", "ตั้งค่า"]
 SHELTER_CMD = {"ศูนย์พักพิง", "ที่พักพิง", "shelter"}
 FLOOD_CMD = "แจ้งน้ำท่วม"
 FLOOD_BUTTONS = {"ท่วม" + label.replace("ท่วมถึง", "").replace("ท่วม", ""): lvl for lvl, label in floodreports.LEVELS.items()}
@@ -53,7 +58,7 @@ CHANGES = {
 HELP = ("น้ำใกล้บ้านฉัน: ส่งตำแหน่งบ้านของคุณมาที่นี่ (กด + แล้วเลือก \"ตำแหน่งที่ตั้ง\") "
         "เพื่อรับแจ้งเตือนเมื่อสถานีวัดน้ำที่ใกล้ที่สุดเปลี่ยนสถานะ\n"
         "พิมพ์ \"สถานะ\" ดูค่าล่าสุด · \"รายงาน\" ดูสรุปทั้งจังหวัด · \"ตั้งค่า\" เลือกระดับแจ้งเตือน/ช่วงไม่รบกวน · "
-        "\"แจ้งน้ำท่วม\" รายงานจุดที่ท่วมแถวคุณ · \"ศูนย์พักพิง\" ดู 3 แห่งที่ใกล้ที่สุด · \"ปิดสรุป\" หยุดสรุปทุกเช้า 07:00 · \"ยกเลิก\" หยุดทุกอย่างและลบตำแหน่งที่เก็บไว้\n"
+        "\"แจ้งน้ำท่วม\" รายงานจุดที่ท่วมแถวคุณ · \"ตำแหน่งของฉัน\" ดู/ลบจุดที่ติดตาม (ได้สูงสุด 3 จุด) · \"ศูนย์พักพิง\" ดู 3 แห่งที่ใกล้ที่สุด · \"ปิดสรุป\" หยุดสรุปทุกเช้า 07:00 · \"ยกเลิก\" หยุดทุกอย่างและลบตำแหน่งที่เก็บไว้\n"
         "ข้อมูลจาก ThaiWater ใช้ประกอบการตัดสินใจเท่านั้น ให้ยึดประกาศ ปภ. เป็นหลัก")
 GROUP_HELP = ("น้ำใกล้บ้านฉัน: พิมพ์ \"ติดตาม <ชื่อจังหวัด>\" เช่น ติดตาม อยุธยา "
               "เพื่อให้บอตส่งสรุปสถานการณ์น้ำของจังหวัดนั้นเข้ากลุ่มนี้ทุกเช้า 07:00\n"
@@ -82,8 +87,14 @@ def _reply(reply, token, text, flex=None, quick=None):
     _invoke(reply, token, text, flex=flex, quick=quick)
 
 
+def _places(conn, target):
+    """All saved places of a LINE user (oldest first); the first one is the primary place."""
+    return conn.execute("SELECT * FROM subscriptions WHERE channel='line' AND target=? ORDER BY id", (target,)).fetchall()
+
+
 def _sub(conn, target):
-    return conn.execute("SELECT * FROM subscriptions WHERE channel='line' AND target=?", (target,)).fetchone()
+    p = _places(conn, target)
+    return p[0] if p else None
 
 
 def _delete(conn, target):
@@ -92,7 +103,7 @@ def _delete(conn, target):
 
 
 def _full(conn, existing):
-    return not existing and conn.execute("SELECT COUNT(*) AS n FROM subscriptions").fetchone()["n"] >= MAX_SUBSCRIBERS
+    return not existing and conn.execute("SELECT COUNT(DISTINCT target) AS n FROM subscriptions").fetchone()["n"] >= MAX_SUBSCRIBERS
 
 
 def handle_event(conn, ev, at, reply):
@@ -111,6 +122,8 @@ def handle_event(conn, ev, at, reply):
         return
     if ev.get("type") == "follow":
         return _reply(reply, token, HELP, quick=cards.quick(MENU))
+    if ev.get("type") == "postback":
+        return _postback(conn, user, token, (ev.get("postback") or {}).get("data") or "", at, reply)
     if ev.get("type") != "message":
         return
     m = ev.get("message") or {}
@@ -131,6 +144,10 @@ def handle_event(conn, ev, at, reply):
     if text in CANCEL:
         _delete(conn, user)
         return _reply(reply, token, "หยุดแจ้งเตือนและลบตำแหน่งของคุณแล้ว ส่งตำแหน่งมาใหม่ได้ทุกเมื่อ")
+    if text in PLACES_CMD:
+        return _list_places(conn, user, token, reply)
+    if text.startswith("ลบจุดที่"):
+        return _delete_place(conn, user, token, text[len("ลบจุดที่"):].strip(), reply)
     if text in SHELTER_CMD:
         sub = _sub(conn, user)
         if not sub:
@@ -143,11 +160,16 @@ def handle_event(conn, ev, at, reply):
         if not sub:
             return _reply(reply, token, "ยังไม่มีตำแหน่งของคุณ ส่งตำแหน่งบ้านมาก่อนได้เลย")
         if text in STATUS:
-            st = _nearest(conn, sub["lat"], sub["lng"], at)
-            if not st:
+            places = _places(conn, user)
+            found = [(p, _nearest(conn, p["lat"], p["lng"], at)) for p in places]
+            if not any(st for _, st in found):
                 return _reply(reply, token, "ตอนนี้ไม่มีสถานีใกล้บ้านที่ข้อมูลล่าสุด ลองใหม่ภายหลัง")
-            return _reply(reply, token, message(sub, st), cards.station_card(sub["label"], st, report_link(st["province"])),
-                          cards.quick(MENU))
+            if len(places) == 1:
+                p, st = found[0]
+                return _reply(reply, token, message(p, st), cards.station_card(p["label"], st, report_link(st["province"])),
+                              cards.quick(MENU))
+            return _reply(reply, token, "\n\n".join(message(p, st) if st else f"{p['label']}: ยังไม่มีสถานีใกล้ที่ข้อมูลล่าสุด"
+                                                    for p, st in found), quick=cards.quick(MENU))
         if text in REPORT:
             prov = province_of(core.latest(conn, at), sub["lat"], sub["lng"])
             return _send_report(conn, reply, token, prov, at)
@@ -212,22 +234,95 @@ def _subscribe(conn, user, token, m, at, reply):
         return _reply(reply, token, "อ่านตำแหน่งไม่ได้ ลองส่งใหม่อีกครั้ง")
     if not _in_thailand(lat, lng):
         return _reply(reply, token, "ตำแหน่งนี้อยู่นอกประเทศไทย ระบบรองรับเฉพาะสถานีในไทย")
-    existing = conn.execute("SELECT digest, notify_level, quiet FROM subscriptions WHERE channel='line' AND target=?",
-                            (user,)).fetchone()
-    if _full(conn, existing):
+    places = _places(conn, user)
+    if _full(conn, places):
         return _reply(reply, token, "ขออภัย ตอนนี้รับผู้ใช้เต็มแล้ว")
-    st = _nearest(conn, lat, lng, at)
-    _delete(conn, user)
-    keep = existing or {"digest": 1, "notify_level": "all", "quiet": 0}  # re-sending a location keeps the settings
+    if not places:
+        st = _nearest(conn, lat, lng, at)
+        _insert_place(conn, user, lat, lng, PLACE_LABELS[0], st, {"digest": 1, "notify_level": "all", "quiet": 0})
+        head = ("บันทึกตำแหน่งแล้ว จะแจ้งเตือนเมื่อสถานีใกล้บ้านเปลี่ยนสถานะ และส่งสรุปสถานการณ์ทุกเช้า 07:00 "
+                "(เก็บเฉพาะตำแหน่งนี้ พิมพ์ \"ตั้งค่า\" เปลี่ยนระดับแจ้งเตือน/ช่วงไม่รบกวน \"ปิดสรุป\" หยุดสรุปเช้า "
+                "\"ส่งตำแหน่งอีกจุดเพื่อติดตามเพิ่มได้สูงสุด 3 จุด\" หรือ \"ยกเลิก\" เพื่อลบ)\n\n")
+        return _reply(reply, token, head + (message({"label": PLACE_LABELS[0]}, st) if st else
+                                            "ตอนนี้ยังไม่มีสถานีใกล้บ้านที่ข้อมูลล่าสุด"), quick=cards.quick(MENU))
+    for p in places:
+        if core.km(lat, lng, p["lat"], p["lng"]) <= SAME_PLACE_KM:
+            return _reply(reply, token, f"จุดนี้บันทึกไว้แล้วเป็น \"{p['label']}\" พิมพ์ \"ตำแหน่งของฉัน\" เพื่อดูหรือลบจุดที่บันทึก",
+                          quick=cards.quick(MENU))
+    pos = f"lat={lat:.6f}&lng={lng:.6f}"
+    items = [(f"แทนที่ {p['label']}", f"act=rep&id={p['id']}&{pos}") for p in places]
+    if len(places) < MAX_PLACES:
+        items.insert(0, (f"เพิ่มเป็น{_free_label(places)}", f"act=add&{pos}"))
+    _reply(reply, token, f"คุณบันทึกไว้ {len(places)} จุดแล้ว ตำแหน่งใหม่นี้จะให้ทำอย่างไร? (ติดตามได้สูงสุด {MAX_PLACES} จุด)",
+           quick=cards.quick_postback(items))
+
+
+def _free_label(places):
+    used = {p["label"] for p in places}
+    return next((l for l in PLACE_LABELS if l not in used), PLACE_LABELS[-1])
+
+
+def _insert_place(conn, user, lat, lng, label, st, keep):
     conn.execute("INSERT INTO subscriptions(channel,target,lat,lng,label,last_status,last_notified,digest,notify_level,quiet) "
                  "VALUES('line',?,?,?,?,?,?,?,?,?)",
-                 (user, lat, lng, "บ้านของคุณ", st["status"] if st else None, utc_now() if st else None,
+                 (user, lat, lng, label, st["status"] if st else None, utc_now() if st else None,
                   keep["digest"], keep["notify_level"], keep["quiet"]))
     conn.commit()
-    head = ("บันทึกตำแหน่งแล้ว จะแจ้งเตือนเมื่อสถานีใกล้บ้านเปลี่ยนสถานะ และส่งสรุปสถานการณ์ทุกเช้า 07:00 "
-            "(เก็บเฉพาะตำแหน่งนี้ พิมพ์ \"ตั้งค่า\" เปลี่ยนระดับแจ้งเตือน/ช่วงไม่รบกวน \"ปิดสรุป\" หยุดสรุปเช้า "
-            "หรือ \"ยกเลิก\" เพื่อลบ)\n\n")
-    _reply(reply, token, head + (message({"label": "บ้านของคุณ"}, st) if st else "ตอนนี้ยังไม่มีสถานีใกล้บ้านที่ข้อมูลล่าสุด"),
+
+
+def _postback(conn, user, token, data, at, reply):
+    q = {k: v[0] for k, v in urllib.parse.parse_qs(data).items()}
+    try:
+        lat, lng = float(q["lat"]), float(q["lng"])
+    except (KeyError, ValueError):
+        return
+    if not _in_thailand(lat, lng) or q.get("act") not in ("add", "rep"):
+        return
+    places = _places(conn, user)
+    if not places:
+        return _reply(reply, token, "ยังไม่มีตำแหน่งของคุณ ส่งตำแหน่งบ้านมาก่อนได้เลย")
+    st = _nearest(conn, lat, lng, at)
+    if q["act"] == "add":
+        if len(places) >= MAX_PLACES:
+            return _reply(reply, token, f"บันทึกครบ {MAX_PLACES} จุดแล้ว เลือก \"แทนที่\" หรือพิมพ์ \"ตำแหน่งของฉัน\" เพื่อลบจุดเดิมก่อน",
+                          quick=cards.quick(MENU))
+        label = _free_label(places)
+        _insert_place(conn, user, lat, lng, label, st, places[0])   # same settings as the first place
+        done = f"เพิ่ม \"{label}\" แล้ว"
+    else:
+        target = next((p for p in places if str(p["id"]) == q.get("id")), None)
+        if not target:
+            return _reply(reply, token, "ไม่พบจุดที่จะแทนที่ ลองส่งตำแหน่งใหม่อีกครั้ง")
+        conn.execute("UPDATE subscriptions SET lat=?, lng=?, last_status=?, last_notified=?, last_early=NULL, last_report_alert=NULL WHERE id=?",
+                     (lat, lng, st["status"] if st else None, utc_now() if st else None, target["id"]))
+        conn.commit()
+        label, done = target["label"], f"แทนที่ \"{target['label']}\" ด้วยตำแหน่งใหม่แล้ว"
+    _reply(reply, token, done + "\n\n" + (message({"label": label}, st) if st else "ตอนนี้ยังไม่มีสถานีใกล้จุดนี้ที่ข้อมูลล่าสุด"),
+           quick=cards.quick(MENU))
+
+
+def _list_places(conn, user, token, reply):
+    places = _places(conn, user)
+    if not places:
+        return _reply(reply, token, "ยังไม่มีตำแหน่งที่บันทึกไว้ ส่งตำแหน่งบ้านมาได้เลย (กด + แล้วเลือก \"ตำแหน่งที่ตั้ง\")")
+    lines = [f"ตำแหน่งที่ติดตามอยู่ ({len(places)}/{MAX_PLACES})"] + [
+        f"{i}. {p['label']} ({p['lat']:.4f}, {p['lng']:.4f})" for i, p in enumerate(places, 1)]
+    lines.append("ส่งตำแหน่งใหม่เพื่อเพิ่มหรือแทนที่ หรือแตะปุ่มด้านล่างเพื่อลบ")
+    _reply(reply, token, "\n".join(lines), quick=cards.quick([f"ลบจุดที่ {i}" for i in range(1, len(places) + 1)] + ["สถานะ"]))
+
+
+def _delete_place(conn, user, token, n, reply):
+    places = _places(conn, user)
+    try:
+        target = places[int(n) - 1] if int(n) >= 1 else None
+    except (ValueError, IndexError):
+        target = None
+    if not target:
+        return _reply(reply, token, "ไม่พบจุดนั้น พิมพ์ \"ตำแหน่งของฉัน\" เพื่อดูรายการ", quick=cards.quick(MENU))
+    conn.execute("DELETE FROM subscriptions WHERE id=?", (target["id"],))
+    conn.commit()
+    left = len(places) - 1
+    _reply(reply, token, f"ลบ \"{target['label']}\" แล้ว" + (f" เหลือ {left} จุด" if left else " ตอนนี้ไม่มีจุดที่ติดตามแล้ว ส่งตำแหน่งใหม่ได้ทุกเมื่อ"),
            quick=cards.quick(MENU))
 
 

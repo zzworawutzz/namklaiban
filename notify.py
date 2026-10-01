@@ -295,10 +295,14 @@ def run_digest(conn, at=None, senders=SENDERS):
     if not subs:
         return 0, 0
     rows = core.latest(conn, at)
-    cache, sent, failed = {}, 0, 0
+    cache, sent, failed, done = {}, 0, 0, set()
     for sub in subs:
         prov = (sub["label"] or "")[2:] if is_group(sub) else province_of(rows, sub["lat"], sub["lng"])
         if not prov:
+            continue
+        if (sub["channel"], sub["target"], prov) in done:   # several saved places in one province: one report is enough
+            conn.execute("UPDATE subscriptions SET last_digest=? WHERE id=?", (today, sub["id"]))
+            conn.commit()
             continue
         if prov not in cache:
             cache[prov] = report.build(conn, prov, at, rows=rows)
@@ -314,6 +318,7 @@ def run_digest(conn, at=None, senders=SENDERS):
             continue
         conn.execute("UPDATE subscriptions SET last_digest=? WHERE id=?", (today, sub["id"]))
         conn.commit()
+        done.add((sub["channel"], sub["target"], prov))
         sent += 1
     return sent, failed
 
