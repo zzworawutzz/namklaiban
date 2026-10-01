@@ -31,6 +31,7 @@ main{flex:1;display:grid;grid-template-columns:380px 1fr;min-height:0}
 #map{min-height:300px}
 .controls{display:flex;flex-wrap:wrap;gap:8px}
 .controls input{flex:1 1 100%;padding:9px 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg)}
+.controls select{flex:1 1 100%;padding:9px 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg)}
 .btn{padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-weight:500}
 .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .btn[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
@@ -67,6 +68,7 @@ svg.chart{width:100%;height:auto;display:block}
   <div id="panel">
     <div id="err" class="err" hidden></div>
     <div class="controls">
+      <select id="prov" aria-label="เลือกจังหวัด"></select>
       <input id="q" type="search" placeholder="ค้นหาสถานีหรือจังหวัด" aria-label="ค้นหาสถานี">
       <button class="btn primary" id="btnMe" type="button">ใกล้ฉัน</button>
       <button class="btn" id="btnPin" type="button" aria-pressed="false">ปักหมุดบ้านฉัน</button>
@@ -92,6 +94,8 @@ var LABEL = {normal:"ปกติ", watch:"เฝ้าระวัง", alert:"
 var COLOR = {normal:"#1b8f61", watch:"#c98a00", alert:"#d2372f", unknown:"#6b7f8a"};
 var REFRESH_MS = 5*60*1000;
 var Z = {alert:600, watch:400, unknown:200, normal:0};
+var DEFAULT_PROVINCE = "พระนครศรีอยุธยา";
+var province = (function(){ var v = store("nkb-prov"); return v===null||v===undefined ? DEFAULT_PROVINCE : (v==="all" ? "" : v); })();
 var filter = null;
 var stations = [], byId = {}, markers = {}, sel = null, origin = null, pinMode = false, originLayer = null;
 function $(id){return document.getElementById(id);}
@@ -134,7 +138,9 @@ function getJSON(path){
   return fetch(API+path).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); });
 }
 
+function inProv(s){ return !province || s.province===province; }
 function visible(s){
+  if(!inProv(s)) return false;
   if(!filter) return true;
   return filter==="stale" ? s.stale : s.status===filter;
 }
@@ -149,7 +155,7 @@ function drawMarkers(){
 }
 function drawChips(){
   var c = {alert:0,watch:0,normal:0,unknown:0}, stale = 0;
-  stations.forEach(function(s){ c[s.status]=(c[s.status]||0)+1; if(s.stale) stale++; });
+  stations.filter(inProv).forEach(function(s){ c[s.status]=(c[s.status]||0)+1; if(s.stale) stale++; });
   var html = ["alert","watch","normal","unknown"].map(function(k){
     return '<button type="button" class="chip" data-f="'+k+'" aria-pressed="'+(filter===k)+'">'+shapeSvg(k,16,false)+LABEL[k]+" "+c[k]+'</button>';
   }).join("");
@@ -250,6 +256,9 @@ function setOrigin(o){
   if(!o){ $("results").hidden = true; return; }
   getJSON("/stations/nearby?lat="+o.lat+"&lng="+o.lng+"&limit=3").then(function(list){
     list.forEach(function(s){ byId[s.id]=Object.assign(byId[s.id]||{},s); });
+    if(province && list.some(function(s){ return s.province!==province; })){  // don't hide the stations near the user
+      province = ""; $("prov").value = ""; drawMarkers(); drawChips();
+    }
     showResults("สถานีใกล้ที่สุด 3 แห่ง", list, function(s){return s.distance_km+" กม.";});
     if(list[0]) select(list[0].id,false);
     var b = L.latLngBounds([[o.lat,o.lng]].concat(list.map(function(s){return [s.lat,s.lng];})));
@@ -257,10 +266,26 @@ function setOrigin(o){
   }).catch(function(){ showErr("เรียกข้อมูลสถานีใกล้เคียงไม่ได้"); });
 }
 
+function drawProvinceSelect(){
+  var names = {}; stations.forEach(function(s){ if(s.province) names[s.province]=1; });
+  var list = Object.keys(names).sort(function(a,b){ return a.localeCompare(b,"th"); });
+  if(province && !names[province]) province = "";  // saved province has no stations any more
+  var count = function(n){ return stations.filter(function(s){return s.province===n;}).length; };
+  $("prov").innerHTML = '<option value="">ทั้งประเทศ ('+stations.length+' สถานี)</option>' +
+    list.map(function(n){ return '<option value="'+esc(n)+'">'+esc(n)+' ('+count(n)+')</option>'; }).join("");
+  $("prov").value = province;
+}
+function showProvince(fit){
+  var list = stations.filter(inProv);
+  if(fit && list.length) map.fitBounds(L.latLngBounds(list.map(function(s){return [s.lat,s.lng];})),{padding:[40,40],maxZoom:11});
+  if(!province){ if(!origin) $("results").hidden = true; return; }
+  list = list.slice().sort(function(a,b){ return (b.pct_of_bank==null?-1:b.pct_of_bank)-(a.pct_of_bank==null?-1:a.pct_of_bank); });
+  showResults("จังหวัด"+province+" ("+list.length+" สถานี เรียงตามระดับน้ำสูงสุด)", list.slice(0,10));
+}
 function load(){
   return getJSON("/stations").then(function(list){
     stations = list; byId = {}; list.forEach(function(s){byId[s.id]=s;});
-    showErr(""); drawMarkers(); drawChips();
+    showErr(""); drawProvinceSelect(); drawMarkers(); drawChips();
     if(sel && byId[sel]) select(sel,false);
   }).catch(function(e){
     showErr("เชื่อมต่อ API ที่ "+API+" ไม่ได้ ("+e.message+") ตรวจว่า uvicorn ยังรันอยู่ แล้วโหลดหน้านี้ใหม่");
@@ -271,6 +296,10 @@ $("chips").addEventListener("click",function(e){
   var b = e.target.closest ? e.target.closest(".chip") : null; if(!b) return;
   var f = b.getAttribute("data-f"); filter = (filter===f) ? null : f;
   drawMarkers(); drawChips();
+});
+$("prov").addEventListener("change",function(e){
+  province = e.target.value; store("nkb-prov", province || "all");
+  drawMarkers(); drawChips(); showProvince(true);
 });
 $("q").addEventListener("input",function(e){
   var q = e.target.value.trim();
@@ -311,7 +340,8 @@ load().then(function(){
   var want = QS.get("station");
   if(want && byId[want]){ select(want,true); return; }  // shared link wins over the saved home pin
   var saved = store("nkb-home");
-  if(saved){ try{ var h=JSON.parse(saved); if(typeof h.lat==="number"&&typeof h.lng==="number"){ $("btnPin").textContent="ย้ายหมุดบ้าน"; setOrigin({lat:h.lat,lng:h.lng,kind:"home"}); } }catch(e){} }
+  if(saved){ try{ var h=JSON.parse(saved); if(typeof h.lat==="number"&&typeof h.lng==="number"){ $("btnPin").textContent="ย้ายหมุดบ้าน"; setOrigin({lat:h.lat,lng:h.lng,kind:"home"}); return; } }catch(e){} }
+  showProvince(true);  // no shared link and no saved home: start on the chosen province
 });
 setInterval(load, REFRESH_MS);
 if("serviceWorker" in navigator && location.protocol!=="file:"){ navigator.serviceWorker.register("sw.js").catch(function(){}); }
