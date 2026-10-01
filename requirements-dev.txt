@@ -1,0 +1,4 @@
+-r requirements.txt
+pytest>=8
+httpx>=0.27
+pgserver>=0.1  # embedded Postgres, used only by test_postgres.py

@@ -1,0 +1,3 @@
+# Tells Vercel where the FastAPI instance is (the file is api.py, not one of its default names).
+[tool.vercel]
+entrypoint = "api:app"
