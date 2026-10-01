@@ -321,7 +321,7 @@ var REFRESH_MS = 5*60*1000;
 var Z = {alert:600, watch:400, unknown:200, normal:0};
 var CLUSTER_OFF_ZOOM = 11;
 var DEFAULT_PROVINCE = "พระนครศรีอยุธยา";
-var province = (function(){ var v = store("nkb-prov"); return v===null||v===undefined ? DEFAULT_PROVINCE : (v==="all" ? "" : v); })();
+var province = DEFAULT_PROVINCE;   // always open on the default province; the choice is not remembered between visits
 var filter = null;
 var stations = [], byId = {}, markers = {}, sel = null, origin = null, pinMode = false, originLayer = null;
 function $(id){return document.getElementById(id);}
@@ -694,7 +694,7 @@ function setOrigin(o){
       : L.circleMarker([o.lat,o.lng],{radius:8,color:"#fff",weight:2,fillColor:"#0b6e8f",fillOpacity:1}).addTo(map);
   }
   $("btnClear").hidden = !o;
-  say(!o ? "" : (o.kind==="home" ? "ใช้ตำแหน่งบ้านที่ปักไว้ (เก็บในเครื่องนี้เท่านั้น)" : "ใช้ตำแหน่งปัจจุบันของคุณ"));
+  say(!o ? "" : (o.kind==="home" ? "ใช้ตำแหน่งบ้านที่ปักไว้ (ใช้เฉพาะตอนเปิดหน้านี้ ไม่ถูกเก็บไว้)" : "ใช้ตำแหน่งปัจจุบันของคุณ"));
   if(!o){ $("results").hidden = true; return; }
   getJSON("/stations/nearby?lat="+o.lat+"&lng="+o.lng+"&limit=3").then(function(list){
     list.forEach(function(s){ byId[s.id]=Object.assign(byId[s.id]||{},s); });
@@ -742,7 +742,7 @@ $("chips").addEventListener("click",function(e){
   redraw();
 });
 $("prov").addEventListener("change",function(e){
-  province = e.target.value; store("nkb-prov", province || "all");
+  province = e.target.value;
   resetReplay(); redraw(); showProvince(true); updateRepLink();
 });
 var geoSeq = 0;
@@ -814,10 +814,9 @@ map.on("click",function(e){
   if(rptPicking){ rptPicking=false; map.getContainer().style.cursor=""; toast(""); rptSetPoint(e.latlng); rptOpen(); return; }
   if(!pinMode){ probe(e.latlng); return; }
   pinMode=false; $("btnPin").setAttribute("aria-pressed","false"); $("btnPin").textContent="ย้ายหมุดบ้าน"; map.getContainer().style.cursor="";
-  store("nkb-home",JSON.stringify({lat:e.latlng.lat,lng:e.latlng.lng}));
   setOrigin({lat:e.latlng.lat,lng:e.latlng.lng,kind:"home"});
 });
-$("btnClear").addEventListener("click",function(){ store("nkb-home",null); $("btnPin").textContent="ปักหมุดบ้านฉัน"; setOrigin(null); closeLayers(); });
+$("btnClear").addEventListener("click",function(){ $("btnPin").textContent="ปักหมุดบ้านฉัน"; setOrigin(null); closeLayers(); });
 $("btnMe").addEventListener("click",function(){
   if(!navigator.geolocation){ say("เบราว์เซอร์นี้ไม่รองรับการระบุตำแหน่ง ลองปักหมุดบ้านแทน"); return; }
   say("กำลังหาตำแหน่งของคุณ…", true);
@@ -906,8 +905,6 @@ setSheet(isMobile() && !QS.get("station") ? "peek" : "half");   // phones: map f
 load().then(function(){
   var want = QS.get("station");
   if(want && byId[want]){ select(want,true); return; }  // shared link wins over the saved home pin
-  var saved = store("nkb-home");
-  if(saved){ try{ var h=JSON.parse(saved); if(typeof h.lat==="number"&&typeof h.lng==="number"){ $("btnPin").textContent="ย้ายหมุดบ้าน"; setOrigin({lat:h.lat,lng:h.lng,kind:"home"}); return; } }catch(e){} }
   showProvince(true);  // no shared link and no saved home: start on the chosen province
 });
 // "add the LINE bot" button: shown only when the server can tell us the bot's add-friend link

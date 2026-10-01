@@ -154,14 +154,12 @@ function show(province){
 getJSON("/stations").then(function(list){
   var names = {}; list.forEach(function(s){ if(s.province) names[s.province] = (names[s.province]||0)+1; });
   var keys = Object.keys(names).sort(function(a,b){return a.localeCompare(b,"th");});
-  var saved = store("nkb-prov");
-  var want = QS.get("province") || (saved && saved!=="all" ? saved : DEFAULT_PROVINCE);
+  var want = QS.get("province") || DEFAULT_PROVINCE;
   if(!names[want]) want = keys[0];
   $("prov").innerHTML = keys.map(function(n){ return '<option value="'+esc(n)+'">'+esc(n)+' ('+names[n]+')</option>'; }).join("");
   $("prov").value = want;
   $("prov").addEventListener("change",function(e){
     var u = new URL(location.href); u.searchParams.set("province", e.target.value); history.replaceState(null,"",u);
-    store("nkb-prov", e.target.value);
     show(e.target.value);
   });
   show(want);
