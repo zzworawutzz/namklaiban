@@ -45,14 +45,16 @@ CREATE TABLE IF NOT EXISTS ingest_runs(
 CREATE TABLE IF NOT EXISTS subscriptions(
   id INTEGER PRIMARY KEY AUTOINCREMENT, channel TEXT NOT NULL, target TEXT NOT NULL,
   lat REAL NOT NULL, lng REAL NOT NULL, label TEXT, last_status TEXT, last_notified TEXT,
-  digest INTEGER NOT NULL DEFAULT 1, last_digest TEXT);
+  digest INTEGER NOT NULL DEFAULT 1, last_digest TEXT,
+  notify_level TEXT NOT NULL DEFAULT 'all', quiet INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS locks(name TEXT PRIMARY KEY, until TEXT NOT NULL);
 """
 # Same tables for Postgres: REAL there is 4-byte float, which would blur coordinates.
 SCHEMA_PG = (SCHEMA.replace("REAL", "DOUBLE PRECISION")
              .replace("INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY"))
 NEW_STATION_COLS = {"river": "TEXT", "basin": "TEXT", "watch_pct": "REAL", "alert_pct": "REAL"}
-NEW_SUB_COLS = {"digest": "INTEGER NOT NULL DEFAULT 1", "last_digest": "TEXT"}
+NEW_SUB_COLS = {"digest": "INTEGER NOT NULL DEFAULT 1", "last_digest": "TEXT",
+                "notify_level": "TEXT NOT NULL DEFAULT 'all'", "quiet": "INTEGER NOT NULL DEFAULT 0"}
 
 
 def init_db(conn):

@@ -14,13 +14,16 @@ Rules: the first run only notifies if the station is already watch/alert; after 
 a message goes out on every status change. A failed send is retried next run.
 """
 import argparse
+import inspect
 import json
 import os
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 
+import cards
 import core
 import db
 import report
@@ -31,34 +34,70 @@ LABEL = {"normal": "ปกติ", "watch": "เฝ้าระวัง", "aler
 FOOTER = "ข้อมูลจาก ThaiWater ใช้ประกอบการตัดสินใจเท่านั้น ให้ยึดประกาศ ปภ. ในพื้นที่เป็นหลัก"
 
 
-def send_line(target, text):
+def _invoke(fn, *args, **kw):
+    """Call fn with only the keyword arguments it declares (simple senders just ignore cards/buttons)."""
+    try:
+        params = inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return fn(*args)
+    if any(p.kind == p.VAR_KEYWORD for p in params.values()):
+        return fn(*args, **{k: v for k, v in kw.items() if v is not None})
+    return fn(*args, **{k: v for k, v in kw.items() if k in params and v is not None})
+
+
+def _line_token():
     token = os.environ.get("LINE_CHANNEL_TOKEN")
     if not token:
         raise RuntimeError("LINE_CHANNEL_TOKEN is not set")
     if not token.isascii() or " " in token:
         raise RuntimeError("LINE_CHANNEL_TOKEN does not look like a real token "
                            "(contains non-ASCII characters or spaces) - did you leave the placeholder text in?")
-    body = json.dumps({"to": target, "messages": [{"type": "text", "text": text}]}).encode()
-    req = urllib.request.Request(LINE_PUSH, data=body, headers={
-        "Content-Type": "application/json", "Authorization": f"Bearer {token}"})
-    with urllib.request.urlopen(req, timeout=15):
+    return token
+
+
+def _line_post(url, payload, timeout):
+    req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers={
+        "Content-Type": "application/json", "Authorization": f"Bearer {_line_token()}"})
+    with urllib.request.urlopen(req, timeout=timeout):
         pass
 
 
-def reply_line(reply_token, text):
+def _text_msg(text, quick=None):
+    m = {"type": "text", "text": text[:4900]}
+    if quick:
+        m["quickReply"] = {"items": quick}
+    return m
+
+
+def _flex_msg(flex, alt, quick=None):
+    m = {"type": "flex", "altText": alt[:400], "contents": flex}
+    if quick:
+        m["quickReply"] = {"items": quick}
+    return m
+
+
+def _post_with_fallback(url, base, text, flex, quick, timeout):
+    """Send the card if there is one; if LINE rejects it (HTTP 400) send the plain text instead."""
+    try:
+        _line_post(url, {**base, "messages": [_flex_msg(flex, text, quick) if flex else _text_msg(text, quick)]}, timeout)
+    except urllib.error.HTTPError as e:
+        if flex is None or e.code != 400:
+            raise
+        print(f"LINE rejected the card ({e.read()[:200]!r}); sending plain text", file=sys.stderr)
+        _line_post(url, {**base, "messages": [_text_msg(text, quick)]}, timeout)
+
+
+def send_line(target, text, flex=None):
+    _post_with_fallback(LINE_PUSH, {"to": target}, text, flex, None, 15)
+
+
+def reply_line(reply_token, text, flex=None, quick=None):
     """Answer a user's message through the Reply API (free, valid ~1 minute)."""
-    token = os.environ.get("LINE_CHANNEL_TOKEN")
-    if not token or not token.isascii() or " " in token:
-        raise RuntimeError("LINE_CHANNEL_TOKEN is missing or malformed")
-    body = json.dumps({"replyToken": reply_token, "messages": [{"type": "text", "text": text[:4900]}]}).encode()
-    req = urllib.request.Request("https://api.line.me/v2/bot/message/reply", data=body, headers={
-        "Content-Type": "application/json", "Authorization": f"Bearer {token}"})
-    with urllib.request.urlopen(req, timeout=10):
-        pass
+    _post_with_fallback("https://api.line.me/v2/bot/message/reply", {"replyToken": reply_token}, text, flex, quick, 10)
 
 
-def send_stdout(target, text):
-    print(f"--> {target}\n{text}\n")
+def send_stdout(target, text, flex=None):
+    print(f"--> {target}{' [card]' if flex else ''}\n{text}\n")
 
 
 SENDERS = {"line": send_line, "stdout": send_stdout}
@@ -82,12 +121,29 @@ def message(sub, st):
     return "\n".join(lines)
 
 
+QUIET_FROM_H, QUIET_TO_H = 22, 6   # Thai local time: no pushes for people who asked for quiet nights
+
+
+def is_group(sub):
+    """LINE groupIds start with C, roomIds with R (userIds with U). Groups only get the morning report."""
+    return sub["channel"] == "line" and sub["target"][:1] in ("C", "R")
+
+
+def in_quiet_hours(at):
+    h = at.astimezone(TZ_TH).hour
+    return h >= QUIET_FROM_H or h < QUIET_TO_H
+
+
 def run(conn, at=None, senders=SENDERS):
-    """Returns (sent, failed). Only fresh stations are considered for a subscriber."""
+    """Returns (sent, failed). Only fresh stations are considered for a subscriber.
+    Settings: notify_level 'alert' = only when entering/leaving the alert level;
+    quiet = no pushes 22:00-06:00 Thai time unless the status is alert (held back, sent after 06:00)."""
     at = at or datetime.now(timezone.utc)
     rows = core.latest(conn, at)
     sent = failed = 0
     for sub in conn.execute("SELECT * FROM subscriptions").fetchall():
+        if is_group(sub):
+            continue
         near = core.nearest([dict(r) for r in rows], sub["lat"], sub["lng"], 1, fresh_only=True)
         if not near:
             continue
@@ -98,8 +154,14 @@ def run(conn, at=None, senders=SENDERS):
             if prev is None:  # silent baseline
                 conn.execute("UPDATE subscriptions SET last_status=? WHERE id=?", (st["status"], sub["id"]))
             continue
+        if sub["notify_level"] == "alert" and "alert" not in (st["status"], prev):
+            conn.execute("UPDATE subscriptions SET last_status=? WHERE id=?", (st["status"], sub["id"]))
+            continue  # this user only wants alert-level news; remember the state without a message
+        if sub["quiet"] and in_quiet_hours(at) and st["status"] != "alert":
+            continue  # keep last_status unchanged so it is sent after the quiet hours if still different
         try:
-            senders[sub["channel"]](sub["target"], message(sub, st))
+            _invoke(senders[sub["channel"]], sub["target"], message(sub, st),
+                    flex=cards.station_card(sub["label"], st, report_link(st["province"])))
         except Exception as e:
             print(f"send failed for subscription {sub['id']}: {e}", file=sys.stderr)
             failed += 1
@@ -148,14 +210,17 @@ def run_digest(conn, at=None, senders=SENDERS):
     rows = core.latest(conn, at)
     cache, sent, failed = {}, 0, 0
     for sub in subs:
-        prov = province_of(rows, sub["lat"], sub["lng"])
+        prov = (sub["label"] or "")[2:] if is_group(sub) else province_of(rows, sub["lat"], sub["lng"])
         if not prov:
             continue
         if prov not in cache:
             cache[prov] = report.build(conn, prov, at, rows=rows)
         rep = cache[prov]
         try:
-            senders[sub["channel"]](sub["target"], report.digest_text(rep, at, report_link(prov)))
+            if rep is None:
+                continue
+            _invoke(senders[sub["channel"]], sub["target"], report.digest_text(rep, at, report_link(prov)),
+                    flex=cards.digest_card(rep, report.thai_date(at), report_link(prov)))
         except Exception as e:
             print(f"digest failed for subscription {sub['id']}: {e}", file=sys.stderr)
             failed += 1

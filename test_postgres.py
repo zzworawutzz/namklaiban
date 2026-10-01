@@ -183,3 +183,25 @@ def test_snapshots_on_postgres(pg):
         tr.seed(c)
         s = core.snapshots(c, tr.AT, hours=24, step_h=6, province=tr.PROV)
     assert len(s["times"]) == 5 and s["stations"]["A"][-1] == 120.0 and set(s["stations"]) == {"A", "B", "C"}
+
+
+def test_line_settings_and_group_on_postgres(pg):
+    import test_line_features as tl
+    import line_webhook as lw
+    rec = tl.Recorder()
+    with db.connect() as c:
+        c.execute("CREATE TABLE subscriptions(id BIGSERIAL PRIMARY KEY, channel TEXT NOT NULL, target TEXT NOT NULL,"
+                  "lat DOUBLE PRECISION NOT NULL, lng DOUBLE PRECISION NOT NULL, label TEXT, last_status TEXT, last_notified TEXT,"
+                  "digest INTEGER NOT NULL DEFAULT 1, last_digest TEXT)")   # as it was before the settings columns
+        c.commit()
+        tl.seed(c)                                                           # init_db adds notify_level / quiet
+        lw.handle_event(c, tl.user_event({"type": "location", "latitude": 14.36, "longitude": 100.55}), tl.AT, rec)
+        tl.say(c, rec, "แจ้งเฉพาะเตือนภัย"); tl.say(c, rec, "ไม่รบกวนกลางคืน")
+        row = c.execute("SELECT notify_level, quiet FROM subscriptions WHERE target='U1'").fetchone()
+        assert (row["notify_level"], row["quiet"]) == ("alert", 1)
+        lw.handle_event(c, tl.group_event("message", "ติดตาม อยุธยา"), tl.AT, rec)
+        assert c.execute("SELECT label FROM subscriptions WHERE target='C123'").fetchone()["label"] == "จ.พระนครศรีอยุธยา"
+        out = []
+        assert notify.run_digest(c, tl.AT, {"line": lambda t, m, flex=None: out.append(t)}) == (2, 0)
+        assert sorted(out) == ["C123", "U1"]
+        assert notify.run(c, tl.AT, {"line": lambda t, m: 1 / 0}) == (0, 0)
