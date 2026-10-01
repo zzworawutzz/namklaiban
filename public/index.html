@@ -210,6 +210,12 @@ svg.chart{width:100%;height:auto;display:block}
 <div id="layers" hidden role="dialog" aria-label="ตัวเลือกแผนที่">
   <h3>เลเยอร์</h3>
   <label class="chk"><input type="checkbox" id="chkRiver" checked><span>เส้นเชื่อมสถานีตามแม่น้ำ<br><span class="note">เป็นเส้นตรงระหว่างสถานี ไม่ใช่แนวแม่น้ำจริง เรียงต้นน้ำ→ปลายน้ำจากระดับท้องน้ำ (ประมาณ)</span></span></label>
+  <div id="floodBox" hidden>
+    <label class="chk"><input type="checkbox" id="chkFlood"><span>พื้นที่น้ำท่วมจากดาวเทียม (GISTDA)<br><span class="note">ภาพถ่ายดาวเทียม อาจล่าช้าและถูกเมฆบัง ไม่ใช่ประกาศทางการ</span></span></label>
+    <select id="floodPeriod" aria-label="ช่วงเวลาของภาพดาวเทียม" style="margin:0 0 6px 28px">
+      <option value="1day">ย้อนหลัง 1 วัน</option><option value="3days">3 วัน</option><option value="7days" selected>7 วัน</option><option value="30days">30 วัน</option>
+    </select>
+  </div>
   <h3>ตำแหน่งของฉัน</h3>
   <button class="btn block" id="btnPin" type="button" aria-pressed="false">ปักหมุดบ้านฉัน</button>
   <button class="btn block" id="btnClear" type="button" hidden style="margin-top:8px">ล้างตำแหน่ง</button>
@@ -321,7 +327,7 @@ var map = L.map("map",{zoomControl:false,attributionControl:true}).setView([13.5
 L.control.zoom({position:"bottomright"}).addTo(map);
 map.attributionControl.setPrefix(false);
 // OpenStreetMap tiles (no API key). The "soft" look and the dark mode come from CSS filters on .basemap.
-L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,className:"basemap",attribution:"© OpenStreetMap contributors"}).addTo(map);
+var baseTiles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,className:"basemap",attribution:"© OpenStreetMap contributors"}).addTo(map);
 // Nearby stations merge into a numbered cluster (coloured by its worst status); zoom in to split them.
 var layer = L.markerClusterGroup({showCoverageOnHover:false, maxClusterRadius:36, disableClusteringAtZoom:CLUSTER_OFF_ZOOM,
                                   spiderfyOnMaxZoom:false, iconCreateFunction:clusterIcon});
@@ -502,6 +508,20 @@ function drawRivers(){
   });
 }
 $("chkRiver").addEventListener("change", drawRivers);
+
+/* satellite flood extent: tiles are proxied by our API (the key stays server-side); offered only when configured */
+var floodTiles = null;
+function drawFlood(){
+  if(floodTiles){ map.removeLayer(floodTiles); floodTiles = null; }
+  if(!$("chkFlood").checked) return;
+  floodTiles = L.tileLayer(API+"/api/gistda/flood/"+$("floodPeriod").value+"/{z}/{x}/{y}",
+    {opacity:.6, maxZoom:19, maxNativeZoom:15, errorTileUrl:"data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==", attribution:"น้ำท่วม: GISTDA"}).addTo(map);
+}
+$("chkFlood").addEventListener("change", drawFlood);
+$("floodPeriod").addEventListener("change", drawFlood);
+fetch(API+"/api/gistda/status").then(function(r){ return r.ok ? r.json() : null; }).then(function(j){
+  if(j && j.enabled) $("floodBox").hidden = false;
+}).catch(function(){});
 
 function tlLabel(){
   var d = replay.data;
