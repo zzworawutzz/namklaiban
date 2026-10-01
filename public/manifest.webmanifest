@@ -1,0 +1,12 @@
+{
+  "name": "น้ำใกล้บ้านฉัน",
+  "short_name": "น้ำใกล้บ้าน",
+  "description": "ดูระดับน้ำจากสถานีวัดที่ใกล้บ้านที่สุด",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#edf2f5",
+  "theme_color": "#0e5a78",
+  "lang": "th",
+  "icons": [{"src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}]
+}
