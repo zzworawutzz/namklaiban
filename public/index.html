@@ -57,6 +57,12 @@ svg.chart{width:100%;height:auto;display:block}
 .sharebar{display:flex;gap:8px;align-items:center;margin-top:12px}
 .foot{color:var(--muted);font-size:12px;margin-top:14px}
 .leaflet-container{font-family:inherit}
+.pp{min-width:220px;color:#10252f;font-family:inherit}
+.pp b{display:block;margin-bottom:4px}
+.pp .pprow{display:flex;width:100%;justify-content:space-between;align-items:center;gap:10px;background:none;border:0;border-top:1px solid #d3dfe5;padding:6px 0;text-align:left;cursor:pointer;color:inherit;font:inherit}
+.pp .pprow small{display:block;color:#587280}
+.pp .pprow strong{white-space:nowrap}
+.pp .pprow:hover{background:#edf2f5}
 </style>
 </head>
 <body>
@@ -134,6 +140,26 @@ var map = L.map("map",{zoomControl:true}).setView([13.5,101.0],6);
 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:18,attribution:"© OpenStreetMap contributors"}).addTo(map);
 var layer = L.layerGroup().addTo(map);
 
+var probeMark = null;
+function probe(latlng){
+  if(probeMark){ map.removeLayer(probeMark); probeMark = null; }
+  var m = probeMark = L.circleMarker(latlng,{radius:7,color:"#fff",weight:2,fillColor:"#0e5a78",fillOpacity:1}).addTo(map);
+  m.bindPopup('<div class="pp">กำลังค้นหาสถานีใกล้จุดนี้…</div>').openPopup();
+  getJSON("/stations/nearby?lat="+latlng.lat+"&lng="+latlng.lng+"&limit=3").then(function(list){
+    if(probeMark!==m) return;
+    list.forEach(function(s){ byId[s.id]=Object.assign(byId[s.id]||{},s); });
+    m.setPopupContent('<div class="pp"><b>สถานีใกล้จุดที่เลือก</b>'+list.map(function(s){
+      return '<button type="button" class="pprow" data-id="'+esc(s.id)+'"><span>'+esc(s.name)+'<small>'+esc(s.province||"")+' · '+s.distance_km+' กม.'+(s.stale?' · ข้อมูลไม่อัปเดต':'')+'</small></span><strong style="color:'+(COLOR[s.status]||COLOR.unknown)+'">'+esc(statusText(s))+' '+pctText(s)+'</strong></button>';
+    }).join("")+'<small style="color:#587280">กดชื่อสถานีเพื่อดูรายละเอียด</small></div>');
+  }).catch(function(){ if(probeMark===m) m.setPopupContent('<div class="pp">เรียกข้อมูลสถานีใกล้เคียงไม่ได้ ลองใหม่อีกครั้ง</div>'); });
+}
+map.on("popupopen",function(e){
+  var el = e.popup.getElement(); if(!el) return;
+  el.addEventListener("click",function(ev){
+    var b = ev.target.closest ? ev.target.closest(".pprow") : null; if(!b) return;
+    select(b.getAttribute("data-id"), false); map.closePopup();
+  });
+});
 function showErr(msg){ var e=$("err"); e.hidden=!msg; e.textContent=msg||""; }
 function getJSON(path){
   return fetch(API+path).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); });
@@ -327,7 +353,7 @@ $("detail").addEventListener("click",function(e){
 $("resList").addEventListener("click",function(e){ var b=e.target.closest(".row"); if(b) select(b.getAttribute("data-id"),true); });
 $("btnPin").addEventListener("click",function(){ pinMode=!pinMode; this.setAttribute("aria-pressed",String(pinMode)); this.textContent = pinMode?"ยกเลิกการปักหมุด":"ปักหมุดบ้านฉัน"; if(pinMode) $("originNote").textContent="แตะบนแผนที่ตรงจุดที่ตั้งบ้านของคุณ"; map.getContainer().style.cursor = pinMode?"crosshair":""; });
 map.on("click",function(e){
-  if(!pinMode) return;
+  if(!pinMode){ probe(e.latlng); return; }
   pinMode=false; $("btnPin").setAttribute("aria-pressed","false"); $("btnPin").textContent="ย้ายหมุดบ้าน"; map.getContainer().style.cursor="";
   store("nkb-home",JSON.stringify({lat:e.latlng.lat,lng:e.latlng.lng}));
   setOrigin({lat:e.latlng.lat,lng:e.latlng.lng,kind:"home"});
