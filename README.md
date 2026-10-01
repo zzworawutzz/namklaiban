@@ -65,6 +65,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 3. ตั้ง env เพิ่มใน Vercel: `CRON_SECRET` (สตริงสุ่ม ≥16 ตัว) และถ้าจะแจ้งเตือน `LINE_CHANNEL_TOKEN`
 4. Deploy แล้วตั้งตัวเรียก `/api/cron/ingest` ทุก 20 นาที เลือกอย่างใดอย่างหนึ่ง:
    - **ฟรี (Hobby):** Vercel Cron ฟรีรันได้วันละครั้ง และ expression ที่ถี่กว่านั้นทำให้ deploy ล้มเหลว จึงใช้ `.github/workflows/ingest.yml` แทน: ตั้ง repo secret `CRON_SECRET` (ค่าเดียวกับ Vercel) และ repo variable `APP_URL`
+   - **ตัวตั้งเวลาภายนอก (เช่น cron-job.org) ซ้อนเป็นตัวสำรอง:** ตั้ง env `CRON_SECRET_EXTERNAL` (ค่าสุ่มแยกจาก `CRON_SECRET`) แล้วให้บริการนั้นเรียก `GET /api/cron/ingest` พร้อมหัว `Authorization: Bearer <ค่านั้น>` ทุก 20 นาที ลบ env นี้เพื่อเพิกถอนทันทีโดยไม่กระทบ GitHub (รันซ้อนกันได้ปลอดภัย: มีล็อกและข้อมูลไม่ซ้ำ)
    - **Pro:** เพิ่มใน `vercel.json` แล้ว Vercel จะส่ง `Authorization: Bearer $CRON_SECRET` ให้เอง
      ```json
      "crons": [{ "path": "/api/cron/ingest", "schedule": "*/20 * * * *" }]

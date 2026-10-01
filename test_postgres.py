@@ -161,3 +161,17 @@ def test_digest_report_and_migration_on_postgres(pg):
         assert notify.run_digest(c, tr.AT, {"stdout": lambda t, m: out.append(m)}) == (0, 0)
         assert c.execute("SELECT digest FROM subscriptions").fetchone()["digest"] == 1
     assert "จ.พระนครศรีอยุธยา" in out[0]
+
+
+def test_cron_accepts_separate_external_key(pg, monkeypatch):
+    monkeypatch.setattr(ig, "fetch", lambda: {"data": real_rows()})
+    cl = TestClient(api.app)
+    monkeypatch.setenv("CRON_SECRET_EXTERNAL", "external-key-external-key")
+    assert cl.get("/api/cron/ingest", headers={"Authorization": "Bearer external-key-external-key"}).status_code == 200
+    assert cl.get("/api/cron/ingest", headers={"Authorization": "Bearer wrong"}).status_code == 401
+    monkeypatch.setenv("CRON_SECRET", "main-main-main-main")
+    assert cl.get("/api/cron/ingest", headers={"Authorization": "Bearer main-main-main-main"}).status_code == 200
+    monkeypatch.delenv("CRON_SECRET_EXTERNAL")                           # revoking the external key works on its own
+    assert cl.get("/api/cron/ingest", headers={"Authorization": "Bearer external-key-external-key"}).status_code == 401
+    assert cl.get("/api/cron/ingest", headers={"Authorization": "Bearer main-main-main-main"}).status_code == 200
+    assert cl.get("/api/cron/ingest").status_code == 401

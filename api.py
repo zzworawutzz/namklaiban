@@ -119,8 +119,11 @@ def province_report(province: str, days: int = Query(14, ge=2, le=30)):
 def cron_ingest(authorization: Optional[str] = Header(None)):
     """Fetch new readings, then send notifications. Called by Vercel Cron or any scheduler
     with `Authorization: Bearer $CRON_SECRET`. Refuses to run when CRON_SECRET is unset."""
-    secret = os.environ.get("CRON_SECRET", "")
-    if not secret or not hmac.compare_digest((authorization or "").encode(), f"Bearer {secret}".encode()):
+    # CRON_SECRET is for Vercel Cron / GitHub Actions; CRON_SECRET_EXTERNAL lets a third-party
+    # scheduler call this endpoint with its own key that can be revoked on its own.
+    secrets = [os.environ.get(k, "") for k in ("CRON_SECRET", "CRON_SECRET_EXTERNAL")]
+    given = (authorization or "").encode()
+    if not any(s and hmac.compare_digest(given, f"Bearer {s}".encode()) for s in secrets):
         raise HTTPException(401, "unauthorized")
     with conn() as c:
         if not ingest.try_lock(c, "cron"):
