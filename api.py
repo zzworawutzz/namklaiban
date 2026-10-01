@@ -166,9 +166,9 @@ async def line_webhook_endpoint(request: Request, x_line_signature: Optional[str
     except ValueError:
         raise HTTPException(400, "invalid json")
 
-    def reply(token, text):
+    def reply(token, text, flex=None, quick=None):
         try:
-            notify.reply_line(token, text)
+            notify.reply_line(token, text, flex=flex, quick=quick)
         except Exception as e:  # a failed reply must not make LINE retry the whole webhook
             print(f"LINE reply failed: {e}")
 

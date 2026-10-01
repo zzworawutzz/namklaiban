@@ -88,7 +88,7 @@ def test_endpoint_signature_and_end_to_end(tmp_path, monkeypatch):
     monkeypatch.setenv("WATER_DB", str(db_path))
     monkeypatch.setattr(api, "now", lambda: AT)
     sent = []
-    monkeypatch.setattr(api.notify, "reply_line", lambda tok, t: sent.append(t))
+    monkeypatch.setattr(api.notify, "reply_line", lambda tok, t, flex=None, quick=None: sent.append(t))
     cl = TestClient(api.app)
     body = json.dumps({"events": [loc()]}).encode()
     assert cl.post("/api/line/webhook", content=body).status_code == 503            # not configured
@@ -100,3 +100,26 @@ def test_endpoint_signature_and_end_to_end(tmp_path, monkeypatch):
     empty = b'{"events":[]}'                                                          # LINE console "Verify" button
     assert cl.post("/api/line/webhook", content=empty, headers={"X-Line-Signature": sign(empty)}).status_code == 200
     assert cl.post("/api/line/webhook", content=b"{", headers={"X-Line-Signature": sign(b"{")}).status_code == 400
+
+
+def test_endpoint_passes_cards_and_buttons_through_to_line(tmp_path, monkeypatch):
+    """Regression: the real endpoint must hand flex cards and quick-reply buttons to reply_line
+    (they were silently dropped once, so users only ever saw plain text)."""
+    db_path = tmp_path / "x.db"
+    c = db.connect(str(db_path)); ig.init_db(c); ig.save(c, real_rows()); c.commit(); c.close()
+    monkeypatch.setenv("WATER_DB", str(db_path))
+    monkeypatch.setattr(api, "now", lambda: AT)
+    monkeypatch.setenv("LINE_CHANNEL_SECRET", SECRET)
+    got = []
+    monkeypatch.setattr(api.notify, "reply_line", lambda tok, t, flex=None, quick=None: got.append((t, flex, quick)))
+    cl = TestClient(api.app)
+
+    def post(ev):
+        body = json.dumps({"events": [ev]}).encode()
+        assert cl.post("/api/line/webhook", content=body, headers={"X-Line-Signature": sign(body)}).status_code == 200
+    post(loc())
+    post(text("สถานะ"))
+    post(text("ตั้งค่า"))
+    status, settings = got[1], got[2]
+    assert status[1]["type"] == "bubble" and [q["action"]["text"] for q in status[2]] == ["สถานะ", "รายงาน", "ตั้งค่า"]
+    assert settings[1] is None and "แจ้งเฉพาะเตือนภัย" in [q["action"]["text"] for q in settings[2]]
