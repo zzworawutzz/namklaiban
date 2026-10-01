@@ -21,6 +21,7 @@ import db
 import ingest
 import line_webhook
 import notify
+import report
 
 HEALTH_MAX_INGEST_AGE_MIN = 60  # ingest runs every ~20 min; this long means it is stuck
 
@@ -31,7 +32,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"])
 @app.middleware("http")
 async def short_cache(request: Request, call_next):
     resp = await call_next(request)
-    if request.url.path.startswith("/stations"):
+    if request.url.path.startswith(("/stations", "/reports")):
         resp.headers["Cache-Control"] = "public, max-age=60"  # data refreshes every ~20 min
     return resp
 
@@ -104,6 +105,16 @@ def related(station_id: str):
     return core.related(rows, station_id)
 
 
+@app.get("/reports/{province}")
+def province_report(province: str, days: int = Query(14, ge=2, le=30)):
+    """Situation report for one province (exact name as in /stations), with a daily series."""
+    with conn() as c:
+        rep = report.build(c, province, now(), days)
+    if not rep:
+        raise HTTPException(404, "ไม่พบจังหวัดนี้")
+    return rep
+
+
 @app.get("/api/cron/ingest", include_in_schema=False)
 def cron_ingest(authorization: Optional[str] = Header(None)):
     """Fetch new readings, then send notifications. Called by Vercel Cron or any scheduler
@@ -118,13 +129,15 @@ def cron_ingest(authorization: Optional[str] = Header(None)):
             th = ingest.load_thresholds(os.environ.get("THRESHOLDS_FILE"))
             n_st, n_rd, skipped, pruned = ingest.run_ingest(c, thresholds=th)
             sent, failed = notify.run(c, now())
+            digests, digest_failed = notify.run_digest(c, now())
         except Exception as e:
             c.rollback()
             raise HTTPException(502, f"{type(e).__name__}: {e}"[:300])
         finally:
             ingest.release_lock(c, "cron")
     return {"stations": n_st, "new_readings": n_rd, "skipped": skipped, "pruned": pruned,
-            "notifications_sent": sent, "notifications_failed": failed}
+            "notifications_sent": sent, "notifications_failed": failed,
+            "digests_sent": digests, "digests_failed": digest_failed}
 
 
 @app.post("/api/line/webhook", include_in_schema=False)

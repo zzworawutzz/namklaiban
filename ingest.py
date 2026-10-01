@@ -44,26 +44,31 @@ CREATE TABLE IF NOT EXISTS ingest_runs(
   stations INTEGER, readings INTEGER, skipped INTEGER, error TEXT);
 CREATE TABLE IF NOT EXISTS subscriptions(
   id INTEGER PRIMARY KEY AUTOINCREMENT, channel TEXT NOT NULL, target TEXT NOT NULL,
-  lat REAL NOT NULL, lng REAL NOT NULL, label TEXT, last_status TEXT, last_notified TEXT);
+  lat REAL NOT NULL, lng REAL NOT NULL, label TEXT, last_status TEXT, last_notified TEXT,
+  digest INTEGER NOT NULL DEFAULT 1, last_digest TEXT);
 CREATE TABLE IF NOT EXISTS locks(name TEXT PRIMARY KEY, until TEXT NOT NULL);
 """
 # Same tables for Postgres: REAL there is 4-byte float, which would blur coordinates.
 SCHEMA_PG = (SCHEMA.replace("REAL", "DOUBLE PRECISION")
              .replace("INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY"))
 NEW_STATION_COLS = {"river": "TEXT", "basin": "TEXT", "watch_pct": "REAL", "alert_pct": "REAL"}
+NEW_SUB_COLS = {"digest": "INTEGER NOT NULL DEFAULT 1", "last_digest": "TEXT"}
 
 
 def init_db(conn):
     """Create tables and add columns introduced after a db file was first made."""
     if getattr(conn, "pg", False):
         conn.executescript(SCHEMA_PG)
+        for col, typ in NEW_SUB_COLS.items():  # databases created before these columns existed
+            conn.execute(f"ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS {col} {typ.replace('REAL', 'DOUBLE PRECISION')}")
         conn.commit()
         return
     conn.executescript(SCHEMA)
-    have = {r[1] for r in conn.execute("PRAGMA table_info(stations)")}
-    for col, typ in NEW_STATION_COLS.items():
-        if col not in have:
-            conn.execute(f"ALTER TABLE stations ADD COLUMN {col} {typ}")
+    for table, cols in (("stations", NEW_STATION_COLS), ("subscriptions", NEW_SUB_COLS)):
+        have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+        for col, typ in cols.items():
+            if col not in have:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
     conn.commit()
 
 

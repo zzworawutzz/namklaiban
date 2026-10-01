@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 pgserver = pytest.importorskip("pgserver")
 psycopg = pytest.importorskip("psycopg")
 
-import api, core, db, ingest as ig, notify
+import api, core, db, ingest as ig, notify, report
 from conftest import real_rows
 
 AT = datetime(2026, 10, 1, 16, 30, tzinfo=timezone.utc)
@@ -144,3 +144,20 @@ def test_line_webhook_flow_on_postgres(pg):
         lw.handle_event(c, ev({"type": "text", "text": "ยกเลิก"}), AT, reply)
         assert c.execute("SELECT COUNT(*) AS n FROM subscriptions").fetchone()["n"] == 0
     assert "บันทึกตำแหน่งแล้ว" in out[0] and "สถานะ" in out[2] and "ลบตำแหน่ง" in out[3]
+
+
+def test_digest_report_and_migration_on_postgres(pg):
+    import test_report as tr
+    with db.connect() as c:  # a database created before the digest columns existed
+        c.execute("CREATE TABLE subscriptions(id BIGSERIAL PRIMARY KEY, channel TEXT NOT NULL, target TEXT NOT NULL,"
+                  "lat DOUBLE PRECISION NOT NULL, lng DOUBLE PRECISION NOT NULL, label TEXT, last_status TEXT, last_notified TEXT)")
+        c.execute("INSERT INTO subscriptions(channel,target,lat,lng) VALUES('stdout','U1',14.36,100.55)")
+        c.commit()
+        tr.seed(c)                      # runs init_db -> ALTER ... ADD COLUMN IF NOT EXISTS
+        rep = report.build(c, tr.PROV, tr.AT)
+        assert rep["counts"]["alert"] == 1 and rep["delta_24h"] == {"alert": 1, "watch": -1} and len(rep["series"]) == 14
+        out = []
+        assert notify.run_digest(c, tr.AT, {"stdout": lambda t, m: out.append(m)}) == (1, 0)
+        assert notify.run_digest(c, tr.AT, {"stdout": lambda t, m: out.append(m)}) == (0, 0)
+        assert c.execute("SELECT digest FROM subscriptions").fetchone()["digest"] == 1
+    assert "จ.พระนครศรีอยุธยา" in out[0]

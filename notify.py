@@ -17,12 +17,14 @@ import argparse
 import json
 import os
 import sys
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 
 import core
 import db
-from ingest import init_db, utc_now
+import report
+from ingest import TZ_TH, init_db, utc_now
 
 LINE_PUSH = "https://api.line.me/v2/bot/message/push"
 LABEL = {"normal": "ปกติ", "watch": "เฝ้าระวัง", "alert": "เตือนภัย", "unknown": "ไม่ทราบ"}
@@ -109,6 +111,61 @@ def run(conn, at=None, senders=SENDERS):
     return sent, failed
 
 
+DIGEST_FROM_H, DIGEST_TO_H = 7, 11   # Thai local hours [7, 11): sent once a day, retried until 11:00
+
+
+def public_url():
+    """Base URL of this deployment (Vercel provides the production domain), or None."""
+    host = os.environ.get("PUBLIC_URL") or os.environ.get("VERCEL_PROJECT_PRODUCTION_URL")
+    if not host:
+        return None
+    return host if host.startswith("http") else f"https://{host}"
+
+
+def province_of(rows, lat, lng):
+    """Province of the station nearest to the point (fresh or not)."""
+    best = min((r for r in rows if r["province"]), key=lambda r: core.km(lat, lng, r["lat"], r["lng"]), default=None)
+    return best["province"] if best else None
+
+
+def report_link(province):
+    base = public_url()
+    return f"{base}/report.html?province={urllib.parse.quote(province)}" if base else None
+
+
+def run_digest(conn, at=None, senders=SENDERS):
+    """Send the morning situation report to subscribers who have not had today's yet.
+    Returns (sent, failed). Outside 07:00-10:59 Thai time it does nothing."""
+    at = at or datetime.now(timezone.utc)
+    th = at.astimezone(TZ_TH)
+    if not (DIGEST_FROM_H <= th.hour < DIGEST_TO_H):
+        return 0, 0
+    today = th.strftime("%Y-%m-%d")
+    subs = conn.execute("SELECT * FROM subscriptions WHERE digest = 1 AND (last_digest IS NULL OR last_digest <> ?)",
+                        (today,)).fetchall()
+    if not subs:
+        return 0, 0
+    rows = core.latest(conn, at)
+    cache, sent, failed = {}, 0, 0
+    for sub in subs:
+        prov = province_of(rows, sub["lat"], sub["lng"])
+        if not prov:
+            continue
+        if prov not in cache:
+            cache[prov] = report.build(conn, prov, at, rows=rows)
+        rep = cache[prov]
+        try:
+            senders[sub["channel"]](sub["target"], report.digest_text(rep, at, report_link(prov)))
+        except Exception as e:
+            print(f"digest failed for subscription {sub['id']}: {e}", file=sys.stderr)
+            failed += 1
+            continue
+        conn.execute("UPDATE subscriptions SET last_digest=? WHERE id=?", (today, sub["id"]))
+        conn.commit()
+        sent += 1
+    return sent, failed
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", default=None, help="SQLite path or postgres:// URL (default: $DATABASE_URL, $WATER_DB, water.db)")
@@ -121,6 +178,7 @@ def main(argv=None):
     add.add_argument("--label", default="")
     sp.add_parser("list")
     sp.add_parser("run")
+    sp.add_parser("digest")
     rm = sp.add_parser("remove")
     rm.add_argument("id", type=int)
     a = ap.parse_args(argv)
@@ -141,6 +199,10 @@ def main(argv=None):
     elif a.cmd == "remove":
         conn.execute("DELETE FROM subscriptions WHERE id=?", (a.id,))
         conn.commit()
+    elif a.cmd == "digest":
+        sent, failed = run_digest(conn)
+        print(f"digests sent={sent} failed={failed} (only sends 07:00-10:59 Thai time)")
+        return 1 if failed else 0
     else:
         sent, failed = run(conn)
         print(f"sent={sent} failed={failed}")
