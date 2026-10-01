@@ -21,10 +21,11 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import cards
 import core
+import floodreports
 import db
 import report
 from ingest import TZ_TH, init_db, utc_now
@@ -140,6 +141,43 @@ def message(sub, st):
     return "\n".join(lines)
 
 
+EARLY_WITHIN_H = 6        # warn when the nearest station is rising and should reach the bank within this many hours
+EARLY_COOLDOWN_H = 6      # at most one early warning per subscriber per this many hours
+REPORT_RADIUS_KM = 2.0    # user flood reports this close to home are worth a message...
+REPORT_MIN_CONFIRMED = 2  # ...once at least this many different people reported nearby
+REPORT_COOLDOWN_H = 3
+
+
+def early_message(sub, st):
+    where = f" ({sub['label']})" if sub["label"] else ""
+    pct = round(st["pct_of_bank"])
+    return "\n".join([
+        f"เตือนล่วงหน้า น้ำใกล้บ้านฉัน{where}",
+        f"สถานี {st['name']} {st['province'] or ''} (ห่าง {st['distance_km']} กม.) กำลังสูงขึ้น {st['trend_pct_per_hr']:+.1f}%/ชม.",
+        f"ตอนนี้ {pct}% ของตลิ่ง คาดถึงตลิ่งใน ~{st['eta_to_bank_h']} ชม. หากยังสูงขึ้นในอัตราเดิม",
+        "ควรยกของขึ้นที่สูงและเตรียมแผนเดินทาง (ประมาณการจากแนวโน้ม ไม่ใช่ประกาศทางการ)",
+        FOOTER])
+
+
+def report_alert_message(sub, rep, dist_km):
+    where = f" ({sub['label']})" if sub["label"] else ""
+    link = public_url()
+    return "\n".join([
+        f"น้ำใกล้บ้านฉัน{where}",
+        f"มีผู้ใช้รายงานน้ำท่วมใกล้บ้าน ห่างประมาณ {dist_km:.1f} กม.: {rep['label']} ยืนยันโดย {rep['confirmed']} คน",
+        "เป็นข้อมูลจากผู้ใช้ ยังไม่ผ่านการตรวจสอบ" + (f" ดูบนแผนที่ {link}" if link else ""),
+        FOOTER])
+
+
+def _iso(dt):
+    return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _since(ts, at, hours):
+    """True when ts is empty or older than `hours` before `at`."""
+    return not ts or ts < (at - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 QUIET_FROM_H, QUIET_TO_H = 22, 6   # Thai local time: no pushes for people who asked for quiet nights
 
 
@@ -160,6 +198,7 @@ def run(conn, at=None, senders=SENDERS):
     at = at or datetime.now(timezone.utc)
     rows = core.latest(conn, at)
     sent = failed = 0
+    reports = [r for r in floodreports.active(conn, at) if r["confirmed"] >= REPORT_MIN_CONFIRMED]
     for sub in conn.execute("SELECT * FROM subscriptions").fetchall():
         if is_group(sub):
             continue
@@ -169,6 +208,35 @@ def run(conn, at=None, senders=SENDERS):
         st = near[0]
         prev = sub["last_status"]
         changed = st["status"] != prev
+        quiet_now = bool(sub["quiet"]) and in_quiet_hours(at)
+        if not changed:
+            # 1) rising water that should reach the bank soon (the status itself has not changed yet)
+            urgent = st["status"] == "alert"
+            if (st["trend"] == "rising" and st["eta_to_bank_h"] and st["eta_to_bank_h"] <= EARLY_WITHIN_H
+                    and st["status"] in ("watch", "alert") and (sub["notify_level"] != "alert" or urgent)
+                    and not (quiet_now and not urgent) and _since(sub["last_early"], at, EARLY_COOLDOWN_H)):
+                try:
+                    _invoke(senders[sub["channel"]], sub["target"], early_message(sub, st),
+                            flex=cards.station_card(sub["label"], st, report_link(st["province"])))
+                    conn.execute("UPDATE subscriptions SET last_early=? WHERE id=?", (_iso(at), sub["id"]))
+                    sent += 1
+                except Exception as e:
+                    print(f"early warning failed for subscription {sub['id']}: {e}", file=sys.stderr)
+                    failed += 1
+                continue
+            # 2) people near home report flooding and others confirm it
+            if sub["notify_level"] != "alert" and not quiet_now and _since(sub["last_report_alert"], at, REPORT_COOLDOWN_H):
+                close = sorted(((core.km(sub["lat"], sub["lng"], r["lat"], r["lng"]), r) for r in reports),
+                               key=lambda t: t[0])
+                if close and close[0][0] <= REPORT_RADIUS_KM and close[0][1]["age_min"] <= 180:
+                    try:
+                        _invoke(senders[sub["channel"]], sub["target"], report_alert_message(sub, close[0][1], close[0][0]))
+                        conn.execute("UPDATE subscriptions SET last_report_alert=? WHERE id=?", (_iso(at), sub["id"]))
+                        sent += 1
+                    except Exception as e:
+                        print(f"report alert failed for subscription {sub['id']}: {e}", file=sys.stderr)
+                        failed += 1
+                    continue
         if not changed or (prev is None and st["status"] not in ("watch", "alert")):
             if prev is None:  # silent baseline
                 conn.execute("UPDATE subscriptions SET last_status=? WHERE id=?", (st["status"], sub["id"]))

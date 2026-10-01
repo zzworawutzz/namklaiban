@@ -66,3 +66,69 @@ def test_line_rejects_placeholder_token(monkeypatch):
         assert "placeholder" in str(e)
     else:
         raise AssertionError("expected RuntimeError")
+
+
+# ---- early warning and nearby user reports ----
+
+import floodreports as fr
+from datetime import timedelta
+
+
+def _station(**kw):
+    base = dict(id="s1", name="สถานีทดสอบ", province="อยุธยา", lat=14.2, lng=99.0, status="watch", pct_of_bank=85.0,
+                trend="rising", trend_pct_per_hr=4.0, eta_to_bank_h=3.8, stale=False, age_min=10, source="x", twins=[],
+                twin_conflict=False, advice="เฝ้าระวัง", river="r", watch_pct=70.0, alert_pct=90.0, water_level=1.0,
+                bank_level=2.0, ground_level=0.0, ts="2026-10-01T16:20:00Z", basin="b")
+    base.update(kw)
+    return base
+
+
+_n = iter(range(1000))
+
+
+def _run(tmp_path, monkeypatch, station, sub_sql="", at=AT, reports=()):
+    d = tmp_path / str(next(_n)); d.mkdir()          # a fresh database per scenario
+    c = setup(d)
+    if sub_sql:
+        c.execute("UPDATE subscriptions SET " + sub_sql)
+    c.execute("UPDATE subscriptions SET last_status=?", (station["status"],))   # status already known: no change message
+    c.commit()
+    monkeypatch.setattr(notify.core, "latest", lambda conn, a: [station])
+    for who, lat, lng in reports:
+        fr.add(c, lat, lng, 3, None, "web", who, at)
+    out = []
+    return c, out, (lambda: notify.run(c, at, {"stdout": lambda t, m: out.append(m)}))
+
+
+def test_early_warning_once_then_cooldown(tmp_path, monkeypatch):
+    c, out, go = _run(tmp_path, monkeypatch, _station())
+    assert go() == (1, 0) and "เตือนล่วงหน้า" in out[0] and "~3.8 ชม." in out[0]
+    assert go() == (0, 0)                                           # cooldown
+    c.execute("UPDATE subscriptions SET last_early='2026-10-01T05:00:00Z'")
+    assert go() == (1, 0)                                           # six hours later it may warn again
+
+
+def test_no_early_warning_when_far_falling_normal_or_user_wants_alerts_only(tmp_path, monkeypatch):
+    for kw, sql in [(dict(eta_to_bank_h=9.0), ""), (dict(trend="falling", eta_to_bank_h=None), ""),
+                    (dict(status="normal", pct_of_bank=40.0), ""), (dict(), "notify_level='alert'")]:
+        c, out, go = _run(tmp_path, monkeypatch, _station(**kw), sql)
+        assert go() == (0, 0), kw
+
+
+def test_quiet_hours_hold_early_warning_unless_alert(tmp_path, monkeypatch):
+    night = datetime(2026, 10, 1, 18, 0, tzinfo=timezone.utc)   # 01:00 Thai
+    c, out, go = _run(tmp_path, monkeypatch, _station(), "quiet=1", at=night)
+    assert go() == (0, 0)
+    c, out, go = _run(tmp_path, monkeypatch, _station(status="alert", pct_of_bank=93.0), "quiet=1", at=night)
+    assert go() == (1, 0)
+
+
+def test_confirmed_report_near_home_is_sent_once_and_unconfirmed_or_far_ones_are_not(tmp_path, monkeypatch):
+    st = _station(trend="steady", eta_to_bank_h=None, status="normal", pct_of_bank=30.0)
+    c, out, go = _run(tmp_path, monkeypatch, st, reports=[("a", 14.205, 99.002)])
+    assert go() == (0, 0)                                           # one person only: not confirmed
+    fr.add(c, 14.206, 99.003, 3, None, "web", "b", AT)              # a second, different person nearby
+    assert go() == (1, 0) and "ยืนยันโดย 2 คน" in out[0] and "ยังไม่ผ่านการตรวจสอบ" in out[0]
+    assert go() == (0, 0)                                           # cooldown
+    c, out, go = _run(tmp_path, monkeypatch, st, reports=[("a", 15.5, 100.5), ("b", 15.501, 100.501)])
+    assert go() == (0, 0)                                           # confirmed, but far from home

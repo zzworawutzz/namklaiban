@@ -46,7 +46,8 @@ CREATE TABLE IF NOT EXISTS subscriptions(
   id INTEGER PRIMARY KEY AUTOINCREMENT, channel TEXT NOT NULL, target TEXT NOT NULL,
   lat REAL NOT NULL, lng REAL NOT NULL, label TEXT, last_status TEXT, last_notified TEXT,
   digest INTEGER NOT NULL DEFAULT 1, last_digest TEXT,
-  notify_level TEXT NOT NULL DEFAULT 'all', quiet INTEGER NOT NULL DEFAULT 0);
+  notify_level TEXT NOT NULL DEFAULT 'all', quiet INTEGER NOT NULL DEFAULT 0,
+  last_early TEXT, last_report_alert TEXT);
 CREATE TABLE IF NOT EXISTS locks(name TEXT PRIMARY KEY, until TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS flood_reports(
   id INTEGER PRIMARY KEY AUTOINCREMENT, lat REAL NOT NULL, lng REAL NOT NULL, level INTEGER NOT NULL,
@@ -60,7 +61,8 @@ SCHEMA_PG = (SCHEMA.replace("REAL", "DOUBLE PRECISION")
              .replace("INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY"))
 NEW_STATION_COLS = {"river": "TEXT", "basin": "TEXT", "watch_pct": "REAL", "alert_pct": "REAL"}
 NEW_SUB_COLS = {"digest": "INTEGER NOT NULL DEFAULT 1", "last_digest": "TEXT",
-                "notify_level": "TEXT NOT NULL DEFAULT 'all'", "quiet": "INTEGER NOT NULL DEFAULT 0"}
+                "notify_level": "TEXT NOT NULL DEFAULT 'all'", "quiet": "INTEGER NOT NULL DEFAULT 0",
+                "last_early": "TEXT", "last_report_alert": "TEXT"}
 
 
 def init_db(conn):
