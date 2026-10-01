@@ -8,7 +8,9 @@ Run:  pip install -r requirements.txt
 import hmac
 import json
 import os
+import urllib.error
 import urllib.parse
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
@@ -132,6 +134,41 @@ def line_add_friend(response: Response):
         raise HTTPException(404, "LINE bot is not configured")
     response.headers["Cache-Control"] = "public, max-age=86400"
     return {"url": "https://line.me/R/ti/p/" + urllib.parse.quote(basic, safe="")}
+
+
+GISTDA_TILES = "https://api-gateway.gistda.or.th/api/2.0/resources/maps/flood/{period}/tms/{z}/{x}/{y}"
+GISTDA_PERIODS = ("1day", "3days", "7days", "30days")
+
+
+def gistda_key():
+    return os.environ.get("GISTDA_API_KEY", "").strip()
+
+
+@app.get("/api/gistda/status", include_in_schema=False)
+def gistda_status(response: Response):
+    """Lets the map know whether to offer the satellite flood layer (needs GISTDA_API_KEY)."""
+    response.headers["Cache-Control"] = "public, max-age=300"
+    return {"enabled": bool(gistda_key()), "periods": list(GISTDA_PERIODS)}
+
+
+@app.get("/api/gistda/flood/{period}/{z}/{x}/{y}", include_in_schema=False)
+def gistda_flood_tile(period: str, z: int, x: int, y: int):
+    """Proxy for GISTDA satellite flood-extent tiles, so the API key never reaches the browser."""
+    key = gistda_key()
+    if not key or period not in GISTDA_PERIODS or not 0 <= z <= 22 or x < 0 or y < 0:
+        raise HTTPException(404, "not available")
+    url = GISTDA_TILES.format(period=period, z=z, x=x, y=y) + "?" + urllib.parse.urlencode({"api_key": key})
+    try:
+        with urllib.request.urlopen(url, timeout=8) as r:
+            body, ctype = r.read(), r.headers.get("Content-Type", "image/png")
+    except urllib.error.HTTPError as e:
+        # no flood in this tile is normal; anything else (bad key, quota) must not be cached for long
+        raise HTTPException(404 if e.code == 404 else 502, "tile unavailable")
+    except Exception:
+        raise HTTPException(502, "tile unavailable")
+    if not ctype.startswith("image/"):
+        raise HTTPException(502, "tile unavailable")
+    return Response(body, media_type=ctype, headers={"Cache-Control": "public, max-age=1800, s-maxage=1800"})
 
 
 @app.get("/api/cron/ingest", include_in_schema=False)

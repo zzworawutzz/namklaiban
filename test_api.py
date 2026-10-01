@@ -49,3 +49,42 @@ def test_health_and_empty_db(client, tmp_path, monkeypatch):
     assert h["ingest_ok"] is False and h["last_ingest_age_min"] is None  # no ingest_runs row yet
     monkeypatch.setenv("WATER_DB", str(tmp_path / "empty.db"))
     assert client.get("/health").json()["stations"] == 0
+
+
+class _FakeResp:
+    def __init__(self, body=b"\x89PNG", ctype="image/png"):
+        self._b, self.headers = body, {"Content-Type": ctype}
+    def read(self): return self._b
+    def __enter__(self): return self
+    def __exit__(self, *a): return False
+
+
+def test_gistda_layer_is_off_without_a_key(client, monkeypatch):
+    monkeypatch.delenv("GISTDA_API_KEY", raising=False)
+    assert client.get("/api/gistda/status").json()["enabled"] is False
+    assert client.get("/api/gistda/flood/7days/8/200/120").status_code == 404
+
+
+def test_gistda_tile_proxy_keeps_key_server_side(client, monkeypatch):
+    monkeypatch.setenv("GISTDA_API_KEY", "secret-key")
+    seen = {}
+    def fake(url, timeout=0):
+        seen["url"] = url; return _FakeResp()
+    monkeypatch.setattr(api.urllib.request, "urlopen", fake)
+    assert client.get("/api/gistda/status").json()["enabled"] is True
+    r = client.get("/api/gistda/flood/7days/8/200/120")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/png"
+    assert "secret-key" in seen["url"] and "/flood/7days/tms/8/200/120" in seen["url"]
+    assert "secret-key" not in r.text and "secret-key" not in str(r.headers)
+
+
+def test_gistda_tile_rejects_bad_period_and_upstream_errors(client, monkeypatch):
+    monkeypatch.setenv("GISTDA_API_KEY", "k")
+    assert client.get("/api/gistda/flood/1year/8/1/1").status_code == 404
+    import urllib.error
+    def boom(url, timeout=0): raise urllib.error.HTTPError(url, 403, "forbidden", {}, None)
+    monkeypatch.setattr(api.urllib.request, "urlopen", boom)
+    assert client.get("/api/gistda/flood/7days/8/1/1").status_code == 502
+    def html(url, timeout=0): return _FakeResp(b"<html>", "text/html")
+    monkeypatch.setattr(api.urllib.request, "urlopen", html)
+    assert client.get("/api/gistda/flood/7days/8/1/1").status_code == 502
