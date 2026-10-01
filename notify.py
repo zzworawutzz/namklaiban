@@ -43,6 +43,18 @@ def send_line(target, text):
         pass
 
 
+def reply_line(reply_token, text):
+    """Answer a user's message through the Reply API (free, valid ~1 minute)."""
+    token = os.environ.get("LINE_CHANNEL_TOKEN")
+    if not token or not token.isascii() or " " in token:
+        raise RuntimeError("LINE_CHANNEL_TOKEN is missing or malformed")
+    body = json.dumps({"replyToken": reply_token, "messages": [{"type": "text", "text": text[:4900]}]}).encode()
+    req = urllib.request.Request("https://api.line.me/v2/bot/message/reply", data=body, headers={
+        "Content-Type": "application/json", "Authorization": f"Bearer {token}"})
+    with urllib.request.urlopen(req, timeout=10):
+        pass
+
+
 def send_stdout(target, text):
     print(f"--> {target}\n{text}\n")
 

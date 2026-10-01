@@ -6,6 +6,7 @@ Run:  pip install -r requirements.txt
       uvicorn api:app --reload        (docs at http://127.0.0.1:8000/docs)
 """
 import hmac
+import json
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -18,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 import core
 import db
 import ingest
+import line_webhook
 import notify
 
 HEALTH_MAX_INGEST_AGE_MIN = 60  # ingest runs every ~20 min; this long means it is stuck
@@ -123,6 +125,37 @@ def cron_ingest(authorization: Optional[str] = Header(None)):
             ingest.release_lock(c, "cron")
     return {"stations": n_st, "new_readings": n_rd, "skipped": skipped, "pruned": pruned,
             "notifications_sent": sent, "notifications_failed": failed}
+
+
+@app.post("/api/line/webhook", include_in_schema=False)
+async def line_webhook_endpoint(request: Request, x_line_signature: Optional[str] = Header(None)):
+    """LINE Messaging API webhook. Set LINE_CHANNEL_SECRET (verifies the signature) and
+    LINE_CHANNEL_TOKEN (sends replies)."""
+    secret = os.environ.get("LINE_CHANNEL_SECRET")
+    if not secret:
+        raise HTTPException(503, "LINE webhook is not configured")
+    body = await request.body()
+    if not line_webhook.valid_signature(secret, body, x_line_signature):
+        raise HTTPException(401, "bad signature")
+    try:
+        events = json.loads(body or b"{}").get("events", [])
+    except ValueError:
+        raise HTTPException(400, "invalid json")
+
+    def reply(token, text):
+        try:
+            notify.reply_line(token, text)
+        except Exception as e:  # a failed reply must not make LINE retry the whole webhook
+            print(f"LINE reply failed: {e}")
+
+    with conn() as c:
+        for ev in events:
+            try:
+                line_webhook.handle_event(c, ev, now(), reply)
+            except Exception as e:
+                c.rollback()
+                print(f"LINE event failed: {type(e).__name__}: {e}")
+    return {"ok": True}
 
 
 _web = Path(__file__).parent / "public"

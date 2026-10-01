@@ -128,3 +128,19 @@ def test_cron_endpoint_auth_and_run(pg, monkeypatch):
         assert ig.try_lock(c, "cron") is True
     assert cl.get("/api/cron/ingest", headers={"Authorization": "Bearer s3cret-s3cret-s3cret"}).json() \
         == {"skipped": "another run is in progress"}
+
+
+def test_line_webhook_flow_on_postgres(pg):
+    import line_webhook as lw
+    out = []
+    reply = lambda tok, t: out.append(t)
+    ev = lambda m: {"type": "message", "replyToken": "r", "source": {"userId": "U1"}, "message": m}
+    with db.connect() as c:
+        ig.init_db(c); ig.save(c, real_rows())
+        lw.handle_event(c, ev({"type": "location", "latitude": 14.2, "longitude": 99.0}), AT, reply)
+        lw.handle_event(c, ev({"type": "location", "latitude": 14.5, "longitude": 101.0}), AT, reply)  # replaces
+        assert c.execute("SELECT COUNT(*) AS n FROM subscriptions").fetchone()["n"] == 1
+        lw.handle_event(c, ev({"type": "text", "text": "สถานะ"}), AT, reply)
+        lw.handle_event(c, ev({"type": "text", "text": "ยกเลิก"}), AT, reply)
+        assert c.execute("SELECT COUNT(*) AS n FROM subscriptions").fetchone()["n"] == 0
+    assert "บันทึกตำแหน่งแล้ว" in out[0] and "สถานะ" in out[2] and "ลบตำแหน่ง" in out[3]

@@ -39,6 +39,14 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 
 ลองโดยไม่ต้องมีบัญชีได้ด้วย `--channel stdout` แจ้งครั้งแรกเฉพาะเมื่อสถานีอยู่ที่เฝ้าระวัง/เตือนภัยแล้ว หลังจากนั้นแจ้งทุกครั้งที่สถานะเปลี่ยน
 
+## แจ้งเตือนผ่าน LINE แบบให้ผู้ใช้สมัครเอง (webhook)
+ผู้ใช้ส่ง **ตำแหน่งบ้าน** ให้บอตใน LINE (กด + → ตำแหน่งที่ตั้ง) ระบบเก็บ userId กับพิกัด แล้วแจ้งเตือนเมื่อสถานีใกล้บ้านเปลี่ยนสถานะ พิมพ์ "สถานะ" ดูค่าล่าสุด หรือ "ยกเลิก" เพื่อลบข้อมูล
+ตั้งค่า:
+1. env บน Vercel: `LINE_CHANNEL_TOKEN`, `LINE_CHANNEL_SECRET` (Basic settings ของ channel), ถ้าต้องการจำกัดจำนวนผู้ใช้ `MAX_SUBSCRIBERS` (ค่าเริ่มต้น 500)
+2. LINE Developers → Messaging API → **Webhook URL** = `https://<โดเมน>/api/line/webhook` → Update → เปิด **Use webhook** → กด **Verify** ต้องได้ Success
+3. ปิด **Auto-reply messages** และ **Greeting messages** ใน LINE Official Account Manager (ไม่งั้นข้อความซ้อนกับของระบบ)
+ระบบตรวจ `X-Line-Signature` ทุกคำขอ จึงมีแต่ LINE ที่สมัครให้ผู้ใช้ได้ ควรมีหน้านโยบายความเป็นส่วนตัวก่อนเปิดให้คนทั่วไปใช้ เพราะเก็บตำแหน่งบ้าน
+
 ## ฐานข้อมูล
 ไม่ตั้งอะไร = SQLite ที่ `water.db` (หรือ `WATER_DB`) ตั้ง `DATABASE_URL=postgresql://...` = Postgres ชุดทดสอบ `test_postgres.py` รันกับ Postgres จริง (ผ่านแพ็กเกจ `pgserver`)
 
