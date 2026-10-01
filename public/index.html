@@ -56,21 +56,21 @@ h2{font-size:16px;margin:0 0 8px;font-weight:600}
 .rp.l1{background:#5b9bea}.rp.l2{background:#3f7fe0}.rp.l3{background:#2a5bc4}.rp.l4{background:#7a3fc4}
 .rpp{min-width:200px}.rpp b{font-size:15px}.rpp .note{margin:4px 0}
 .rpp button{margin-top:6px;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:6px 10px;font-size:13px}
-#rpt{position:fixed;inset:0;z-index:1300;display:grid;place-items:end center;background:rgba(5,15,20,.5)}
-@media (min-width:900px){#rpt{place-items:center}}
-#rpt .dlg{width:min(460px,100%);max-height:92vh;overflow:auto;background:var(--surface);border-radius:20px 20px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px));box-shadow:var(--shadow)}
-@media (min-width:900px){#rpt .dlg{border-radius:20px}}
-#rpt h2{margin:0 0 4px}
-#rpt .where{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 4px}
-#rpt .where .btn{flex:1;min-width:140px}
-#rpt .lv{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
-#rpt .lv label{display:flex;gap:8px;align-items:center;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;font-size:14px}
-#rpt .lv input{accent-color:var(--accent);width:18px;height:18px}
-#rpt .lv label:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
-#rpt input[type=text]{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--bg);font-size:16px}
-#rpt .acts{display:flex;gap:8px;margin-top:14px}
-#rpt .acts .btn{flex:1}
-#rpt .btn:disabled{opacity:.45}
+#rpt,#rt{position:fixed;inset:0;z-index:1300;display:grid;place-items:end center;background:rgba(5,15,20,.5)}
+@media (min-width:900px){#rpt,#rt{place-items:center}}
+#rpt .dlg,#rt .dlg{width:min(460px,100%);max-height:92vh;overflow:auto;background:var(--surface);border-radius:20px 20px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px));box-shadow:var(--shadow)}
+@media (min-width:900px){#rpt .dlg,#rt .dlg{border-radius:20px}}
+#rpt h2,#rt h2{margin:0 0 4px}
+#rpt .where,#rt .where{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 4px}
+#rpt .where .btn,#rt .where .btn{flex:1;min-width:140px}
+#rpt .lv,#rt .lv{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+#rpt .lv label,#rt .lv label{display:flex;gap:8px;align-items:center;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;font-size:14px}
+#rpt .lv input,#rt .lv input{accent-color:var(--accent);width:18px;height:18px}
+#rpt .lv label:has(input:checked),#rt .lv label:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
+#rpt input[type=text],#rt input[type=text]{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--bg);font-size:16px}
+#rpt .acts,#rt .acts{display:flex;gap:8px;margin-top:14px}
+#rpt .acts .btn,#rt .acts .btn{flex:1}
+#rpt .btn:disabled,#rt .btn:disabled{opacity:.45}
 
 
 /* ---- shelters, rain radar, emergency numbers ---- */
@@ -84,6 +84,19 @@ h2{font-size:16px;margin:0 0 8px;font-weight:600}
 .sos{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:8px}
 .sos a{display:block;text-decoration:none;border:1px solid var(--line);border-radius:12px;padding:8px 10px;color:var(--ink);background:var(--bg)}
 .sos a b{display:block;font-size:20px;color:var(--accent);line-height:1.2}.sos a span{font-size:12px;color:var(--muted)}
+
+
+/* ---- route check ---- */
+.actrow{display:flex;gap:8px}.actrow .rpbtn{flex:1}
+#rt label.f{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+#rt .frow{display:flex;gap:8px}#rt .frow input{flex:1;min-width:0}
+#rt .frow .btn{flex:none}
+.verd{border-radius:14px;padding:10px 12px;font-weight:600;margin:8px 0}
+.verd.ok{background:var(--normal-bg);color:var(--normal)}.verd.warn{background:var(--watch-bg);color:var(--watch)}.verd.bad{background:var(--alert-bg);color:var(--alert)}
+.rtopt{display:flex;justify-content:space-between;gap:8px;width:100%;text-align:left;border:1.5px solid var(--line);background:var(--surface);border-radius:12px;padding:8px 12px;margin-top:6px}
+.rtopt[aria-pressed=true]{border-color:var(--accent);background:var(--accent-soft)}
+.rtpts li{display:flex;gap:8px;justify-content:space-between;padding:6px 0;border-top:1px solid var(--line);font-size:14px}
+.rtpts small{color:var(--muted)}
 
 /* ---- top bar ---- */
 #topbar{position:fixed;z-index:1000;left:12px;right:12px;top:calc(12px + env(safe-area-inset-top,0px));display:flex;flex-direction:column;gap:8px;pointer-events:none}
@@ -290,6 +303,19 @@ svg.chart{width:100%;height:auto;display:block}
     <p class="note">ไม่ใช่ประกาศทางการ ถ้าอยู่ในอันตรายโทร 1784 (ปภ.) หรือ 191</p>
   </div>
 </div>
+<div id="rt" hidden role="dialog" aria-modal="true" aria-labelledby="rtTitle">
+  <div class="dlg">
+    <h2 id="rtTitle">เช็กเส้นทาง</h2>
+    <p class="note" style="margin-top:0">ดูว่าเส้นทางขับรถผ่านจุดน้ำท่วมที่ผู้ใช้รายงาน หรือใกล้สถานีเฝ้าระวัง/เตือนภัยหรือไม่</p>
+    <label class="f" for="rtFrom">ต้นทาง</label>
+    <div class="frow"><input type="text" id="rtFrom" placeholder="ชื่อสถานที่ เช่น ตลาดบางปะอิน" autocomplete="off"><button class="btn" id="rtGps" type="button">ตำแหน่งฉัน</button></div>
+    <label class="f" for="rtTo">ปลายทาง</label>
+    <div class="frow"><input type="text" id="rtTo" placeholder="ชื่อสถานที่ เช่น สยามพารากอน" autocomplete="off"></div>
+    <p class="note" id="rtErr" role="alert" hidden style="color:var(--alert)"></p>
+    <div class="acts"><button class="btn" id="rtCancel" type="button">ยกเลิก</button><button class="btn primary" id="rtGo" type="button">ตรวจเส้นทาง</button></div>
+    <p class="note">คำนวณเส้นทางด้วย OSRM และค้นหาสถานที่ด้วย OpenStreetMap (ต้นทางและปลายทางที่พิมพ์จะถูกส่งไปยังบริการเหล่านั้น) ผลเป็นการประเมินคร่าวๆ ไม่ได้รับประกันว่าผ่านได้ ถ้าไม่แน่ใจโทร 1784 หรือ 191</p>
+  </div>
+</div>
 <div id="toast" role="status" hidden></div>
 
 <aside id="sheet" data-state="half" aria-label="สถานการณ์น้ำ">
@@ -308,10 +334,17 @@ svg.chart{width:100%;height:auto;display:block}
       <input id="tl" type="range" min="0" max="24" value="24" step="1" aria-describedby="tlLabel">
       <div class="tlrow"><span id="tlLabel" aria-live="polite">ตอนนี้</span><button class="btn" id="tlNow" type="button" hidden>กลับมาปัจจุบัน</button></div>
     </section>
-    <button class="rpbtn" id="btnReport" type="button">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.2C9 7.4 6.5 10.3 6.5 13.7a5.5 5.5 0 0 0 11 0C17.5 10.3 15 7.4 12 3.2z"/></svg>
-      แจ้งจุดน้ำท่วม
-    </button>
+    <div class="actrow">
+      <button class="rpbtn" id="btnReport" type="button">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.2C9 7.4 6.5 10.3 6.5 13.7a5.5 5.5 0 0 0 11 0C17.5 10.3 15 7.4 12 3.2z"/></svg>
+        แจ้งจุดน้ำท่วม
+      </button>
+      <button class="rpbtn" id="btnRoute" type="button">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"/></svg>
+        เช็กเส้นทาง
+      </button>
+    </div>
+    <section class="card" id="routeCard" hidden></section>
     <section class="card cta" id="lineCta" hidden>
       <p><b>รับแจ้งเตือนทาง LINE</b><br>ส่งตำแหน่งบ้านให้บอต แล้วรับแจ้งเมื่อน้ำใกล้บ้านเปลี่ยนสถานะ และสรุปทุกเช้า 07:00</p>
       <a id="lineLink" href="#" target="_blank" rel="noopener">เพิ่มเพื่อน</a>
@@ -328,7 +361,7 @@ svg.chart{width:100%;height:auto;display:block}
         <a href="tel:1460"><b>1460</b><span>กรมชลประทาน ข้อมูลน้ำ/เขื่อน</span></a>
         <a href="tel:1182"><b>1182</b><span>กรมอุตุฯ สภาพอากาศ</span></a>
       </div></section>
-    <p class="foot" id="foot">ข้อมูลระดับน้ำจาก ThaiWater (สสน.) ใช้ประกอบการตัดสินใจเท่านั้น ไม่ใช่ประกาศทางการ ให้ยึดคำสั่งของ ปภ. ในพื้นที่เป็นหลัก (สายด่วน 1784) · การค้นหาสถานที่ใช้ Nominatim ของ OpenStreetMap (คำที่ค้นหาจะถูกส่งไปยังบริการนั้น) · แผนที่ © OpenStreetMap contributors · ศูนย์พักพิง: ปภ. (Open Data Common) · เรดาร์: RainViewer</p>
+    <p class="foot" id="foot">ข้อมูลระดับน้ำจาก ThaiWater (สสน.) ใช้ประกอบการตัดสินใจเท่านั้น ไม่ใช่ประกาศทางการ ให้ยึดคำสั่งของ ปภ. ในพื้นที่เป็นหลัก (สายด่วน 1784) · การค้นหาสถานที่ใช้ Nominatim ของ OpenStreetMap (คำที่ค้นหาจะถูกส่งไปยังบริการนั้น) · แผนที่ © OpenStreetMap contributors · ศูนย์พักพิง: ปภ. (Open Data Common) · เรดาร์: RainViewer · เส้นทาง: OSRM</p>
   </div>
 </aside>
 
@@ -993,6 +1026,114 @@ $("rptSend").addEventListener("click",function(){
   }).catch(function(){ $("rptErr").hidden=false; $("rptErr").textContent="เชื่อมต่อไม่ได้ ลองใหม่อีกครั้ง"; rptCheck(); });
 });
 loadReports(); setInterval(loadReports, 60000);
+
+/* ---------- route check: OSRM route + our station statuses + user flood reports ---------- */
+var ROUTER = "https://router.project-osrm.org";
+var RT_STATION_KM = 1.0, RT_REPORT_KM = 0.3;
+var rtLayer = L.layerGroup().addTo(map), rtFromPt = null, rtRoutes = null, rtSel = 0, rtNames = null;
+function rtOpen(){ $("rt").hidden = false; closeLayers(); $("rtErr").hidden = true; $("rtTo").focus(); }
+function rtClose(){ $("rt").hidden = true; }
+function rtFail(msg){ $("rtErr").hidden = false; $("rtErr").textContent = msg; $("rtGo").disabled = false; $("rtGo").textContent = "ตรวจเส้นทาง"; }
+function geo1(q){
+  return fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=th&accept-language=th&q="+encodeURIComponent(q))
+    .then(function(r){ if(!r.ok) throw new Error("geo"); return r.json(); })
+    .then(function(l){ if(!l.length) throw new Error("nf:"+q); return {lat:+l[0].lat, lng:+l[0].lon, name:(l[0].display_name||q).split(",")[0]}; });
+}
+function distKmToLine(p, line){   // min distance from point to polyline [[lng,lat]...] (small-area planar approximation) + the nearest vertex index
+  var kx = 111.32*Math.cos(p.lat*Math.PI/180), ky = 110.57, best = 1e9, bi = 0;
+  for(var i=0;i<line.length-1;i++){
+    var ax=(line[i][0]-p.lng)*kx, ay=(line[i][1]-p.lat)*ky, bx=(line[i+1][0]-p.lng)*kx, by=(line[i+1][1]-p.lat)*ky;
+    var dx=bx-ax, dy=by-ay, t = dx*dx+dy*dy ? Math.max(0,Math.min(1,-(ax*dx+ay*dy)/(dx*dx+dy*dy))) : 0;
+    var d = Math.hypot(ax+t*dx, ay+t*dy); if(d<best){ best=d; bi=i; }
+  }
+  return {km:best, idx:bi};
+}
+function rtEvaluate(route){
+  var line = route.geometry.coordinates, cum = [0];
+  for(var i=1;i<line.length;i++) cum.push(cum[i-1]+kmBetween({lat:line[i-1][1],lng:line[i-1][0]},{lat:line[i][1],lng:line[i][0]}));
+  var minLng=1e9,maxLng=-1e9,minLat=1e9,maxLat=-1e9;
+  line.forEach(function(c){ minLng=Math.min(minLng,c[0]); maxLng=Math.max(maxLng,c[0]); minLat=Math.min(minLat,c[1]); maxLat=Math.max(maxLat,c[1]); });
+  function near(p){ return p.lat>minLat-.02 && p.lat<maxLat+.02 && p.lng>minLng-.02 && p.lng<maxLng+.02; }
+  var pts = [];
+  rptData.forEach(function(r){
+    if(!near(r)) return; var d = distKmToLine(r, line);
+    if(d.km<=RT_REPORT_KM) pts.push({kind:"report", lat:r.lat, lng:r.lng, name:"รายงานผู้ใช้: "+r.label, sev:3, at:cum[d.idx], off:d.km});
+  });
+  stations.forEach(function(s0){
+    var s = view(s0); if(s.stale || (s.status!=="alert" && s.status!=="watch") || !near(s)) return;
+    var d = distKmToLine(s, line);
+    if(d.km<=RT_STATION_KM) pts.push({kind:"station", lat:s.lat, lng:s.lng, name:s.name+" ("+(s.status==="alert"?"เตือนภัย":"เฝ้าระวัง")+(s.pct_of_bank!=null?" "+Math.round(s.pct_of_bank)+"%":"")+")", sev:s.status==="alert"?2:1, at:cum[d.idx], off:d.km});
+  });
+  pts.sort(function(a,b){ return a.at-b.at; });
+  return {route:route, pts:pts, score:pts.reduce(function(n,p){ return n+p.sev; },0), km:route.distance/1000, min:Math.round(route.duration/60)};
+}
+function rtVerdict(ev){
+  var rep = ev.pts.filter(function(p){return p.kind==="report";}).length, al = ev.pts.filter(function(p){return p.sev===2;}).length, wa = ev.pts.filter(function(p){return p.sev===1;}).length;
+  if(rep) return {cls:"bad", color:"#d2372f", text:"มีรายงานน้ำท่วมบนเส้นทาง "+rep+" จุด"+(al?" และผ่านใกล้สถานีเตือนภัย "+al+" แห่ง":"")+" ควรเลี่ยงหรือตรวจสอบก่อนเดินทาง"};
+  if(al) return {cls:"bad", color:"#d2372f", text:"ผ่านใกล้สถานีเตือนภัย "+al+" แห่ง ระดับน้ำใกล้ล้นตลิ่ง ถนนช่วงนั้นอาจมีน้ำท่วม"};
+  if(wa) return {cls:"warn", color:"#c98a00", text:"ผ่านใกล้สถานีเฝ้าระวัง "+wa+" แห่ง ควรติดตามสถานการณ์ระหว่างเดินทาง"};
+  return {cls:"ok", color:"#1b8f61", text:"ไม่พบจุดเสี่ยงจากข้อมูลที่มี (ไม่ได้หมายความว่าปลอดภัย ข้อมูลอาจไม่ครบหรือไม่ทัน)"};
+}
+function rtDraw(){
+  rtLayer.clearLayers();
+  rtRoutes.forEach(function(ev,i){
+    if(i===rtSel) return;
+    L.polyline(ev.route.geometry.coordinates.map(function(c){return [c[1],c[0]];}),{color:"#7a8c96",weight:5,opacity:.7,dashArray:"6 8"}).addTo(rtLayer)
+      .on("click",function(){ rtSel=i; rtDraw(); rtCard(); });
+  });
+  var ev = rtRoutes[rtSel], v = rtVerdict(ev), ll = ev.route.geometry.coordinates.map(function(c){return [c[1],c[0]];});
+  L.polyline(ll,{color:"#fff",weight:10,opacity:.95,lineCap:"round"}).addTo(rtLayer);
+  L.polyline(ll,{color:v.color,weight:6,opacity:1,lineCap:"round"}).addTo(rtLayer);
+  ev.pts.forEach(function(p){
+    L.circleMarker([p.lat,p.lng],{radius:8,color:"#fff",weight:2,fillColor:p.sev===1?"#c98a00":p.kind==="report"?"#2f6fd6":"#d2372f",fillOpacity:1}).addTo(rtLayer).bindTooltip(esc(p.name),{direction:"top"});
+  });
+  [ll[0], ll[ll.length-1]].forEach(function(c,i){ L.marker(c,{icon:L.divIcon({className:"",iconSize:[26,26],iconAnchor:[13,13],html:'<div style="width:26px;height:26px;border-radius:50%;background:'+(i?"#10252f":"#0b6e8f")+';color:#fff;border:2px solid #fff;display:grid;place-items:center;font-weight:700;font-size:13px">'+(i?"B":"A")+'</div>'}),interactive:false}).addTo(rtLayer); });
+}
+function rtCard(){
+  var ev = rtRoutes[rtSel], v = rtVerdict(ev), c = $("routeCard");
+  c.hidden = false;
+  c.innerHTML = '<div class="sumhead"><h2 style="margin:0">เช็กเส้นทาง</h2><button class="linkbtn" id="rtClear" type="button" style="border:0">ล้าง</button></div>'+
+    '<div class="note" style="margin:2px 0">'+esc(rtNames[0])+' → '+esc(rtNames[1])+'</div>'+
+    '<div class="verd '+v.cls+'">'+esc(v.text)+'</div>'+
+    (rtRoutes.length>1 ? rtRoutes.map(function(e,i){ return '<button class="rtopt" type="button" data-i="'+i+'" aria-pressed="'+(i===rtSel)+'"><span>เส้นทาง '+(i+1)+(i===0?" (เสี่ยงน้อยสุด)":"")+'</span><span>'+e.km.toFixed(0)+' กม. · '+e.min+' นาที · เสี่ยง '+e.pts.length+' จุด</span></button>'; }).join("") :
+      '<div class="note">'+ev.km.toFixed(0)+' กม. · ประมาณ '+ev.min+' นาที</div>')+
+    (ev.pts.length ? '<ul class="rtpts" style="margin-top:8px">'+ev.pts.slice(0,10).map(function(p){ return '<li><span>'+esc(p.name)+'</span><small>ที่ ~'+p.at.toFixed(0)+' กม.</small></li>'; }).join("")+'</ul>' : "")+
+    '<p class="note">ตรวจเฉพาะรายงานผู้ใช้และสถานีวัดน้ำ ยังไม่รวมพื้นที่น้ำท่วมจากดาวเทียม (ดูได้ที่ชั้นแผนที่) ไม่ใช่ประกาศทางการ โทร 1784</p>';
+  $("rtClear").addEventListener("click",function(){ rtLayer.clearLayers(); c.hidden = true; c.innerHTML = ""; rtRoutes = null; });
+  Array.prototype.forEach.call(c.querySelectorAll(".rtopt"),function(b){ b.addEventListener("click",function(){ rtSel = +b.getAttribute("data-i"); rtDraw(); rtCard(); }); });
+}
+function rtRun(a, b){
+  return fetch(ROUTER+"/route/v1/driving/"+a.lng+","+a.lat+";"+b.lng+","+b.lat+"?overview=full&geometries=geojson&alternatives=true")
+    .then(function(r){ if(!r.ok) throw new Error("route"); return r.json(); })
+    .then(function(j){
+      if(j.code!=="Ok" || !j.routes.length) throw new Error("noroute");
+      rtRoutes = j.routes.slice(0,3).map(rtEvaluate).sort(function(x,y){ return x.score-y.score || x.min-y.min; });
+      rtSel = 0; rtDraw(); rtCard();
+      map.fitBounds(L.latLngBounds(rtRoutes[0].route.geometry.coordinates.map(function(c){return [c[1],c[0]];})), Object.assign({maxZoom:13}, fitPad()));
+      revealInSheet($("routeCard"));
+    });
+}
+$("btnRoute").addEventListener("click", rtOpen);
+$("rtCancel").addEventListener("click", rtClose);
+$("rt").addEventListener("click", function(e){ if(e.target===$("rt")) rtClose(); });
+document.addEventListener("keydown",function(e){ if(e.key==="Escape" && !$("rt").hidden) rtClose(); });
+$("rtFrom").addEventListener("input", function(){ rtFromPt = null; });
+$("rtGps").addEventListener("click",function(){
+  if(!navigator.geolocation){ rtFail("เบราว์เซอร์นี้ไม่รองรับการระบุตำแหน่ง พิมพ์ชื่อสถานที่แทน"); return; }
+  $("rtErr").hidden = true; $("rtFrom").value = "กำลังหาตำแหน่ง…";
+  navigator.geolocation.getCurrentPosition(function(p){ rtFromPt = {lat:p.coords.latitude, lng:p.coords.longitude, name:"ตำแหน่งของฉัน"}; $("rtFrom").value = "ตำแหน่งของฉัน"; },
+    function(){ $("rtFrom").value = ""; rtFail("ใช้ตำแหน่งไม่ได้ กรุณาอนุญาตการเข้าถึงตำแหน่ง หรือพิมพ์ชื่อสถานที่แทน"); }, {timeout:10000,maximumAge:60000});
+});
+$("rtGo").addEventListener("click",function(){
+  var f = $("rtFrom").value.trim(), t = $("rtTo").value.trim();
+  if(!(rtFromPt || f.length>=2) || t.length<2){ rtFail("กรอกต้นทางและปลายทางก่อน"); return; }
+  $("rtErr").hidden = true; this.disabled = true; this.textContent = "กำลังตรวจ…";
+  Promise.all([rtFromPt ? Promise.resolve(rtFromPt) : geo1(f), geo1(t)]).then(function(ab){
+    rtNames = [ab[0].name, ab[1].name]; return rtRun(ab[0], ab[1]);
+  }).then(function(){ $("rtGo").disabled = false; $("rtGo").textContent = "ตรวจเส้นทาง"; rtClose(); })
+    .catch(function(e){ var m = String(e&&e.message||"");
+      rtFail(m.indexOf("nf:")===0 ? "ไม่พบสถานที่ \""+m.slice(3)+"\" ลองพิมพ์ให้ละเอียดขึ้น เช่นเพิ่มชื่ออำเภอหรือจังหวัด" : m==="noroute" ? "หาเส้นทางระหว่างสองจุดนี้ไม่ได้" : "คำนวณเส้นทางไม่ได้ในขณะนี้ ลองใหม่อีกครั้ง"); });
+});
 
 /* ---------- start ---------- */
 setSheet(isMobile() && !QS.get("station") ? "peek" : "half");   // phones: map first, drag the sheet up for details
