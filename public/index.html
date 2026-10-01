@@ -870,7 +870,7 @@ function drawShelters(){
   });
 }
 function refreshShelters(){
-  if(!$("chkShl").checked) return;
+  if(!$("chkShl").checked){ drawShelters(); return; }   // unticked: drawShelters() just clears the markers
   if(!province){ shelterData = []; shelterProv = null; drawShelters(); toast("เลือกจังหวัดเพื่อดูศูนย์พักพิง"); return; }
   if(province===shelterProv){ drawShelters(); return; }
   var want = province;
