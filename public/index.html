@@ -74,6 +74,7 @@ svg.chart{width:100%;height:auto;display:block}
       <button class="btn" id="btnPin" type="button" aria-pressed="false">ปักหมุดบ้านฉัน</button>
       <button class="btn" id="btnClear" type="button" hidden>ล้างตำแหน่ง</button>
     </div>
+    <p class="note"><a id="repLink" href="report.html">ดูรายงานสถานการณ์น้ำ →</a></p>
     <p class="note" id="originNote">กด "ใกล้ฉัน" หรือปักหมุดบ้านบนแผนที่ เพื่อดูสถานีที่ใกล้ที่สุด</p>
     <section id="results" hidden><h2 id="resTitle"></h2><ul id="resList"></ul></section>
     <section id="detail" aria-live="polite" hidden></section>
@@ -257,7 +258,7 @@ function setOrigin(o){
   getJSON("/stations/nearby?lat="+o.lat+"&lng="+o.lng+"&limit=3").then(function(list){
     list.forEach(function(s){ byId[s.id]=Object.assign(byId[s.id]||{},s); });
     if(province && list.some(function(s){ return s.province!==province; })){  // don't hide the stations near the user
-      province = ""; $("prov").value = ""; drawMarkers(); drawChips();
+      province = ""; $("prov").value = ""; drawMarkers(); drawChips(); updateRepLink();
     }
     showResults("สถานีใกล้ที่สุด 3 แห่ง", list, function(s){return s.distance_km+" กม.";});
     if(list[0]) select(list[0].id,false);
@@ -266,6 +267,10 @@ function setOrigin(o){
   }).catch(function(){ showErr("เรียกข้อมูลสถานีใกล้เคียงไม่ได้"); });
 }
 
+function updateRepLink(){
+  $("repLink").href = "report.html" + (province ? "?province="+encodeURIComponent(province) : "");
+  $("repLink").textContent = province ? "ดูรายงานสถานการณ์น้ำ จ."+province+" →" : "ดูรายงานสถานการณ์น้ำ →";
+}
 function drawProvinceSelect(){
   var names = {}; stations.forEach(function(s){ if(s.province) names[s.province]=1; });
   var list = Object.keys(names).sort(function(a,b){ return a.localeCompare(b,"th"); });
@@ -273,7 +278,7 @@ function drawProvinceSelect(){
   var count = function(n){ return stations.filter(function(s){return s.province===n;}).length; };
   $("prov").innerHTML = '<option value="">ทั้งประเทศ ('+stations.length+' สถานี)</option>' +
     list.map(function(n){ return '<option value="'+esc(n)+'">'+esc(n)+' ('+count(n)+')</option>'; }).join("");
-  $("prov").value = province;
+  $("prov").value = province; updateRepLink();
 }
 function showProvince(fit){
   var list = stations.filter(inProv);
@@ -299,7 +304,7 @@ $("chips").addEventListener("click",function(e){
 });
 $("prov").addEventListener("change",function(e){
   province = e.target.value; store("nkb-prov", province || "all");
-  drawMarkers(); drawChips(); showProvince(true);
+  drawMarkers(); drawChips(); showProvince(true); updateRepLink();
 });
 $("q").addEventListener("input",function(e){
   var q = e.target.value.trim();
