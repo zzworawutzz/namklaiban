@@ -170,3 +170,33 @@ def related(rows, station_id, limit=5):
     key = lambda x: x["distance_km"]
     return {"river": me["river"], "upstream": sorted(up, key=key)[:limit],
             "downstream": sorted(down, key=key)[:limit], "colocated": same}
+
+
+SNAP_MAX_AGE_MIN = 150   # a snapshot value older than this (vs its time slot) counts as "no data"
+
+
+def snapshots(conn, at, hours=72, step_h=3, province=None):
+    """Level (% of bank) of each station at evenly spaced past moments, oldest first, last = now.
+    Used by the map's time slider. A slot with no reading in the preceding SNAP_MAX_AGE_MIN is None."""
+    n = max(1, hours // step_h)
+    times = [at - timedelta(hours=step_h * (n - i)) for i in range(n + 1)]
+    since = iso(times[0] - timedelta(minutes=SNAP_MAX_AGE_MIN))
+    sql = ("SELECT r.station_id, r.ts, r.pct_of_bank FROM readings r "
+           + ("JOIN stations s ON s.id = r.station_id WHERE s.province = ? AND r.ts >= ? "
+              if province else "WHERE r.ts >= ? ")
+           + "AND r.pct_of_bank IS NOT NULL ORDER BY r.station_id, r.ts")
+    by = {}
+    for r in conn.execute(sql, ((province, since) if province else (since,))):
+        by.setdefault(r["station_id"], []).append((parse(r["ts"]), r["pct_of_bank"]))
+    max_age = timedelta(minutes=SNAP_MAX_AGE_MIN)
+    out = {}
+    for sid, pts in by.items():
+        vals, j, last = [], 0, None
+        for t in times:
+            while j < len(pts) and pts[j][0] <= t:
+                last = pts[j]
+                j += 1
+            vals.append(round(last[1], 1) if last and t - last[0] <= max_age else None)
+        if any(v is not None for v in vals):
+            out[sid] = vals
+    return {"times": [iso(t) for t in times], "step_h": step_h, "stations": out}

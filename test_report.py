@@ -133,3 +133,29 @@ def test_init_db_adds_digest_columns_to_old_sqlite(tmp_path):
     ig.init_db(c)
     row = c.execute("SELECT digest, last_digest FROM subscriptions").fetchone()
     assert row["digest"] == 1 and row["last_digest"] is None  # existing subscribers keep getting the report
+
+
+def test_snapshots_values_gaps_and_filters(conn):
+    s = core.snapshots(conn, AT, hours=24, step_h=6)
+    assert len(s["times"]) == 5 and s["times"][-1] == core.iso(AT) and s["step_h"] == 6
+    a = s["stations"]["A"]                       # A = 120 - 1.6 * hours_ago (readings at AT-30min, AT-1h, ...)
+    assert a[-1] == 120.0 and a[0] == pytest.approx(120 - 1.6 * 24, abs=0.1) and a[0] < a[-1]
+    assert set(s["stations"]) == {"A", "B", "C", "D"}
+    only = core.snapshots(conn, AT, hours=24, step_h=6, province=PROV)
+    assert set(only["stations"]) == {"A", "B", "C"}
+    conn.execute("DELETE FROM readings WHERE station_id='B' AND ts > ?", (core.iso(AT - timedelta(hours=10)),))
+    b = core.snapshots(conn, AT, hours=24, step_h=6)["stations"]["B"]
+    assert b[0] is not None and b[-1] is None    # newest slots have no reading within 150 min -> null, not carried forever
+
+
+def test_snapshots_endpoint(tmp_path, monkeypatch):
+    p = tmp_path / "s.db"
+    c = db.connect(str(p)); seed(c); c.commit(); c.close()
+    monkeypatch.setenv("WATER_DB", str(p))
+    monkeypatch.setattr(api, "now", lambda: AT)
+    cl = TestClient(api.app)
+    r = cl.get("/history/snapshots", params={"hours": 12, "step": 3, "province": PROV})
+    assert r.status_code == 200 and len(r.json()["times"]) == 5 and set(r.json()["stations"]) == {"A", "B", "C"}
+    assert cl.get("/history/snapshots", params={"hours": 500}).status_code == 422
+    assert cl.get("/history/snapshots", params={"step": 0}).status_code == 422
+    assert r.headers["cache-control"].startswith("public")
