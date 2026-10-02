@@ -20,6 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+import areas
 import core
 import db
 import floodreports
@@ -179,6 +180,16 @@ def shelters_list(response: Response, province: Optional[str] = None,
     if province:
         return shelters.by_province(province)
     raise HTTPException(422, "give province, or lat and lng")
+
+
+@app.get("/api/areas")
+def areas_list(response: Response, province: str):
+    """Districts and subdistricts of a province with their centre points, for the area picker."""
+    response.headers["Cache-Control"] = "public, max-age=86400"
+    data = areas.province(province)
+    if data is None:
+        raise HTTPException(404, "ไม่มีรายชื่อตำบลของจังหวัดนี้")
+    return {"province": province, "districts": data}
 
 
 @app.get("/api/line/add-friend", include_in_schema=False)
