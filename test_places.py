@@ -137,3 +137,17 @@ def test_manual_command_replies_with_help_and_a_link(conn, monkeypatch):
     monkeypatch.delenv("PUBLIC_URL", raising=False); monkeypatch.delenv("VERCEL_PROJECT_PRODUCTION_URL", raising=False)
     say(conn, rec, "คู่มือ")
     assert "help.html" not in rec.last[0]            # no public URL configured: help text only
+
+
+def test_manual_link_is_in_the_welcome_fallback_and_group_messages(conn, monkeypatch):
+    monkeypatch.setenv("PUBLIC_URL", "https://example.test")
+    rec = Rec()
+    lw.handle_event(conn, {"type": "follow", "replyToken": "r", "source": {"userId": "U1"}}, AT, rec)
+    assert "https://example.test/help.html" in rec.last[0]
+    say(conn, rec, "สวัสดี")                                          # anything we do not understand
+    assert "https://example.test/help.html" in rec.last[0]
+    group = {"replyToken": "r", "source": {"groupId": "C1"}}
+    lw.handle_event(conn, {**group, "type": "join"}, AT, rec)
+    assert "https://example.test/help.html" in rec.last[0]
+    lw.handle_event(conn, {**group, "type": "message", "message": {"type": "text", "text": "ช่วยเหลือ"}}, AT, rec)
+    assert "https://example.test/help.html" in rec.last[0]

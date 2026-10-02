@@ -67,6 +67,12 @@ GROUP_HELP = ("น้ำใกล้บ้านฉัน: พิมพ์ \"ต
               "บอตจะไม่ตอบข้อความทั่วไปในกลุ่ม ข้อมูลจาก ThaiWater ใช้ประกอบการตัดสินใจเท่านั้น")
 
 
+def _with_manual(text):
+    """Append the link to the full manual when the public URL of this deployment is known."""
+    base = public_url()
+    return text + (f"\n\nคู่มือการใช้งานฉบับเต็ม: {base}/help.html" if base else "")
+
+
 def valid_signature(secret, body, signature):
     if not secret or not signature:
         return False
@@ -122,7 +128,7 @@ def handle_event(conn, ev, at, reply):
     if not token:
         return
     if ev.get("type") == "follow":
-        return _reply(reply, token, HELP, quick=cards.quick(MENU))
+        return _reply(reply, token, _with_manual(HELP), quick=cards.quick(MENU))
     if ev.get("type") == "postback":
         return _postback(conn, user, token, (ev.get("postback") or {}).get("data") or "", at, reply)
     if ev.get("type") != "message":
@@ -146,8 +152,7 @@ def handle_event(conn, ev, at, reply):
         _delete(conn, user)
         return _reply(reply, token, "หยุดแจ้งเตือนและลบตำแหน่งของคุณแล้ว ส่งตำแหน่งมาใหม่ได้ทุกเมื่อ")
     if text in MANUAL_CMD:
-        base = public_url()
-        return _reply(reply, token, HELP + (f"\n\nคู่มือการใช้งานฉบับเต็ม: {base}/help.html" if base else ""), quick=cards.quick(MENU))
+        return _reply(reply, token, _with_manual(HELP), quick=cards.quick(MENU))
     if text in PLACES_CMD:
         return _list_places(conn, user, token, reply)
     if text.startswith("ลบจุดที่"):
@@ -190,7 +195,7 @@ def handle_event(conn, ev, at, reply):
         return _reply(reply, token, "จะส่งสรุปสถานการณ์ให้ทุกเช้า 07:00 (พิมพ์ \"ปิดสรุป\" เพื่อหยุด)" if on
                       else "หยุดส่งสรุปทุกเช้าแล้ว ยังแจ้งเตือนเมื่อสถานะเปลี่ยนตามเดิม (พิมพ์ \"เปิดสรุป\" เพื่อเปิดใหม่)",
                       quick=cards.quick(MENU))
-    _reply(reply, token, HELP, quick=cards.quick(MENU))
+    _reply(reply, token, _with_manual(HELP), quick=cards.quick(MENU))
 
 
 def _flood_report(conn, user, token, m, level, at, reply):
@@ -340,7 +345,7 @@ def _handle_group(conn, gid, ev, at, reply):
     if not token:
         return
     if kind == "join":
-        return _reply(reply, token, GROUP_HELP)
+        return _reply(reply, token, _with_manual(GROUP_HELP))
     m = ev.get("message") or {}
     if kind != "message" or m.get("type") != "text":
         return
@@ -349,7 +354,7 @@ def _handle_group(conn, gid, ev, at, reply):
     if raw.startswith("ติดตาม"):
         return _group_follow(conn, gid, token, raw[len("ติดตาม"):].strip(), at, reply)
     if text in GROUP_HELP_WORDS:
-        return _reply(reply, token, GROUP_HELP)
+        return _reply(reply, token, _with_manual(GROUP_HELP))
     if text in CANCEL | REPORT | DIGEST_OFF | DIGEST_ON:
         sub = _sub(conn, gid)
         if not sub:
