@@ -122,6 +122,17 @@ h2{font-size:16px;margin:0 0 8px;font-weight:600}
 @media (min-width:900px){.provpill,.provpill.sub,.provpill:not(.sub){flex:none}.provpill select{width:auto;max-width:170px;font-size:14px}}
 @media (max-width:420px){.provpill:not(.sub)>svg:first-child{display:none}}
 
+
+/* ---- labelled layers button + quick layer chips ---- */
+.searchbox{min-width:0}.iconbtn.labelbtn{width:auto;display:flex;align-items:center;gap:6px;padding:0 14px;font-weight:600;font-size:14px;white-space:nowrap}
+.chiprow{flex-basis:100%;display:flex;gap:6px;align-items:center;overflow-x:auto;scrollbar-width:none;padding:2px 2px 6px;margin-bottom:-4px;min-width:0}
+.chiprow::-webkit-scrollbar{display:none}
+.chiprow .chips{flex:none;overflow:visible;padding:0;margin:0;flex-basis:auto}
+.qchips{flex:none;display:flex;gap:6px;align-items:center;padding-right:8px;margin-right:2px;border-right:1px solid var(--line)}
+.qchips:empty{display:none}
+.chip.qc[aria-pressed=true]{background:#2f6fd6;border-color:#2f6fd6;color:#fff}
+@media (min-width:900px){.chiprow{flex-wrap:wrap;overflow:visible}.chiprow .chips{flex-wrap:wrap}}
+
 /* ---- top bar ---- */
 #topbar{position:fixed;z-index:1000;left:12px;right:12px;top:calc(12px + env(safe-area-inset-top,0px));display:flex;flex-direction:column;gap:8px;pointer-events:none}
 #topbar>*{pointer-events:auto}
@@ -267,8 +278,9 @@ svg.chart{width:100%;height:auto;display:block}
     <button class="iconbtn glass" id="btnMe" type="button" aria-label="ใกล้ฉัน ใช้ตำแหน่งปัจจุบัน" title="ใกล้ฉัน">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3.5M12 18.5V22M2 12h3.5M18.5 12H22"/><circle cx="12" cy="12" r="7.5"/></svg>
     </button>
-    <button class="iconbtn glass" id="btnLayers" type="button" aria-label="ตัวเลือกแผนที่" aria-expanded="false" aria-controls="layers" title="ตัวเลือกแผนที่">
+    <button class="iconbtn labelbtn glass" id="btnLayers" type="button" aria-label="ชั้นแผนที่ เปิดปิดน้ำท่วมดาวเทียม เรดาร์ฝน ศูนย์พักพิง" aria-expanded="false" aria-controls="layers" title="ชั้นแผนที่">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5z"/><path d="m3 13 9 5 9-5"/></svg>
+      <span>ชั้นแผนที่</span>
     </button>
   </div>
   <div class="row2">
@@ -279,7 +291,7 @@ svg.chart{width:100%;height:auto;display:block}
     </label>
     <label class="provpill glass sub"><select id="dist" aria-label="เลือกอำเภอหรือเขต" disabled><option value="">อำเภอ</option></select><svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></label>
     <label class="provpill glass sub"><select id="tam" aria-label="เลือกตำบลหรือแขวง" disabled><option value="">ตำบล</option></select><svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></label>
-    <div class="chips" id="chips" aria-live="polite"></div>
+    <div class="chiprow"><div class="qchips" id="qchips"></div><div class="chips" id="chips" aria-live="polite"></div></div>
   </div>
 </header>
 
@@ -377,8 +389,8 @@ svg.chart{width:100%;height:auto;display:block}
       <a id="lineLink" href="#" target="_blank" rel="noopener">เพิ่มเพื่อน</a>
     </section>
     <p class="note" id="originNote" hidden></p>
-    <section class="card" id="shelterCard" hidden><h2>ศูนย์พักพิงใกล้คุณ</h2><ul id="shelterList" class="rows"></ul><p class="note">ข้อมูลจาก ปภ. อาจไม่เป็นปัจจุบัน โทรสอบถามก่อนเดินทาง</p></section>
     <section id="results" hidden><h2 id="resTitle"></h2><ul id="resList" class="rows"></ul></section>
+    <section class="card" id="shelterCard" hidden><h2>ศูนย์พักพิงใกล้คุณ</h2><ul id="shelterList" class="rows"></ul><p class="note">ข้อมูลจาก ปภ. อาจไม่เป็นปัจจุบัน โทรสอบถามก่อนเดินทาง</p></section>
     <section class="card" id="detail" aria-live="polite" hidden></section>
     <section class="card" id="emergency"><h2>เบอร์ฉุกเฉิน (โทรฟรี)</h2>
       <div class="sos">
@@ -655,7 +667,7 @@ function drawFlood(){
 $("chkFlood").addEventListener("change", drawFlood);
 $("floodPeriod").addEventListener("change", drawFlood);
 fetch(API+"/api/gistda/status").then(function(r){ return r.ok ? r.json() : null; }).then(function(j){
-  if(j && j.enabled) $("floodBox").hidden = false;
+  if(j && j.enabled){ $("floodBox").hidden = false; syncQuick(); }
 }).catch(function(){});
 
 function tlLabel(){
@@ -1014,9 +1026,9 @@ $("chkRadar").addEventListener("change",function(){
   if(!this.checked){ radarOff(); return; }
   fetch("https://api.rainviewer.com/public/weather-maps.json").then(function(r){ return r.json(); }).then(function(j){
     var past = (j.radar && j.radar.past) || [];
-    if(!past.length || !$("chkRadar").checked){ if($("chkRadar").checked){ toast("ยังไม่มีภาพเรดาร์ฝน"); $("chkRadar").checked = false; } return; }
+    if(!past.length || !$("chkRadar").checked){ if($("chkRadar").checked){ toast("ยังไม่มีภาพเรดาร์ฝน"); $("chkRadar").checked = false; syncQuick(); } return; }
     radarFrames = past; radarFrames.host = j.host; $("radarCtl").hidden = false; radarShow(past.length-1);
-  }).catch(function(){ $("chkRadar").checked = false; toast("โหลดเรดาร์ฝนไม่ได้"); });
+  }).catch(function(){ $("chkRadar").checked = false; syncQuick(); toast("โหลดเรดาร์ฝนไม่ได้"); });
 });
 $("radarPlay").addEventListener("click",function(){
   if(radarTimer){ radarStop(); return; }
@@ -1240,7 +1252,21 @@ $("tam").addEventListener("change", function(){
   setOrigin({lat:t.lat, lng:t.lng, kind:"area", label:(pre.t==="แขวง" ? "แขวง" : "ต.")+t.name+" "+(pre.d==="เขต" ? "เขต" : "อ.")+d.name+(pre.t==="แขวง" ? " กทม." : " จ."+areaCur.province)});
 });
 
+/* ---------- quick layer chips (mirror the checkboxes in the layers panel) ---------- */
+var QUICK = [["chkFlood","🛰","ดาวเทียม","น้ำท่วมจากดาวเทียม"],["chkRadar","🌧","ฝน","เรดาร์ฝน"],["chkShl","🏠","พักพิง","ศูนย์พักพิง"]];
+function syncQuick(){
+  $("qchips").innerHTML = QUICK.filter(function(q){ return q[0]!=="chkFlood" || !$("floodBox").hidden; }).map(function(q){
+    return '<button type="button" class="chip qc" data-q="'+q[0]+'" aria-pressed="'+$(q[0]).checked+'" aria-label="ชั้นแผนที่: '+q[3]+'" title="เปิด/ปิดชั้นแผนที่: '+q[3]+'"><span aria-hidden="true">'+q[1]+'</span>'+q[2]+'</button>';
+  }).join("");
+}
+$("qchips").addEventListener("click",function(e){
+  var b = e.target.closest ? e.target.closest(".qc") : null; if(!b) return;
+  var c = $(b.getAttribute("data-q")); c.checked = !c.checked; c.dispatchEvent(new Event("change"));
+});
+QUICK.forEach(function(q){ $(q[0]).addEventListener("change", syncQuick); });
+
 /* ---------- start ---------- */
+syncQuick();
 setSheet(isMobile() && !QS.get("station") ? "peek" : "half");   // phones: map first, drag the sheet up for details
 load().then(function(){
   var want = QS.get("station");
