@@ -316,7 +316,7 @@ svg.chart{width:100%;height:auto;display:block}
       <option value="1day">ย้อนหลัง 1 วัน</option><option value="3days">3 วัน</option><option value="7days" selected>7 วัน</option><option value="30days">30 วัน</option>
     </select>
   </div>
-  <label class="chk"><input type="checkbox" id="chkShl"><span>ศูนย์พักพิงชั่วคราว (ปภ.)<br><span class="note">แสดงของจังหวัดที่เลือก ข้อมูลอาจไม่เป็นปัจจุบัน โทรสอบถามก่อนเดินทาง</span></span></label>
+  <label class="chk"><input type="checkbox" id="chkShl"><span>ศูนย์พักพิงชั่วคราว (ปภ.)<br><span class="note">แสดงตามพื้นที่ที่เลือก (จังหวัด / อำเภอ / ตำบล) ข้อมูลอาจไม่เป็นปัจจุบัน โทรสอบถามก่อนเดินทาง</span></span></label>
   <label class="chk"><input type="checkbox" id="chkRadar"><span>เรดาร์ฝน (ย้อนหลัง 2 ชม.)<br><span class="note">ภาพจาก RainViewer ความละเอียดต่ำ ใช้ดูทิศทางฝนคร่าวๆ</span></span></label>
   <div id="radarCtl" hidden><button class="btn" id="radarPlay" type="button">▶ เล่น</button><span id="radarTime" aria-live="polite"></span></div>
   <label class="chk"><input type="checkbox" id="chkRpt" checked><span>จุดน้ำท่วมที่ผู้ใช้รายงาน<br><span class="note">ข้อมูลจากผู้ใช้ ยังไม่ผ่านการตรวจสอบ แสดง 12 ชม. ล่าสุด</span></span></label>
@@ -1012,15 +1012,30 @@ function drawShelters(){
       .bindPopup(shelterPopup(s)).addTo(shelterLayer);
   });
 }
+function areaSel(){   // the district / subdistrict picked in the bar, or null for each
+  var di = $("dist").value, ti = $("tam").value;
+  var d = (areaCur && di!=="" && areaCur.province===province) ? areaCur.districts[+di] : null;
+  return {d:d, t:(d && ti!=="") ? d.tambons[+ti] : null};
+}
+function shelterKey(){ var a = areaSel(); return province+"|"+(a.d ? a.d.name : "")+"|"+(a.t ? a.t.name : ""); }
 function refreshShelters(){
   if(!$("chkShl").checked){ drawShelters(); return; }   // unticked: drawShelters() just clears the markers
   if(!province){ shelterData = []; shelterProv = null; drawShelters(); toast("เลือกจังหวัดเพื่อดูศูนย์พักพิง"); return; }
-  if(province===shelterProv){ drawShelters(); return; }
-  var want = province;
-  getJSON("/api/shelters?province="+encodeURIComponent(want)).then(function(l){
-    if(province!==want) return; shelterProv = want; shelterData = l; drawShelters();
-    if(!l.length) toast("ไม่มีข้อมูลศูนย์พักพิงของจังหวัดนี้");
-  }).catch(function(){ toast("โหลดข้อมูลศูนย์พักพิงไม่ได้"); });
+  var key = shelterKey();
+  if(key===shelterProv){ drawShelters(); return; }
+  var a = areaSel(), pv = "province="+encodeURIComponent(province), tries = [];
+  if(a.t) tries.push({q:"&district="+encodeURIComponent(a.d.name)+"&tambon="+encodeURIComponent(a.t.name), where:"ตำบลนี้"});
+  if(a.d) tries.push({q:"&district="+encodeURIComponent(a.d.name), where:"อำเภอนี้"});
+  tries.push({q:"", where:"จังหวัดนี้"});
+  (function next(i){        // narrowest area first; if the DDPM list has nothing there, widen and say so
+    getJSON("/api/shelters?"+pv+tries[i].q).then(function(l){
+      if(shelterKey()!==key) return;
+      if(!l.length && i<tries.length-1){ next(i+1); return; }
+      shelterProv = key; shelterData = l; drawShelters();
+      if(!l.length) toast("ไม่มีข้อมูลศูนย์พักพิงของจังหวัดนี้");
+      else if(i>0) toast("ไม่พบศูนย์พักพิงใน"+tries[i-1].where+"ในข้อมูล ปภ. จึงแสดงของ"+tries[i].where.replace("นี้","")+"แทน");
+    }).catch(function(){ toast("โหลดข้อมูลศูนย์พักพิงไม่ได้"); });
+  })(0);
 }
 $("chkShl").addEventListener("change", refreshShelters);
 function showNearShelters(o){
@@ -1296,13 +1311,13 @@ function syncAreaPills(){          // call whenever the province may have change
 $("dist").addEventListener("change", function(){
   var pre = arPre(province);
   if(origin && origin.kind==="area") setOrigin(null);
-  if(this.value==="" || !areaCur){ arFill($("tam"), [], pre.t); updateBoundary(); return; }
+  if(this.value==="" || !areaCur){ arFill($("tam"), [], pre.t); updateBoundary(); refreshShelters(); return; }
   var d = areaCur.districts[+this.value];
-  arFill($("tam"), d.tambons.map(function(t){return t.name;}), pre.t); updateBoundary();
+  arFill($("tam"), d.tambons.map(function(t){return t.name;}), pre.t); updateBoundary(); refreshShelters();
   map.fitBounds(L.latLngBounds(d.tambons.map(function(t){return [t.lat,t.lng];})), Object.assign({maxZoom:12}, fitPad()));
 });
 $("tam").addEventListener("change", function(){
-  updateBoundary();
+  updateBoundary(); refreshShelters();
   if(this.value===""){ if(origin && origin.kind==="area") setOrigin(null); return; }
   var d = areaCur.districts[+$("dist").value], t = d.tambons[+this.value], pre = arPre(areaCur.province);
   setOrigin({lat:t.lat, lng:t.lng, kind:"area", label:(pre.t==="แขวง" ? "แขวง" : "ต.")+t.name+" "+(pre.d==="เขต" ? "เขต" : "อ.")+d.name+(pre.t==="แขวง" ? " กทม." : " จ."+areaCur.province)});
