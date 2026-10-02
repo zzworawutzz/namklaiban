@@ -37,8 +37,9 @@ def test_results_are_capped_unique_and_each_kind_limited():
 
 
 def test_stations_are_included(tmp_path):
-    out = suggest.search("บ้านปากแซง", [{"name": "บ้านปากแซง", "province": "กาญจนบุรี", "lat": 14.2, "lng": 99.0}])
+    out = suggest.search("บ้านปากแซง", [{"id": "505018", "name": "บ้านปากแซง", "province": "กาญจนบุรี", "lat": 14.2, "lng": 99.0}])
     assert out[0]["type"] == "สถานี" and out[0]["label"] == "สถานีวัดน้ำ บ้านปากแซง (จ.กาญจนบุรี)"
+    assert out[0]["id"] == "505018" and out[0]["province"] == "กาญจนบุรี"
 
 
 def test_endpoint(tmp_path, monkeypatch):
@@ -50,3 +51,13 @@ def test_endpoint(tmp_path, monkeypatch):
     r = cl.get("/api/suggest", params={"q": "บ้านแก้ง"})
     assert r.status_code == 200 and any(o["type"] == "สถานี" for o in r.json()) and "max-age" in r.headers["cache-control"]
     assert cl.get("/api/suggest", params={"q": "x" * 200}).status_code == 422
+
+
+def test_results_say_where_they_are_so_the_map_can_open_them():
+    t = suggest.search("คลองสะแก")[0]
+    assert (t["province"], t["district"], t["tambon"]) == ("พระนครศรีอยุธยา", "นครหลวง", "คลองสะแก")
+    d = suggest.search("บางปะอิน")[0]
+    assert (d["province"], d["district"]) == ("พระนครศรีอยุธยา", "บางปะอิน") and "tambon" not in d
+    assert suggest.search("นครนายก")[0]["province"] == "นครนายก"
+    sh = [o for o in suggest.search("วัด") if o["type"] == "ศูนย์พักพิง"]
+    assert all(o["province"] for o in sh)

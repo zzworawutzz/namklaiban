@@ -262,11 +262,11 @@ def ews_warnings(response: Response):
 
 @app.get("/api/suggest", include_in_schema=False)
 def suggest_places(response: Response, q: str = Query("", max_length=80)):
-    """Type-ahead for the route check: subdistricts, districts, provinces, water stations and shelters."""
+    """Type-ahead for the search box: subdistricts, districts, provinces, water stations and shelters."""
     if len(suggest.norm(q)) < suggest.MIN_Q:
         return []
     with conn() as c:
-        rows = c.execute("SELECT name, province, lat, lng FROM stations").fetchall()
+        rows = c.execute("SELECT id, name, province, lat, lng FROM stations").fetchall()
     response.headers["Cache-Control"] = "public, max-age=3600"
     return suggest.search(q, [dict(r) for r in rows])
 
