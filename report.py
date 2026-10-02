@@ -9,7 +9,8 @@ from ingest import TZ_TH, status_of
 TOP_N = 10
 TEXT_TOP = 5
 THAI_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."]
-ARROW = {"rising": "▲", "falling": "▼", "steady": "■"}
+ARROW = {"rising": "▲", "falling": "▼", "steady": ""}   # steady is shown by the status square alone
+SQUARE = {"alert": "🟥", "watch": "🟨", "normal": "🟩", "unknown": "⬜"}   # coloured by status so the share text reads at a glance
 
 
 def thai_date(dt):
@@ -111,7 +112,7 @@ def digest_text(rep, at, url=None):
     if rep["top"]:
         lines.append("น้ำสูงสุด:")
         for i, r in enumerate(rep["top"][:TEXT_TOP], 1):
-            lines.append(f"{i}. {r['name']} {round(r['pct_of_bank'])}% {ARROW.get(r['trend'], '')}".rstrip())
+            lines.append(f"{i}. {r['name']} {round(r['pct_of_bank'])}% {SQUARE.get(r['status'], '')}{ARROW.get(r['trend'], '')}".rstrip())
     if rep["rising"]:
         lines.append("กำลังสูงขึ้นเร็ว: " + ", ".join(
             f"{r['name']} {r['trend_pct_per_hr']:+.1f}%/ชม." for r in rep["rising"][:3]))
