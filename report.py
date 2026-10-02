@@ -1,10 +1,33 @@
 """Province situation report: headline numbers, change vs 24 h ago, top stations,
 fastest-rising stations and a daily series, plus the Thai text used for the LINE digest.
 Built only from data we already store (latest readings + up to 31 days of history)."""
+import os
 from datetime import timedelta
 
 import core
 from ingest import TZ_TH, status_of
+
+DIGEST_FIRST_H, DIGEST_END_H = 7, 22   # Thai local hours: summaries go out from 07:00 and never at or after 22:00
+
+
+def digest_every_h():
+    """Hours between situation summaries (env DIGEST_EVERY_H, default 3; 24 = the old once-a-day 07:00 report)."""
+    try:
+        return max(1, min(24, int(os.environ.get("DIGEST_EVERY_H", "3"))))
+    except ValueError:
+        return 3
+
+
+def digest_slots():
+    """Thai local hours at which a summary is due, e.g. [7, 10, 13, 16, 19]."""
+    return list(range(DIGEST_FIRST_H, DIGEST_END_H, digest_every_h()))
+
+
+def digest_label():
+    """How the schedule reads in chat, e.g. 'ทุก 3 ชั่วโมง (07:00–19:00)'."""
+    slots = digest_slots()
+    return "ทุกเช้า 07:00" if len(slots) == 1 else f"ทุก {digest_every_h()} ชั่วโมง ({slots[0]:02d}:00–{slots[-1]:02d}:00)"
+
 
 TOP_N = 10
 TEXT_TOP = 5

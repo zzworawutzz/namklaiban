@@ -260,7 +260,7 @@ def run(conn, at=None, senders=SENDERS):
     return sent, failed
 
 
-DIGEST_FROM_H, DIGEST_TO_H = 7, 11   # Thai local hours [7, 11): sent once a day, retried until 11:00
+DIGEST_RETRY_H = 4   # a missed slot is retried for up to this many hours (never past the next slot)
 
 
 def public_url():
@@ -282,16 +282,34 @@ def report_link(province):
     return f"{base}/report.html?province={urllib.parse.quote(province)}" if base else None
 
 
+def _digest_slot(th):
+    """(slot_id, slot_hour) of the summary slot open at Thai local time `th`, or None. Slot ids look like 2026-10-02T10."""
+    every = report.digest_every_h()
+    open_ = [h for h in report.digest_slots() if h <= th.hour < h + min(every, DIGEST_RETRY_H)]
+    return (f"{th:%Y-%m-%d}T{max(open_):02d}", max(open_)) if open_ else None
+
+
 def run_digest(conn, at=None, senders=SENDERS):
-    """Send the morning situation report to subscribers who have not had today's yet.
-    Returns (sent, failed). Outside 07:00-10:59 Thai time it does nothing."""
+    """Send the situation summary to subscribers who have not had this slot's yet (every DIGEST_EVERY_H hours from
+    07:00, default 3, nothing from 22:00 to 07:00). Groups only get the first (morning) one of the day.
+    Returns (sent, failed)."""
     at = at or datetime.now(timezone.utc)
     th = at.astimezone(TZ_TH)
-    if not (DIGEST_FROM_H <= th.hour < DIGEST_TO_H):
+    slot = _digest_slot(th)
+    if not slot:
         return 0, 0
-    today = th.strftime("%Y-%m-%d")
-    subs = conn.execute("SELECT * FROM subscriptions WHERE digest = 1 AND (last_digest IS NULL OR last_digest <> ?)",
-                        (today,)).fetchall()
+    today, first_h = th.strftime("%Y-%m-%d"), report.digest_slots()[0]
+
+    def due(sub):
+        if is_group(sub) and slot[1] != first_h:
+            return False
+        last = sub["last_digest"]
+        if not last:
+            return True
+        if len(last) == 10:                       # older versions stored just the date: that meant the morning one
+            last += f"T{first_h:02d}"
+        return last < slot[0]
+    subs = [s for s in conn.execute("SELECT * FROM subscriptions WHERE digest = 1").fetchall() if due(s)]
     if not subs:
         return 0, 0
     rows = core.latest(conn, at)
@@ -301,7 +319,7 @@ def run_digest(conn, at=None, senders=SENDERS):
         if not prov:
             continue
         if (sub["channel"], sub["target"], prov) in done:   # several saved places in one province: one report is enough
-            conn.execute("UPDATE subscriptions SET last_digest=? WHERE id=?", (today, sub["id"]))
+            conn.execute("UPDATE subscriptions SET last_digest=? WHERE id=?", (slot[0], sub["id"]))
             conn.commit()
             continue
         if prov not in cache:
@@ -316,7 +334,7 @@ def run_digest(conn, at=None, senders=SENDERS):
             print(f"digest failed for subscription {sub['id']}: {e}", file=sys.stderr)
             failed += 1
             continue
-        conn.execute("UPDATE subscriptions SET last_digest=? WHERE id=?", (today, sub["id"]))
+        conn.execute("UPDATE subscriptions SET last_digest=? WHERE id=?", (slot[0], sub["id"]))
         conn.commit()
         done.add((sub["channel"], sub["target"], prov))
         sent += 1
@@ -358,7 +376,7 @@ def main(argv=None):
         conn.commit()
     elif a.cmd == "digest":
         sent, failed = run_digest(conn)
-        print(f"digests sent={sent} failed={failed} (only sends 07:00-10:59 Thai time)")
+        print(f"digests sent={sent} failed={failed} (only sends in the summary slots, {report.digest_label()})")
         return 1 if failed else 0
     else:
         sent, failed = run(conn)

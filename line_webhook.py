@@ -3,11 +3,11 @@
   location message   -> save/replace their subscription (userId + coordinates)
   "ยกเลิก" / "stop"    -> delete it
   "สถานะ"              -> current status of the station nearest their saved location (card)
-  "รายงาน"             -> province situation report now (also sent every morning at 07:00)
+  "รายงาน"             -> province situation report now (also sent automatically, see report.digest_label())
   "ตั้งค่า"             -> show settings with tap-to-change buttons:
         "แจ้งทุกระดับ" / "แจ้งเฉพาะเตือนภัย"   which status changes trigger a message
         "ไม่รบกวนกลางคืน" / "แจ้งกลางคืน"       hold non-alert messages between 22:00 and 06:00
-        "ปิดสรุป" / "เปิดสรุป"                  the 07:00 morning report
+        "ปิดสรุป" / "เปิดสรุป"                  the periodic situation summary
   anything else      -> short instructions
 
 In a LINE group or room the bot only reacts to commands (and stays silent otherwise):
@@ -60,7 +60,7 @@ CHANGES = {
 HELP = ("น้ำใกล้บ้านฉัน: ส่งตำแหน่งบ้านของคุณมาที่นี่ (กด + แล้วเลือก \"ตำแหน่งที่ตั้ง\") "
         "เพื่อรับแจ้งเตือนเมื่อสถานีวัดน้ำที่ใกล้ที่สุดเปลี่ยนสถานะ\n"
         "พิมพ์ \"สถานะ\" ดูค่าล่าสุด · \"รายงาน\" ดูสรุปทั้งจังหวัด · \"ตั้งค่า\" เลือกระดับแจ้งเตือน/ช่วงไม่รบกวน · "
-        "\"แจ้งน้ำท่วม\" รายงานจุดที่ท่วมแถวคุณ · \"ตำแหน่งของฉัน\" ดู/ลบจุดที่ติดตาม (ได้สูงสุด 3 จุด) · \"ศูนย์พักพิง\" ดู 3 แห่งที่ใกล้ที่สุด · \"ปิดสรุป\" หยุดสรุปทุกเช้า 07:00 · \"ยกเลิก\" หยุดทุกอย่างและลบตำแหน่งที่เก็บไว้\n"
+        "\"แจ้งน้ำท่วม\" รายงานจุดที่ท่วมแถวคุณ · \"ตำแหน่งของฉัน\" ดู/ลบจุดที่ติดตาม (ได้สูงสุด 3 จุด) · \"ศูนย์พักพิง\" ดู 3 แห่งที่ใกล้ที่สุด · \"ปิดสรุป\" หยุดสรุปสถานการณ์อัตโนมัติ · \"ยกเลิก\" หยุดทุกอย่างและลบตำแหน่งที่เก็บไว้\n"
         "ข้อมูลจาก ThaiWater ใช้ประกอบการตัดสินใจเท่านั้น ให้ยึดประกาศ ปภ. เป็นหลัก")
 GROUP_HELP = ("น้ำใกล้บ้านฉัน: พิมพ์ \"ติดตาม <ชื่อจังหวัด>\" เช่น ติดตาม อยุธยา "
               "เพื่อให้บอตส่งสรุปสถานการณ์น้ำของจังหวัดนั้นเข้ากลุ่มนี้ทุกเช้า 07:00\n"
@@ -195,8 +195,8 @@ def handle_event(conn, ev, at, reply):
         on = 1 if text in DIGEST_ON else 0
         conn.execute("UPDATE subscriptions SET digest=? WHERE channel='line' AND target=?", (on, user))
         conn.commit()
-        return _reply(reply, token, "จะส่งสรุปสถานการณ์ให้ทุกเช้า 07:00 (พิมพ์ \"ปิดสรุป\" เพื่อหยุด)" if on
-                      else "หยุดส่งสรุปทุกเช้าแล้ว ยังแจ้งเตือนเมื่อสถานะเปลี่ยนตามเดิม (พิมพ์ \"เปิดสรุป\" เพื่อเปิดใหม่)",
+        return _reply(reply, token, f"จะส่งสรุปสถานการณ์ให้{report.digest_label()} (พิมพ์ \"ปิดสรุป\" เพื่อหยุด)" if on
+                      else "หยุดส่งสรุปแล้ว ยังแจ้งเตือนเมื่อสถานะเปลี่ยนตามเดิม (พิมพ์ \"เปิดสรุป\" เพื่อเปิดใหม่)",
                       quick=cards.quick(MENU))
     _reply(reply, token, _with_manual(HELP), quick=cards.quick(MENU))
 
@@ -231,7 +231,7 @@ def _settings(reply, token, sub, confirm=None):
         "การตั้งค่าของคุณ",
         "• แจ้งเตือน: " + ("เฉพาะตอนถึง/พ้นระดับเตือนภัย" if alert_only else "ทุกครั้งที่สถานะเปลี่ยน"),
         "• กลางคืน 22:00–06:00: " + ("ไม่ส่ง ยกเว้นเตือนภัย" if quiet else "ส่งตามปกติ"),
-        "• สรุปทุกเช้า 07:00: " + ("เปิด" if digest else "ปิด"),
+        f"• สรุป{report.digest_label()}: " + ("เปิด" if digest else "ปิด"),
         "แตะปุ่มด้านล่างเพื่อเปลี่ยน"]
     buttons = ["แจ้งทุกระดับ" if alert_only else "แจ้งเฉพาะเตือนภัย",
                "แจ้งกลางคืน" if quiet else "ไม่รบกวนกลางคืน",
@@ -252,8 +252,9 @@ def _subscribe(conn, user, token, m, at, reply):
     if not places:
         st = _nearest(conn, lat, lng, at)
         _insert_place(conn, user, lat, lng, PLACE_LABELS[0], st, {"digest": 1, "notify_level": "all", "quiet": 0})
-        head = ("บันทึกตำแหน่งแล้ว จะแจ้งเตือนเมื่อสถานีใกล้บ้านเปลี่ยนสถานะ และส่งสรุปสถานการณ์ทุกเช้า 07:00 "
-                "(เก็บเฉพาะตำแหน่งนี้ พิมพ์ \"ตั้งค่า\" เปลี่ยนระดับแจ้งเตือน/ช่วงไม่รบกวน \"ปิดสรุป\" หยุดสรุปเช้า "
+        head = ("บันทึกตำแหน่งแล้ว จะแจ้งเตือนเมื่อสถานีใกล้บ้านเปลี่ยนสถานะ และส่งสรุปสถานการณ์ "
+                f"{report.digest_label()} "
+                "(เก็บเฉพาะตำแหน่งนี้ พิมพ์ \"ตั้งค่า\" เปลี่ยนระดับแจ้งเตือน/ช่วงไม่รบกวน \"ปิดสรุป\" หยุดสรุป "
                 "\"ส่งตำแหน่งอีกจุดเพื่อติดตามเพิ่มได้สูงสุด 3 จุด\" หรือ \"ยกเลิก\" เพื่อลบ)\n\n")
         return _reply(reply, token, head + (message({"label": PLACE_LABELS[0]}, st) if st else
                                             "ตอนนี้ยังไม่มีสถานีใกล้บ้านที่ข้อมูลล่าสุด"), quick=cards.quick(MENU))

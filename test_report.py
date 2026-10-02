@@ -63,23 +63,60 @@ def test_text_has_headline_delta_and_top(conn):
     assert "เทียบ 24 ชม. ก่อน" in text and len(text) < 4000
 
 
-def test_digest_window_once_per_day_retry_and_opt_out(conn):
+def _subs(conn):
     conn.execute("INSERT INTO subscriptions(channel,target,lat,lng,label) VALUES('stdout','U1',14.36,100.55,'บ้าน')")
     conn.execute("INSERT INTO subscriptions(channel,target,lat,lng,label,digest) VALUES('stdout','U2',14.36,100.55,'x',0)")
     conn.execute("INSERT INTO subscriptions(channel,target,lat,lng,label) VALUES('stdout','U3',18.8,98.98,'cm')")
     conn.commit()
+
+
+def test_digest_every_3_hours_from_0700_quiet_at_night_retry_and_opt_out(conn):
+    _subs(conn)
     out = []
     ok = {"stdout": lambda t, m: out.append((t, m))}
+    assert report.digest_slots() == [7, 10, 13, 16, 19] and report.digest_label() == "ทุก 3 ชั่วโมง (07:00–19:00)"
     early = AT - timedelta(minutes=31)   # 06:59 Thai
-    late = AT + timedelta(hours=3, minutes=30)  # 11:00 Thai
-    assert notify.run_digest(conn, early, ok) == (0, 0) and notify.run_digest(conn, late, ok) == (0, 0)
-    assert notify.run_digest(conn, AT, ok) == (2, 0)                      # U1 + U3; U2 opted out
+    assert notify.run_digest(conn, early, ok) == (0, 0)
+    assert notify.run_digest(conn, AT, ok) == (2, 0)                      # 07:30: U1 + U3; U2 opted out
     assert {t for t, _ in out} == {"U1", "U3"}
     assert "จ.พระนครศรีอยุธยา" in dict(out)["U1"] and "จ.เชียงใหม่" in dict(out)["U3"]
-    assert notify.run_digest(conn, AT + timedelta(minutes=20), ok) == (0, 0)  # already sent today
+    assert notify.run_digest(conn, AT + timedelta(minutes=20), ok) == (0, 0)  # same slot: already sent
+    assert notify.run_digest(conn, AT + timedelta(hours=2, minutes=20), ok) == (0, 0)   # 09:50, nothing due yet
+    assert notify.run_digest(conn, AT + timedelta(hours=3), ok) == (2, 0)   # 10:30: the next slot
+    assert notify.run_digest(conn, AT + timedelta(hours=12), ok) == (2, 0)  # 19:30: the last one of the day
+    assert notify.run_digest(conn, AT + timedelta(hours=15), ok) == (0, 0)  # 22:30: quiet
     nxt = AT + timedelta(days=1)
     assert notify.run_digest(conn, nxt, {"stdout": lambda t, m: 1 / 0}) == (0, 2)   # fails -> not marked
-    assert notify.run_digest(conn, nxt + timedelta(minutes=20), ok) == (2, 0)       # retried
+    assert notify.run_digest(conn, nxt + timedelta(minutes=20), ok) == (2, 0)       # retried in the same slot
+
+
+def test_digest_groups_get_only_the_morning_one_and_old_date_only_marks_still_count(conn):
+    conn.execute("INSERT INTO subscriptions(channel,target,lat,lng,label) VALUES('line','C1',14.36,100.55,'จ.พระนครศรีอยุธยา')")
+    conn.execute("INSERT INTO subscriptions(channel,target,lat,lng,label,last_digest) VALUES('stdout','U9',14.36,100.55,'บ้าน','2026-10-02')")
+    conn.commit()
+    out = []
+    ok = {"line": lambda t, m, flex=None: out.append(t), "stdout": lambda t, m: out.append(t)}
+    assert notify.run_digest(conn, AT, ok) == (1, 0) and out == ["C1"]     # U9 already had today's morning one (date-only mark)
+    out.clear()
+    assert notify.run_digest(conn, AT + timedelta(hours=3), ok) == (1, 0) and out == ["U9"]   # 10:30: the group is not due again
+
+
+def test_digest_every_24_hours_keeps_the_old_once_a_day_window(conn, monkeypatch):
+    monkeypatch.setenv("DIGEST_EVERY_H", "24")
+    _subs(conn)
+    ok = {"stdout": lambda t, m: None}
+    assert report.digest_slots() == [7] and report.digest_label() == "ทุกเช้า 07:00"
+    assert notify.run_digest(conn, AT, ok) == (2, 0)
+    assert notify.run_digest(conn, AT + timedelta(hours=3, minutes=30), ok) == (0, 0)   # 11:00: past the retry window
+    assert notify.run_digest(conn, AT + timedelta(hours=6), ok) == (0, 0)
+
+
+def test_digest_every_h_setting_is_clamped(monkeypatch):
+    for raw, want in (("x", 3), ("0", 1), ("99", 24), ("6", 6)):
+        monkeypatch.setenv("DIGEST_EVERY_H", raw)
+        assert report.digest_every_h() == want
+    monkeypatch.setenv("DIGEST_EVERY_H", "6")
+    assert report.digest_slots() == [7, 13, 19]
 
 
 def test_digest_link_uses_deployment_domain(conn, monkeypatch):
