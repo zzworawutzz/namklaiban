@@ -11,11 +11,11 @@ DIGEST_FIRST_H, DIGEST_END_H = 7, 22   # Thai local hours: summaries go out from
 
 
 def digest_every_h():
-    """Hours between situation summaries (env DIGEST_EVERY_H, default 3; 24 = the old once-a-day 07:00 report)."""
+    """Hours between situation summaries (env DIGEST_EVERY_H, default 24 = once a day at 07:00; 3 = 07:00, 10:00, 13:00, 16:00, 19:00)."""
     try:
-        return max(1, min(24, int(os.environ.get("DIGEST_EVERY_H", "3"))))
+        return max(1, min(24, int(os.environ.get("DIGEST_EVERY_H", "24"))))
     except ValueError:
-        return 3
+        return 24
 
 
 def digest_slots():

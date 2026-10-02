@@ -70,7 +70,8 @@ def _subs(conn):
     conn.commit()
 
 
-def test_digest_every_3_hours_from_0700_quiet_at_night_retry_and_opt_out(conn):
+def test_digest_every_3_hours_from_0700_quiet_at_night_retry_and_opt_out(conn, monkeypatch):
+    monkeypatch.setenv("DIGEST_EVERY_H", "3")   # opt-in: the default is once a day
     _subs(conn)
     out = []
     ok = {"stdout": lambda t, m: out.append((t, m))}
@@ -90,7 +91,8 @@ def test_digest_every_3_hours_from_0700_quiet_at_night_retry_and_opt_out(conn):
     assert notify.run_digest(conn, nxt + timedelta(minutes=20), ok) == (2, 0)       # retried in the same slot
 
 
-def test_digest_groups_get_only_the_morning_one_and_old_date_only_marks_still_count(conn):
+def test_digest_groups_get_only_the_morning_one_and_old_date_only_marks_still_count(conn, monkeypatch):
+    monkeypatch.setenv("DIGEST_EVERY_H", "3")
     conn.execute("INSERT INTO subscriptions(channel,target,lat,lng,label) VALUES('line','C1',14.36,100.55,'จ.พระนครศรีอยุธยา')")
     conn.execute("INSERT INTO subscriptions(channel,target,lat,lng,label,last_digest) VALUES('stdout','U9',14.36,100.55,'บ้าน','2026-10-02')")
     conn.commit()
@@ -101,8 +103,7 @@ def test_digest_groups_get_only_the_morning_one_and_old_date_only_marks_still_co
     assert notify.run_digest(conn, AT + timedelta(hours=3), ok) == (1, 0) and out == ["U9"]   # 10:30: the group is not due again
 
 
-def test_digest_every_24_hours_keeps_the_old_once_a_day_window(conn, monkeypatch):
-    monkeypatch.setenv("DIGEST_EVERY_H", "24")
+def test_digest_default_is_once_a_day_at_0700_with_the_old_window(conn):
     _subs(conn)
     ok = {"stdout": lambda t, m: None}
     assert report.digest_slots() == [7] and report.digest_label() == "ทุกเช้า 07:00"
@@ -112,7 +113,9 @@ def test_digest_every_24_hours_keeps_the_old_once_a_day_window(conn, monkeypatch
 
 
 def test_digest_every_h_setting_is_clamped(monkeypatch):
-    for raw, want in (("x", 3), ("0", 1), ("99", 24), ("6", 6)):
+    monkeypatch.delenv("DIGEST_EVERY_H", raising=False)
+    assert report.digest_every_h() == 24
+    for raw, want in (("x", 24), ("0", 1), ("99", 24), ("6", 6)):
         monkeypatch.setenv("DIGEST_EVERY_H", raw)
         assert report.digest_every_h() == want
     monkeypatch.setenv("DIGEST_EVERY_H", "6")
