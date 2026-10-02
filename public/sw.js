@@ -1,7 +1,7 @@
 // Cache the app shell so the page opens offline. API data is never served from
 // this cache: stale water levels are worse than an honest "can't connect" error.
-const SHELL = "nkb-shell-v4";
-const FILES = ["./", "index.html", "report.html", "help.html", "manifest.webmanifest", "icon.svg"];
+const SHELL = "nkb-shell-v5";
+const FILES = ["./", "index.html", "report.html", "help.html", "privacy.html", "manifest.webmanifest", "icon.svg"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
