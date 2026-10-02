@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>วิธีใช้งาน น้ำใกล้บ้านฉัน</title>
+<meta name="description" content="คู่มือการใช้งานเว็บและบอต LINE น้ำใกล้บ้านฉัน: อ่านแผนที่ ดูสถานะน้ำ ค้นหาพื้นที่ ชั้นแผนที่ แจ้งน้ำท่วม เช็กเส้นทาง และการแจ้งเตือนทาง LINE">
+<meta name="theme-color" content="#0b6e8f">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f3f6f8;--surface:#fff;--ink:#0f2530;--muted:#5b7482;--line:#e1e9ee;--accent:#0b6e8f;--accent-ink:#fff;--accent-soft:rgba(11,110,143,.1);
+--normal:#1b8f61;--watch:#c98a00;--alert:#d2372f;--unknown:#6b7f8a;
+--normal-bg:rgba(27,143,97,.13);--watch-bg:rgba(201,138,0,.15);--alert-bg:rgba(210,55,47,.12);--unknown-bg:rgba(107,127,138,.15);
+--glass:rgba(255,255,255,.92);--shadow:0 8px 28px rgba(15,37,48,.14),0 1px 3px rgba(15,37,48,.08);--blue:#2f6fd6}
+@media (prefers-color-scheme:dark){:root{--bg:#0a171d;--surface:#122630;--ink:#e8f1f5;--muted:#93acb8;--line:#223e4a;--accent:#5bc0e6;--accent-ink:#04202b;--accent-soft:rgba(91,192,230,.14);--normal:#3dc08a;--watch:#e8b43a;--alert:#ff6b61;--unknown:#98adb7;--glass:rgba(18,38,48,.9);--shadow:0 8px 28px rgba(0,0,0,.5),0 1px 3px rgba(0,0,0,.4)}}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:74px}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"IBM Plex Sans Thai",system-ui,sans-serif;font-size:16px;line-height:1.65;-webkit-text-size-adjust:100%}
+a{color:var(--accent)}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+header{position:sticky;top:0;z-index:10;background:var(--glass);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);padding:10px 16px;padding-top:calc(10px + env(safe-area-inset-top,0px));display:flex;gap:10px;align-items:center;justify-content:space-between}
+header h1{margin:0;font-size:18px;font-weight:600}
+header a.back{display:inline-flex;align-items:center;height:44px;padding:0 14px;border-radius:14px;background:var(--accent-soft);color:var(--accent);font-weight:600;text-decoration:none;white-space:nowrap}
+main{max-width:780px;margin:0 auto;padding:6px 16px 40px}
+.hero{margin-top:14px;background:linear-gradient(135deg,var(--accent-soft),transparent);border:1px solid var(--line);border-radius:20px;padding:18px}
+.hero h2{margin:0 0 4px;font-size:22px}.hero p{margin:0;color:var(--muted)}
+.toc{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 4px}
+.toc a{display:inline-block;padding:7px 14px;border-radius:999px;background:var(--surface);border:1px solid var(--line);text-decoration:none;font-size:14px;font-weight:600;color:var(--ink)}
+section{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px;margin-top:14px;box-shadow:var(--shadow)}
+section>h2{margin:0 0 4px;font-size:20px}
+section>h2 .n{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-size:15px;margin-right:8px;vertical-align:1px}
+h3{font-size:16px;margin:16px 0 4px}
+p{margin:6px 0}
+ul,ol{margin:6px 0;padding-left:22px}li{margin:3px 0}
+.note{color:var(--muted);font-size:14px}
+.tip,.warn{border-radius:14px;padding:10px 14px;margin:10px 0;font-size:15px}
+.tip{background:var(--accent-soft)}.warn{background:var(--watch-bg)}
+.chipdemo{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:999px;border:1px solid var(--line);background:var(--bg);font-size:13px;font-weight:600;white-space:nowrap;vertical-align:middle}
+.chipdemo.on{background:var(--blue);border-color:var(--blue);color:#fff}
+.dot{display:inline-block;width:12px;height:12px;border-radius:50%;vertical-align:-1px}
+.d-normal{background:var(--normal)}.d-watch{background:var(--watch);border-radius:3px}.d-alert{background:var(--alert)}.d-unknown{background:var(--unknown)}
+.mk{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;color:#fff;font-weight:700;font-size:12px;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35);vertical-align:middle}
+.mk.normal{background:var(--normal)}.mk.watch{background:var(--watch);border-radius:8px}.mk.alert{background:var(--alert);width:36px;height:36px}.mk.unknown{background:var(--unknown)}
+table{width:100%;border-collapse:collapse;font-size:15px;margin:8px 0}
+th,td{text-align:left;padding:8px 6px;border-top:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-weight:500;border-top:0}
+code{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:1px 8px;font-size:14px;font-family:inherit;font-weight:600;white-space:nowrap}
+details{border-top:1px solid var(--line);padding:10px 0}details:first-of-type{border-top:0}
+summary{cursor:pointer;font-weight:600}
+details p{margin:6px 0 0}
+.sos{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:8px}
+.sos a{display:block;text-decoration:none;border:1px solid var(--line);border-radius:12px;padding:8px 10px;color:var(--ink);background:var(--bg)}
+.sos a b{display:block;font-size:20px;color:var(--accent);line-height:1.2}.sos a span{font-size:12px;color:var(--muted)}
+.cta{display:inline-flex;align-items:center;min-height:46px;padding:0 20px;border-radius:14px;background:var(--accent);color:var(--accent-ink);font-weight:700;text-decoration:none;margin-top:8px}
+footer{color:var(--muted);font-size:13px;margin:22px 4px 0}
+@media print{header,.toc,.cta{display:none}section{box-shadow:none;break-inside:avoid}body{background:#fff}}
+</style>
+</head>
+<body>
+<header>
+  <h1>วิธีใช้งาน</h1>
+  <a class="back" href="./">← กลับไปแผนที่</a>
+</header>
+<main>
+
+<div class="hero">
+  <h2>น้ำใกล้บ้านฉัน</h2>
+  <p>ดูระดับน้ำในแม่น้ำและคลองใกล้บ้านคุณแบบสดๆ รู้ว่าอีกนานแค่ไหนน้ำจะล้นตลิ่ง และรับแจ้งเตือนทาง LINE โดยไม่ต้องสมัครสมาชิก ข้อมูลจากสถานีวัดน้ำของ ThaiWater (สสน.) ทั่วประเทศ ประมาณ 800 แห่ง</p>
+</div>
+
+<nav class="toc" aria-label="สารบัญ">
+  <a href="#read">1 อ่านแผนที่</a>
+  <a href="#find">2 หาพื้นที่ของคุณ</a>
+  <a href="#layers">3 ชั้นแผนที่</a>
+  <a href="#station">4 ดูรายละเอียดสถานี</a>
+  <a href="#report">5 แจ้งน้ำท่วม</a>
+  <a href="#route">6 เช็กเส้นทาง</a>
+  <a href="#line">7 บอต LINE</a>
+  <a href="#province">8 รายงานรายจังหวัด</a>
+  <a href="#faq">9 คำถามที่พบบ่อย</a>
+</nav>
+
+<section id="read">
+  <h2><span class="n">1</span>อ่านแผนที่</h2>
+  <p>แต่ละวงกลมบนแผนที่คือ <b>สถานีวัดน้ำ</b> ตัวเลขข้างในคือ <b>ระดับน้ำเป็นเปอร์เซ็นต์ของตลิ่ง</b> เช่น 80 แปลว่าน้ำสูงถึง 80% ของความสูงตลิ่ง ส่วน 100 ขึ้นไปคือน้ำเต็มตลิ่งหรือล้นแล้ว</p>
+  <table>
+    <tr><th>สัญลักษณ์</th><th>ความหมาย</th></tr>
+    <tr><td><span class="mk normal">45</span></td><td><b>ปกติ</b> ต่ำกว่า 70% ของตลิ่ง วงกลมเล็ก สีเขียว</td></tr>
+    <tr><td><span class="mk watch">78</span></td><td><b>เฝ้าระวัง</b> 70–90% สี่เหลี่ยมมนสีเหลือง ควรติดตามต่อเนื่อง</td></tr>
+    <tr><td><span class="mk alert">105</span></td><td><b>เตือนภัย</b> 90% ขึ้นไป วงกลมใหญ่สีแดง มีวงกระเพื่อม ใกล้ล้นหรือล้นตลิ่งแล้ว</td></tr>
+    <tr><td><span class="mk unknown">–</span></td><td><b>ไม่มีเกณฑ์เทียบ</b> สถานีไม่มีค่าความสูงตลิ่ง จึงบอกสถานะไม่ได้</td></tr>
+  </table>
+  <p>สีและรูปทรงต่างกันเพื่อให้คนที่แยกสีไม่ถนัดก็อ่านได้ วงกลมที่มีขอบเส้นประแปลว่า <b>ข้อมูลเก่าเกิน 2 ชั่วโมง</b> ตัวเลขอาจไม่ตรงกับตอนนี้</p>
+  <p>ตรงที่มีหลายสถานีอยู่ใกล้กัน จะรวมเป็นวงกลมใหญ่ที่มีตัวเลขจำนวนสถานี แตะหรือซูมเข้าไปเพื่อแยกออก</p>
+  <div class="tip"><b>แถบสถานะด้านบน</b> (เตือนภัย / เฝ้าระวัง / ปกติ / ข้อมูลค้าง) แตะเพื่อกรองให้เห็นเฉพาะสถานีกลุ่มนั้น แตะอีกครั้งเพื่อยกเลิก บนมือถือปัดแถวไปทางขวาเพื่อดูชิปที่เหลือ</div>
+</section>
+
+<section id="find">
+  <h2><span class="n">2</span>หาพื้นที่ของคุณ</h2>
+  <h3>เลือกจากรายการ</h3>
+  <p>ใต้ช่องค้นหามีสามช่องเรียงกัน <b>จังหวัด → อำเภอ → ตำบล</b> (กรุงเทพฯ จะเป็น เขต → แขวง) เลือกจังหวัดเพื่อกรองสถานี เลือกอำเภอเพื่อซูมไปที่อำเภอ และเลือกตำบลเพื่อดูสถานีใกล้ที่สุด ศูนย์พักพิง และพยากรณ์ฝนของตำบลนั้นทันที เหมาะกับคนที่ไม่อยากเปิดตำแหน่ง</p>
+  <p class="note">ตำแหน่งตำบลเป็นพิกัดกลางตำบลโดยประมาณ ข้อมูลรายชื่อตำบลของกรุงเทพฯ มี 154 จาก 180 แขวง ถ้าหาแขวงของคุณไม่เจอให้ใช้ช่องค้นหาแทน</p>
+  <h3>พิมพ์ค้นหา</h3>
+  <p>พิมพ์ชื่อสถานี ชื่อจังหวัด หรือชื่อสถานที่ในช่องค้นหา แล้วเลือกผลลัพธ์ หรือกด Enter เพื่อค้นหาเป็นชื่อสถานที่บนแผนที่ (เช่น ชื่อตลาด วัด โรงเรียน)</p>
+  <h3>ใกล้ฉัน และปักหมุดบ้าน</h3>
+  <ul>
+    <li>ปุ่มเป้าเล็ง ◎ ข้างช่องค้นหา = ใช้ตำแหน่งปัจจุบัน (เบราว์เซอร์จะขออนุญาตก่อน)</li>
+    <li>เมนู <b>ชั้นแผนที่ → ปักหมุดบ้านฉัน</b> แล้วแตะบนแผนที่ตรงบ้านคุณ</li>
+  </ul>
+  <p>ทั้งสองแบบจะแสดงสถานีใกล้ที่สุด 3 แห่ง ระยะห่าง และเปิดรายละเอียดสถานีที่ใกล้ที่สุดให้เลย ตำแหน่งของคุณใช้เฉพาะในหน้านี้ ไม่ถูกเก็บไว้ที่ใด</p>
+  <div class="tip">ลองแตะที่ใดก็ได้บนแผนที่ ระบบจะบอกสถานีวัดน้ำที่ใกล้จุดนั้นที่สุด</div>
+</section>
+
+<section id="layers">
+  <h2><span class="n">3</span>ชั้นแผนที่</h2>
+  <p>กดปุ่ม <b>ชั้นแผนที่</b> มุมขวาบน หรือใช้ปุ่มลัดใต้แถบจังหวัดเพื่อเปิด/ปิดชั้นข้อมูลที่ซ้อนบนแผนที่ ปุ่มลัดและเมนูทำงานตรงกัน</p>
+  <p><span class="chipdemo on">🛰 ดาวเทียม</span> <span class="chipdemo on">🌧 ฝน</span> <span class="chipdemo">🏠 พักพิง</span> <span class="note">สีน้ำเงิน = กำลังเปิด</span></p>
+  <table>
+    <tr><th>ชั้น</th><th>ใช้ทำอะไร</th></tr>
+    <tr><td><b>🛰 น้ำท่วมจากดาวเทียม</b></td><td>แสดงพื้นที่ที่ดาวเทียมเห็นว่ามีน้ำท่วมขัง เป็นสีฟ้า เลือกช่วงย้อนหลังได้ 1 / 3 / 7 / 30 วัน (จาก GISTDA) <span class="note">ภาพอาจล่าช้าและถูกเมฆบัง ไม่ใช่ประกาศทางการ</span></td></tr>
+    <tr><td><b>🌧 เรดาร์ฝน</b></td><td>ภาพฝนล่าสุดและย้อนหลัง 2 ชั่วโมง กดปุ่ม ▶ เล่น เพื่อดูทิศทางฝน (จาก RainViewer) <span class="note">ความละเอียดต่ำ ดูแนวโน้มคร่าวๆ เท่านั้น</span></td></tr>
+    <tr><td><b>🏠 ศูนย์พักพิงชั่วคราว</b></td><td>หมุดสี่เหลี่ยมเขียวของจังหวัดที่เลือก แตะดูชื่อ ความจุ เบอร์โทร และปุ่มนำทาง (ข้อมูล ปภ.) <span class="note">ข้อมูลอัปเดตปีละครั้ง โทรสอบถามก่อนเดินทางทุกครั้ง</span></td></tr>
+    <tr><td><b>จุดน้ำท่วมที่ผู้ใช้รายงาน</b></td><td>หมุดรูปหยดน้ำสีน้ำเงิน เปิดอยู่เป็นปกติ ดูหัวข้อ 5</td></tr>
+    <tr><td><b>เส้นเชื่อมสถานีตามแม่น้ำ</b></td><td>เส้นตรงระหว่างสถานีบนแม่น้ำเดียวกัน ระบายสีตามสถานะสูงสุดของคู่นั้น ปิดไว้เป็นปกติ <span class="note">ไม่ใช่แนวแม่น้ำจริง และเรียงต้นน้ำ→ปลายน้ำแบบประมาณ</span></td></tr>
+  </table>
+  <p>ทุกครั้งที่เปิดหน้าใหม่ ชั้นแผนที่จะกลับเป็นค่าเริ่มต้น ระบบไม่จำการเลือกของคุณ</p>
+</section>
+
+<section id="station">
+  <h2><span class="n">4</span>ดูรายละเอียดสถานี</h2>
+  <p>แตะวงกลมสถานีบนแผนที่ หรือเลือกจากรายการ จะเห็น</p>
+  <ul>
+    <li><b>ระดับน้ำเทียบตลิ่ง</b> แถบสีแสดง % ของตลิ่ง พร้อมระดับน้ำ ระดับตลิ่ง และระดับท้องน้ำ (หน่วยเมตรจากระดับน้ำทะเลปานกลาง)</li>
+    <li><b>แนวโน้ม</b> กำลังสูงขึ้น / ลดลง / ทรงตัว กี่ % ต่อชั่วโมง และถ้ากำลังสูงขึ้น จะบอก <b>คาดว่าถึงตลิ่งในอีกกี่ชั่วโมง</b> (ประมาณการจากอัตราล่าสุด ไม่ใช่การพยากรณ์)</li>
+    <li><b>กราฟย้อนหลัง 7 วัน</b> ดูว่าน้ำขึ้นลงมาอย่างไร</li>
+    <li><b>สถานีที่เกี่ยวข้อง</b> สถานีบนแม่น้ำเดียวกัน ทั้งต้นน้ำและปลายน้ำ ช่วยดูว่าน้ำกำลังจะไหลมาจากไหน (ประมาณจากระดับท้องน้ำ)</li>
+    <li><b>ข้อแนะนำสั้นๆ</b> ตามสถานะ เช่น ควรยกของขึ้นที่สูง</li>
+  </ul>
+  <p>ปุ่ม <b>รายงาน →</b> ที่หัวแผงจะเปิดสรุปทั้งจังหวัด (ดูหัวข้อ 8) ส่วนปุ่ม <b>แชร์ลิงก์สถานีนี้</b> ท้ายรายละเอียดสถานีใช้ส่งลิงก์ให้คนอื่น ลิงก์จะเปิดมาที่สถานีนั้นและจังหวัดของสถานีนั้น</p>
+  <h3>ย้อนดูสถานการณ์ใน 72 ชั่วโมง</h3>
+  <p>ในแผงข้อมูลมีแถบเลื่อน "ย้อนดูสถานการณ์บนแผนที่" ลากไปทางซ้ายเพื่อดูแผนที่ย้อนหลังได้สูงสุด 72 ชั่วโมง (ป้ายใต้แถบบอกว่าย้อนหลังกี่ชั่วโมง) ช่วยให้เห็นว่าน้ำกำลังขยายวงหรือลดลง ลากกลับขวาสุด = ตอนนี้</p>
+  <div class="warn">ถ้าสถานีมีป้ายเตือนว่า "ข้อมูลไม่อัปเดตเกิน 2 ชั่วโมง" หรือ "สองแหล่งขัดกัน" ให้ตรวจกับหน่วยงานในพื้นที่ก่อนตัดสินใจ</div>
+</section>
+
+<section id="report">
+  <h2><span class="n">5</span>แจ้งน้ำท่วม (รายงานจากผู้ใช้)</h2>
+  <p>สถานีวัดน้ำอยู่ริมแม่น้ำเท่านั้น น้ำท่วมถนนหรือหมู่บ้านที่ไม่มีเซ็นเซอร์ คนในพื้นที่ช่วยกันบอกได้</p>
+  <ol>
+    <li>กดปุ่ม <b>แจ้งจุดน้ำท่วม</b> ในแผงข้อมูล</li>
+    <li>เลือกตำแหน่ง: <b>ใช้ตำแหน่งปัจจุบัน</b> หรือ <b>เลือกบนแผนที่</b> (แล้วแตะจุดที่ท่วม)</li>
+    <li>เลือกระดับน้ำ: เปียกแฉะ / ถึงข้อเท้า / ถึงเข่า / เกินเอว</li>
+    <li>ใส่หมายเหตุสั้นๆ ถ้าต้องการ แล้วกด <b>ส่งรายงาน</b></li>
+  </ol>
+  <p>ไม่ต้องล็อกอิน ไม่มีการเก็บชื่อหรือรูป หมุดจะขึ้นบนแผนที่ <b>12 ชั่วโมง</b> แล้วหายเอง แตะหมุดเพื่อดูว่าเมื่อกี่นาทีก่อน มีกี่คนยืนยัน และปุ่ม <b>ไม่จริง / น้ำลดแล้ว</b> ถ้ามี 3 คนที่ต่างกันกดปุ่มนี้ หมุดจะถูกซ่อน</p>
+  <div class="warn">รายงานเป็นข้อมูลจากผู้ใช้ <b>ยังไม่ผ่านการตรวจสอบ</b> ส่งได้ไม่เกิน 5 ครั้งต่อชั่วโมง และจุดเดิมซ้ำภายใน 10 นาทีไม่ได้ ถ้าอยู่ในอันตรายให้โทร 1784 หรือ 191 ก่อน</div>
+  <p class="note">ส่งผ่าน LINE ก็ได้ ดูหัวข้อ 7</p>
+</section>
+
+<section id="route">
+  <h2><span class="n">6</span>เช็กเส้นทาง</h2>
+  <p>ก่อนออกเดินทาง ดูว่าเส้นทางขับรถผ่านจุดเสี่ยงน้ำท่วมหรือไม่</p>
+  <ol>
+    <li>กดปุ่ม <b>เช็กเส้นทาง</b> ในแผงข้อมูล</li>
+    <li>พิมพ์ชื่อ <b>ต้นทาง</b> (หรือกด <b>ตำแหน่งฉัน</b>) และ <b>ปลายทาง</b> เป็นชื่อสถานที่ พิมพ์ให้ละเอียด เช่นเพิ่มชื่ออำเภอหรือจังหวัด</li>
+    <li>กด <b>ตรวจเส้นทาง</b></li>
+  </ol>
+  <p>ระบบวาดเส้นทางบนแผนที่ แล้วนับ <b>จุดเสี่ยง</b> คือรายงานน้ำท่วมจากผู้ใช้ห่างจากเส้นทางไม่เกิน 300 เมตร และสถานีเฝ้าระวัง/เตือนภัยที่ข้อมูลยังสดห่างไม่เกิน 1 กิโลเมตร สรุปผลเป็นสีเขียว / เหลือง / แดง ถ้ามีเส้นทางสำรอง จะเทียบให้และเรียงเส้นที่เสี่ยงน้อยสุดไว้ก่อน แตะเพื่อสลับดู</p>
+  <div class="warn"><b>ผลเป็นการประเมินคร่าวๆ</b> สถานีวัดน้ำบอกระดับแม่น้ำ ไม่ได้บอกว่าถนนตรงนั้นท่วมจริง "ไม่พบจุดเสี่ยง" ไม่ได้แปลว่าปลอดภัย และยังไม่รวมภาพดาวเทียม ใช้ได้เฉพาะเส้นทางขับรถ</div>
+</section>
+
+<section id="line">
+  <h2><span class="n">7</span>บอต LINE</h2>
+  <p>รับแจ้งเตือนโดยไม่ต้องเปิดเว็บ</p>
+  <h3>เริ่มใช้</h3>
+  <ol>
+    <li>กดปุ่ม <b>เพิ่มเพื่อน</b> ในการ์ด "รับแจ้งเตือนทาง LINE" บนหน้าเว็บ (อยู่ในแผงข้อมูล)</li>
+    <li>ส่ง <b>ตำแหน่งบ้านของคุณ</b>: กดเครื่องหมาย + ข้างช่องพิมพ์ แล้วเลือก "ตำแหน่งที่ตั้ง"</li>
+    <li>เสร็จแล้ว บอตจะบอกสถานะของสถานีใกล้บ้านทันที และเริ่มแจ้งเตือน</li>
+  </ol>
+  <h3>บอตจะแจ้งอะไรคุณ</h3>
+  <ul>
+    <li><b>สถานีใกล้บ้านเปลี่ยนสถานะ</b> เช่น จากเฝ้าระวังเป็นเตือนภัย</li>
+    <li><b>เตือนล่วงหน้า</b> เมื่อน้ำกำลังสูงขึ้นและคาดว่าจะถึงตลิ่งภายใน 6 ชั่วโมง (ส่งไม่เกิน 1 ครั้งต่อ 6 ชั่วโมง)</li>
+    <li><b>มีผู้ใช้รายงานน้ำท่วมใกล้บ้าน</b> ภายใน 2 กม. และมีอย่างน้อย 2 คนยืนยัน (ไม่เกิน 1 ครั้งต่อ 3 ชั่วโมง)</li>
+    <li><b>สรุปสถานการณ์ทุกเช้า 07:00</b> ของจังหวัดคุณ</li>
+  </ul>
+  <h3>คำสั่งที่พิมพ์ได้</h3>
+  <table>
+    <tr><th>พิมพ์</th><th>ได้อะไร</th></tr>
+    <tr><td><code>สถานะ</code></td><td>ค่าล่าสุดของสถานีใกล้บ้าน (ถ้าติดตามหลายจุด แสดงทุกจุด)</td></tr>
+    <tr><td><code>รายงาน</code></td><td>สรุปสถานการณ์ทั้งจังหวัดตอนนี้</td></tr>
+    <tr><td><code>แจ้งน้ำท่วม</code></td><td>เลือกระดับน้ำ แล้วกดปุ่มส่งตำแหน่งจุดที่ท่วม (ภายใน 10 นาที)</td></tr>
+    <tr><td><code>ศูนย์พักพิง</code></td><td>ศูนย์พักพิง 3 แห่งที่ใกล้ที่สุด พร้อมระยะ เบอร์โทร และลิงก์นำทาง</td></tr>
+    <tr><td><code>ตำแหน่งของฉัน</code></td><td>ดูจุดที่ติดตามอยู่ และกดปุ่มลบทีละจุด (หรือพิมพ์ <code>ลบจุดที่ 2</code>)</td></tr>
+    <tr><td><code>ตั้งค่า</code></td><td>เลือกระดับแจ้งเตือนและช่วงไม่รบกวน (ดูด้านล่าง)</td></tr>
+    <tr><td><code>ยกเลิก</code></td><td>หยุดทุกอย่างและลบตำแหน่งที่เก็บไว้ทั้งหมด</td></tr>
+    <tr><td><code>วิธีใช้</code></td><td>ลิงก์มาที่คู่มือนี้</td></tr>
+  </table>
+  <h3>ตั้งค่าการแจ้งเตือน</h3>
+  <ul>
+    <li><code>แจ้งทุกระดับ</code> / <code>แจ้งเฉพาะเตือนภัย</code> เลือกว่าจะรับเมื่อสถานะเปลี่ยนทุกครั้ง หรือเฉพาะระดับเตือนภัย</li>
+    <li><code>ไม่รบกวนกลางคืน</code> / <code>แจ้งกลางคืน</code> ช่วง 22:00–06:00 จะไม่ส่ง ยกเว้นระดับเตือนภัย (ข้อความที่ค้างจะส่งหลัง 06:00)</li>
+    <li><code>ปิดสรุป</code> / <code>เปิดสรุป</code> เปิดปิดสรุปเช้า 07:00</li>
+  </ul>
+  <p>ค่าที่ตั้งใช้ร่วมกันทุกจุดที่ติดตาม</p>
+  <h3>ติดตามหลายจุด (สูงสุด 3 จุด)</h3>
+  <p>เช่น บ้าน ที่ทำงาน บ้านพ่อแม่ เมื่อคุณส่งตำแหน่งใหม่ที่ห่างจากจุดเดิมเกิน 200 เมตร บอตจะถามว่า <b>เพิ่มเป็นจุดที่ 2</b> หรือ <b>แทนที่จุดเดิม</b> ให้แตะปุ่มเลือก ข้อความแจ้งเตือนจะบอกชื่อจุดกำกับ เช่น "(จุดที่ 2)"</p>
+  <h3>ใช้ในกลุ่ม LINE</h3>
+  <p>ชวนบอตเข้ากลุ่ม แล้วพิมพ์ <code>ติดตาม อยุธยา</code> (ชื่อจังหวัดที่ต้องการ) บอตจะส่งสรุปสถานการณ์เข้ากลุ่มทุกเช้า 07:00 และจะไม่ตอบข้อความทั่วไปในกลุ่ม พิมพ์ <code>ยกเลิก</code> เพื่อเลิก</p>
+  <div class="tip">ความเป็นส่วนตัว: เก็บเฉพาะรหัสผู้ใช้ LINE กับพิกัดที่คุณส่งมา เพื่อใช้แจ้งเตือนเท่านั้น พิมพ์ "ยกเลิก" เมื่อไรก็ลบทั้งหมด หรือบล็อกบอตก็ลบให้อัตโนมัติ</div>
+</section>
+
+<section id="province">
+  <h2><span class="n">8</span>รายงานรายจังหวัด</h2>
+  <p>กดปุ่ม <b>รายงาน →</b> บนแผงข้อมูล (หรือพิมพ์ "รายงาน" ใน LINE) จะได้หน้าสรุปของจังหวัด</p>
+  <ul>
+    <li>จำนวนสถานีตามสถานะ เทียบกับเมื่อวาน และจำนวนสถานีที่ล้นตลิ่ง</li>
+    <li>กราฟแท่งจำนวนสถานีตามสถานะแยกรายวัน</li>
+    <li>10 อันดับสถานีที่น้ำสูงที่สุด และสถานีที่กำลังสูงขึ้นเร็ว</li>
+    <li><b>ข้อความสำหรับแชร์</b> กดคัดลอกแล้ววางส่งในกลุ่ม LINE ได้เลย หรือกดพิมพ์</li>
+  </ul>
+</section>
+
+<section id="faq">
+  <h2><span class="n">9</span>คำถามที่พบบ่อย</h2>
+  <details><summary>ข้อมูลอัปเดตบ่อยแค่ไหน</summary><p>ระบบดึงข้อมูลใหม่จาก ThaiWater ทุกประมาณ 15–20 นาที แต่แต่ละสถานีส่งค่าเข้ามาตามรอบของตัวเอง ถ้าสถานีไหนไม่อัปเดตเกิน 2 ชั่วโมง วงกลมจะมีเส้นประและมีป้ายเตือนว่าข้อมูลเก่า</p></details>
+  <details><summary>ทำไมบางสถานีเป็นสีเทา "ไม่มีเกณฑ์เทียบ"</summary><p>สถานีนั้นไม่มีค่าความสูงตลิ่งในฐานข้อมูล จึงคำนวณ % ของตลิ่งไม่ได้ ระบบบอกได้แค่ระดับน้ำ ไม่บอกสถานะ</p></details>
+  <details><summary>สถานีสองแห่งอยู่จุดเดียวกันแต่สถานะต่างกัน</summary><p>บางจุดมีสองหน่วยงาน (เช่น กรมชลประทานกับ สสน.) วัดซ้อนกัน ถ้าค่าต่างกัน ระบบจะแสดงหมายเหตุ "สองแหล่งขัดกัน" ให้ตรวจกับหน่วยงานในพื้นที่</p></details>
+  <details><summary>"คาดถึงตลิ่งในอีกกี่ชั่วโมง" แม่นแค่ไหน</summary><p>คำนวณจากอัตราที่น้ำสูงขึ้นในช่วงที่ผ่านมา โดยสมมติว่าจะขึ้นด้วยอัตราเดิมต่อไป เป็นการประมาณคร่าวๆ ฝนที่ตกเพิ่มหรือการเปิด-ปิดประตูน้ำเปลี่ยนผลได้ จึงใช้เป็นสัญญาณเตือนให้เตรียมตัว ไม่ใช่ตัวเลขที่รับประกัน</p></details>
+  <details><summary>ดูพยากรณ์ฝนได้ที่ไหน</summary><p>เมื่อเลือกจังหวัด ตำบล ปักหมุดบ้าน หรือใช้ตำแหน่งปัจจุบัน จะมีการ์ด "พยากรณ์ฝน" ที่ด้านบนของแผงข้อมูล แสดงปริมาณฝนรวม 24 ชั่วโมงข้างหน้า ช่วงที่ฝนแรงสุด และสรุป 3 วัน (จาก Open-Meteo เป็นผลของแบบจำลอง ไม่ใช่ประกาศของกรมอุตุนิยมวิทยา) ถ้าเลือก "ทั้งประเทศ" การ์ดจะซ่อน</p></details>
+  <details><summary>ติดตั้งเป็นแอปบนมือถือได้ไหม</summary><p>ได้ เปิดเว็บด้วย Chrome หรือ Safari แล้วเลือก "เพิ่มลงหน้าจอโฮม" จะได้ไอคอนเปิดได้เร็วเหมือนแอป และเปิดหน้าได้แม้สัญญาณอ่อน (แต่ข้อมูลระดับน้ำต้องมีอินเทอร์เน็ตเสมอ)</p></details>
+  <details><summary>เปิดแล้วเห็นหน้าเก่า หรือฟีเจอร์ไม่ตรงกับคู่มือ</summary><p>ปิดแล้วเปิดใหม่ หรือรีเฟรชแรงๆ (บนคอมพิวเตอร์กด Ctrl/Cmd + Shift + R) เบราว์เซอร์อาจเก็บหน้าเก่าไว้ครู่หนึ่ง</p></details>
+  <details><summary>เว็บเปิดที่จังหวัดอื่น / ไม่ใช่อยุธยา</summary><p>เว็บเปิดที่ จ.พระนครศรีอยุธยาเสมอ แต่ถ้าเปิดจากลิงก์ที่ระบุสถานี (ท้ายลิงก์มี <code>?station=...</code>) จะเปิดที่จังหวัดของสถานีนั้น เปลี่ยนจังหวัดได้ที่ช่องจังหวัดด้านบน</p></details>
+  <details><summary>เก็บข้อมูลอะไรของฉันบ้าง</summary><p>เว็บ: ไม่เก็บตำแหน่งหรือการเลือกของคุณ ตำแหน่งที่ใช้ค้นหา ค้นเส้นทาง หรือดูพยากรณ์ฝนจะถูกส่งไปยังบริการภายนอกที่ระบุไว้ในหน้า (OpenStreetMap, OSRM, Open-Meteo) รายงานน้ำท่วมเก็บแค่จุด ระดับ หมายเหตุ และเวลา โดยลบเองใน 48 ชั่วโมง LINE: ดูหัวข้อ 7</p></details>
+</section>
+
+<section id="sos">
+  <h2>เบอร์ฉุกเฉิน (โทรฟรี)</h2>
+  <div class="sos">
+    <a href="tel:1784"><b>1784</b><span>ปภ. แจ้งภัย/ขอความช่วยเหลือ</span></a>
+    <a href="tel:1669"><b>1669</b><span>การแพทย์ฉุกเฉิน</span></a>
+    <a href="tel:191"><b>191</b><span>แจ้งเหตุด่วนเหตุร้าย</span></a>
+    <a href="tel:1460"><b>1460</b><span>กรมชลประทาน ข้อมูลน้ำ/เขื่อน</span></a>
+    <a href="tel:1182"><b>1182</b><span>กรมอุตุฯ สภาพอากาศ</span></a>
+  </div>
+  <p><a class="cta" href="./">เปิดแผนที่</a></p>
+</section>
+
+<footer>
+  <p>ข้อมูลระดับน้ำจาก ThaiWater (สสน.) ศูนย์พักพิงจาก ปภ. (Open Data Common) น้ำท่วมจากดาวเทียมจาก GISTDA เรดาร์ฝนจาก RainViewer พยากรณ์ฝนจาก Open-Meteo เส้นทางจาก OSRM แผนที่ © OpenStreetMap contributors</p>
+  <p><b>ใช้ประกอบการตัดสินใจเท่านั้น ไม่ใช่ประกาศทางการ</b> ให้ยึดคำสั่งของ ปภ. และหน่วยงานในพื้นที่เป็นหลัก</p>
+</footer>
+</main>
+</body>
+</html>
