@@ -70,7 +70,7 @@ GROUP_HELP = ("น้ำใกล้บ้านฉัน: พิมพ์ \"ต
 def _with_manual(text):
     """Append the link to the full manual when the public URL of this deployment is known."""
     base = public_url()
-    return text + (f"\n\nคู่มือการใช้งานฉบับเต็ม: {base}/help.html" if base else "")
+    return text + (f"\n\nคู่มือการใช้งานฉบับเต็ม: {base}/help.html\nนโยบายความเป็นส่วนตัว: {base}/privacy.html" if base else "")
 
 
 def valid_signature(secret, body, signature):

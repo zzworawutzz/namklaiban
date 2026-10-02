@@ -134,6 +134,7 @@ def test_manual_command_replies_with_help_and_a_link(conn, monkeypatch):
     monkeypatch.setenv("PUBLIC_URL", "https://example.test")
     say(conn, rec, "วิธีใช้")
     assert "https://example.test/help.html" in rec.last[0] and "ส่งตำแหน่งบ้าน" in rec.last[0]
+    assert "https://example.test/privacy.html" in rec.last[0]
     monkeypatch.delenv("PUBLIC_URL", raising=False); monkeypatch.delenv("VERCEL_PROJECT_PRODUCTION_URL", raising=False)
     say(conn, rec, "คู่มือ")
     assert "help.html" not in rec.last[0]            # no public URL configured: help text only
