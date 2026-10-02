@@ -1,7 +1,17 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["sin1"],
+  "regions": [
+    "sin1"
+  ],
   "functions": {
-    "api.py": { "maxDuration": 60 }
-  }
+    "api.py": {
+      "maxDuration": 60
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/:slug(angthong|ayutthaya|bangkok|buengkan|buriram|chachoengsao|chainat|chaiyaphum|chanthaburi|chiangmai|chiangrai|chonburi|chumphon|kalasin|kamphaengphet|kanchanaburi|khonkaen|krabi|lampang|lamphun|loei|lopburi|maehongson|mahasarakham|mukdahan|nakhonnayok|nakhonpathom|nakhonphanom|nakhonratchasima|nakhonsawan|nakhonsithammarat|nan|narathiwat|nongbualamphu|nongkhai|nonthaburi|pathumthani|pattani|phangnga|phatthalung|phayao|phetchabun|phetchaburi|phichit|phitsanulok|phrae|phuket|prachinburi|prachuapkhirikhan|rangsit|ranong|ratchaburi|rayong|roiet|sakaeo|sakonnakhon|samutprakan|samutsakhon|samutsongkhram|saraburi|satun|singburi|sisaket|songkhla|sukhothai|suphanburi|suratthani|surin|tak|trang|trat|ubonratchathani|udonthani|uthaithani|uttaradit|yala|yasothon)",
+      "destination": "/index.html"
+    }
+  ]
 }

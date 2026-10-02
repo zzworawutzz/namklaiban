@@ -17,6 +17,7 @@ from typing import Optional
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -337,4 +338,10 @@ async def line_webhook_endpoint(request: Request, x_line_signature: Optional[str
 
 _web = Path(__file__).parent / "public"
 if _web.is_dir() and not os.environ.get("VERCEL"):  # on Vercel, public/ is served by the CDN
+    def _place_page():
+        return FileResponse(_web / "index.html")
+
+    # same pretty paths as the rewrite in vercel.json (/rangsit, /ayutthaya ...); one route per slug so static files and API paths are untouched
+    for _slug in json.loads((_web / "places.json").read_text(encoding="utf-8")):
+        app.add_api_route("/" + _slug, _place_page, methods=["GET"], include_in_schema=False)
     app.mount("/", StaticFiles(directory=_web, html=True), name="web")
