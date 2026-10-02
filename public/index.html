@@ -414,7 +414,7 @@ svg.chart{width:100%;height:auto;display:block}
         <a href="tel:1460"><b>1460</b><span>กรมชลประทาน ข้อมูลน้ำ/เขื่อน</span></a>
         <a href="tel:1182"><b>1182</b><span>กรมอุตุฯ สภาพอากาศ</span></a>
       </div></section>
-    <p class="foot" id="foot"><a href="help.html">คู่มือการใช้งาน</a> · ข้อมูลระดับน้ำจาก ThaiWater (สสน.) ใช้ประกอบการตัดสินใจเท่านั้น ไม่ใช่ประกาศทางการ ให้ยึดคำสั่งของ ปภ. ในพื้นที่เป็นหลัก (สายด่วน 1784) · การค้นหาสถานที่ใช้ Nominatim ของ OpenStreetMap (คำที่ค้นหาจะถูกส่งไปยังบริการนั้น) · แผนที่ © OpenStreetMap contributors · ศูนย์พักพิง: ปภ. (Open Data Common) · เรดาร์: RainViewer · เส้นทาง: OSRM · พยากรณ์ฝน: Open-Meteo</p>
+    <p class="foot" id="foot"><a href="help.html">คู่มือการใช้งาน</a> · ข้อมูลระดับน้ำจาก ThaiWater (สสน.) ใช้ประกอบการตัดสินใจเท่านั้น ไม่ใช่ประกาศทางการ ให้ยึดคำสั่งของ ปภ. ในพื้นที่เป็นหลัก (สายด่วน 1784) · การค้นหาสถานที่ใช้ Nominatim ของ OpenStreetMap (คำที่ค้นหาจะถูกส่งไปยังบริการนั้น) · แผนที่ © OpenStreetMap contributors · ศูนย์พักพิง: ปภ. (Open Data Common) · เรดาร์: RainViewer · เส้นทาง: OSRM · พยากรณ์ฝน: Open-Meteo · ขอบเขตพื้นที่: UN OCHA / กรมแผนที่ทหาร (CC BY-IGO)</p>
   </div>
 </aside>
 
@@ -634,7 +634,7 @@ function drawSummary(){
     return '<li><span class="dot" style="background:'+COLOR[r[0]]+'"></span>'+LABEL[r[0]]+'<b>'+r[1]+'</b></li>';
   }).join("")+(k.stale?'<li class="note" style="margin:0">ข้อมูลค้าง '+k.stale+' สถานี</li>':'')+'</ul>';
 }
-function redraw(){ drawMarkers(); drawChips(); drawSummary(); drawRivers(); if(typeof refreshShelters==="function") refreshShelters(); if(typeof refreshRain==="function") refreshRain(); }
+function redraw(){ drawMarkers(); drawChips(); drawSummary(); drawRivers(); if(typeof updateBoundary==="function") updateBoundary(); if(typeof refreshShelters==="function") refreshShelters(); if(typeof refreshRain==="function") refreshRain(); }
 
 /* ---------- river lines ---------- */
 var RIVER_MAX_KM = 80;
@@ -1252,6 +1252,27 @@ $("rtGo").addEventListener("click",function(){
       rtFail(m.indexOf("nf:")===0 ? "ไม่พบสถานที่ \""+m.slice(3)+"\" ลองพิมพ์ให้ละเอียดขึ้น เช่นเพิ่มชื่ออำเภอหรือจังหวัด" : m==="noroute" ? "หาเส้นทางระหว่างสองจุดนี้ไม่ได้" : "คำนวณเส้นทางไม่ได้ในขณะนี้ ลองใหม่อีกครั้ง"); });
 });
 
+/* ---------- red outline of the chosen province / district / subdistrict (UN OCHA boundaries, via our API) ---------- */
+var boundLayer = null, boundKey = "", boundSeq = 0;
+var BOUND_ATTR = 'ขอบเขต: UN OCHA / กรมแผนที่ทหาร (CC BY-IGO) แบบย่อรูป';
+function updateBoundary(){
+  var di = $("dist").value, ti = $("tam").value, key = "";
+  var d = (areaCur && di!=="" && areaCur.province===province) ? areaCur.districts[+di] : null;
+  var t = (d && ti!=="") ? d.tambons[+ti] : null;
+  if(province) key = province + (d ? "|"+d.name : "") + (t ? "|"+t.name : "");
+  if(key===boundKey) return;                       // nothing new to draw
+  boundKey = key; var my = ++boundSeq;
+  if(boundLayer){ map.removeLayer(boundLayer); boundLayer = null; }
+  if(!key) return;
+  var q = "?province="+encodeURIComponent(province) + (d ? "&district="+encodeURIComponent(d.name) : "") + (t ? "&tambon="+encodeURIComponent(t.name) : "");
+  getJSON("/api/boundary"+q).then(function(f){
+    if(my!==boundSeq) return;
+    boundLayer = L.geoJSON(f,{interactive:false, attribution:BOUND_ATTR,
+      style:{color:"#d2372f", weight:t?3.5:d?3:2.5, opacity:.95, fillColor:"#d2372f", fillOpacity:t?.10:.05, lineJoin:"round"}}).addTo(map);
+    boundLayer.bringToBack();
+  }).catch(function(){});                            // no outline for this area: draw nothing rather than something wrong
+}
+
 /* ---------- area pills: province > district > subdistrict (centre point of the subdistrict) ---------- */
 var areaCache = {}, areaCur = null, areaSeq = 0;
 function arPre(prov){ return prov==="กรุงเทพมหานคร" ? {d:"เขต", t:"แขวง"} : {d:"อำเภอ", t:"ตำบล"}; }
@@ -1261,9 +1282,9 @@ function arFill(sel, items, placeholder){
 }
 function arReset(){ var pre = arPre(province); areaCur = null; arFill($("dist"), [], pre.d); arFill($("tam"), [], pre.t); }
 function syncAreaPills(){          // call whenever the province may have changed; keeps the picks while it has not
-  if(!province){ arReset(); return; }
+  if(!province){ arReset(); updateBoundary(); return; }
   if(areaCur && areaCur.province===province) return;
-  arReset(); var my = ++areaSeq, name = province;
+  arReset(); updateBoundary(); var my = ++areaSeq, name = province;
   var show = function(d){
     if(my!==areaSeq || province!==name) return;
     areaCur = d; var pre = arPre(name);
@@ -1275,12 +1296,13 @@ function syncAreaPills(){          // call whenever the province may have change
 $("dist").addEventListener("change", function(){
   var pre = arPre(province);
   if(origin && origin.kind==="area") setOrigin(null);
-  if(this.value==="" || !areaCur){ arFill($("tam"), [], pre.t); return; }
+  if(this.value==="" || !areaCur){ arFill($("tam"), [], pre.t); updateBoundary(); return; }
   var d = areaCur.districts[+this.value];
-  arFill($("tam"), d.tambons.map(function(t){return t.name;}), pre.t);
+  arFill($("tam"), d.tambons.map(function(t){return t.name;}), pre.t); updateBoundary();
   map.fitBounds(L.latLngBounds(d.tambons.map(function(t){return [t.lat,t.lng];})), Object.assign({maxZoom:12}, fitPad()));
 });
 $("tam").addEventListener("change", function(){
+  updateBoundary();
   if(this.value===""){ if(origin && origin.kind==="area") setOrigin(null); return; }
   var d = areaCur.districts[+$("dist").value], t = d.tambons[+this.value], pre = arPre(areaCur.province);
   setOrigin({lat:t.lat, lng:t.lng, kind:"area", label:(pre.t==="แขวง" ? "แขวง" : "ต.")+t.name+" "+(pre.d==="เขต" ? "เขต" : "อ.")+d.name+(pre.t==="แขวง" ? " กทม." : " จ."+areaCur.province)});
