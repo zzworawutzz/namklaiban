@@ -43,7 +43,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "P
 @app.middleware("http")
 async def short_cache(request: Request, call_next):
     resp = await call_next(request)
-    if request.url.path.startswith(("/stations", "/reports", "/history")):
+    if request.url.path.startswith(("/stations", "/reports")):
         resp.headers["Cache-Control"] = "public, max-age=60"  # data refreshes every ~20 min
     return resp
 
@@ -93,14 +93,6 @@ def nearby(lat: float = Query(..., ge=-90, le=90), lng: float = Query(..., ge=-1
     with conn() as c:
         rows = core.latest(c, now())
     return core.nearest(rows, lat, lng, limit, fresh_only)
-
-
-@app.get("/history/snapshots")
-def history_snapshots(hours: int = Query(72, ge=6, le=72), step: int = Query(3, ge=1, le=12),
-                      province: Optional[str] = None):
-    """Past levels for the map's time slider: {times: [...], stations: {id: [pct|null, ...]}}."""
-    with conn() as c:
-        return core.snapshots(c, now(), hours, step, province)
 
 
 @app.get("/stations/{station_id}/readings")

@@ -177,13 +177,6 @@ def test_cron_accepts_separate_external_key(pg, monkeypatch):
     assert cl.get("/api/cron/ingest").status_code == 401
 
 
-def test_snapshots_on_postgres(pg):
-    import test_report as tr
-    with db.connect() as c:
-        tr.seed(c)
-        s = core.snapshots(c, tr.AT, hours=24, step_h=6, province=tr.PROV)
-    assert len(s["times"]) == 5 and s["stations"]["A"][-1] == 120.0 and set(s["stations"]) == {"A", "B", "C"}
-
 
 def test_line_settings_and_group_on_postgres(pg):
     import test_line_features as tl
