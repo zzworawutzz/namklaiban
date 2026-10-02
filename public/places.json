@@ -1,0 +1,240 @@
+{
+"angthong": {
+"province": "อ่างทอง"
+},
+"ayutthaya": {
+"province": "พระนครศรีอยุธยา"
+},
+"bangkok": {
+"province": "กรุงเทพมหานคร"
+},
+"buengkan": {
+"province": "บึงกาฬ"
+},
+"buriram": {
+"province": "บุรีรัมย์"
+},
+"chachoengsao": {
+"province": "ฉะเชิงเทรา"
+},
+"chainat": {
+"province": "ชัยนาท"
+},
+"chaiyaphum": {
+"province": "ชัยภูมิ"
+},
+"chanthaburi": {
+"province": "จันทบุรี"
+},
+"chiangmai": {
+"province": "เชียงใหม่"
+},
+"chiangrai": {
+"province": "เชียงราย"
+},
+"chonburi": {
+"province": "ชลบุรี"
+},
+"chumphon": {
+"province": "ชุมพร"
+},
+"kalasin": {
+"province": "กาฬสินธุ์"
+},
+"kamphaengphet": {
+"province": "กำแพงเพชร"
+},
+"kanchanaburi": {
+"province": "กาญจนบุรี"
+},
+"khonkaen": {
+"province": "ขอนแก่น"
+},
+"krabi": {
+"province": "กระบี่"
+},
+"lampang": {
+"province": "ลำปาง"
+},
+"lamphun": {
+"province": "ลำพูน"
+},
+"loei": {
+"province": "เลย"
+},
+"lopburi": {
+"province": "ลพบุรี"
+},
+"maehongson": {
+"province": "แม่ฮ่องสอน"
+},
+"mahasarakham": {
+"province": "มหาสารคาม"
+},
+"mukdahan": {
+"province": "มุกดาหาร"
+},
+"nakhonnayok": {
+"province": "นครนายก"
+},
+"nakhonpathom": {
+"province": "นครปฐม"
+},
+"nakhonphanom": {
+"province": "นครพนม"
+},
+"nakhonratchasima": {
+"province": "นครราชสีมา"
+},
+"nakhonsawan": {
+"province": "นครสวรรค์"
+},
+"nakhonsithammarat": {
+"province": "นครศรีธรรมราช"
+},
+"nan": {
+"province": "น่าน"
+},
+"narathiwat": {
+"province": "นราธิวาส"
+},
+"nongbualamphu": {
+"province": "หนองบัวลำภู"
+},
+"nongkhai": {
+"province": "หนองคาย"
+},
+"nonthaburi": {
+"province": "นนทบุรี"
+},
+"pathumthani": {
+"province": "ปทุมธานี"
+},
+"pattani": {
+"province": "ปัตตานี"
+},
+"phangnga": {
+"province": "พังงา"
+},
+"phatthalung": {
+"province": "พัทลุง"
+},
+"phayao": {
+"province": "พะเยา"
+},
+"phetchabun": {
+"province": "เพชรบูรณ์"
+},
+"phetchaburi": {
+"province": "เพชรบุรี"
+},
+"phichit": {
+"province": "พิจิตร"
+},
+"phitsanulok": {
+"province": "พิษณุโลก"
+},
+"phrae": {
+"province": "แพร่"
+},
+"phuket": {
+"province": "ภูเก็ต"
+},
+"prachinburi": {
+"province": "ปราจีนบุรี"
+},
+"prachuapkhirikhan": {
+"province": "ประจวบคีรีขันธ์"
+},
+"rangsit": {
+"name": "ทุ่งรังสิต",
+"note": "ทุ่งรังสิตอยู่ใน จ.ปทุมธานี เป็นหลัก น้ำจากป่าสักและเจ้าพระยาไหลลงมาตามคลองต่างๆ หน้านี้แสดงสถานีของ จ.ปทุมธานี ซึ่งมีไม่มาก ควรดูจังหวัดข้างเคียง (อยุธยา สระบุรี กรุงเทพฯ) ประกอบ",
+"province": "ปทุมธานี",
+"view": [
+14.03,
+100.72,
+10
+]
+},
+"ranong": {
+"province": "ระนอง"
+},
+"ratchaburi": {
+"province": "ราชบุรี"
+},
+"rayong": {
+"province": "ระยอง"
+},
+"roiet": {
+"province": "ร้อยเอ็ด"
+},
+"sakaeo": {
+"province": "สระแก้ว"
+},
+"sakonnakhon": {
+"province": "สกลนคร"
+},
+"samutprakan": {
+"province": "สมุทรปราการ"
+},
+"samutsakhon": {
+"province": "สมุทรสาคร"
+},
+"samutsongkhram": {
+"province": "สมุทรสงคราม"
+},
+"saraburi": {
+"province": "สระบุรี"
+},
+"satun": {
+"province": "สตูล"
+},
+"singburi": {
+"province": "สิงห์บุรี"
+},
+"sisaket": {
+"province": "ศรีสะเกษ"
+},
+"songkhla": {
+"province": "สงขลา"
+},
+"sukhothai": {
+"province": "สุโขทัย"
+},
+"suphanburi": {
+"province": "สุพรรณบุรี"
+},
+"suratthani": {
+"province": "สุราษฎร์ธานี"
+},
+"surin": {
+"province": "สุรินทร์"
+},
+"tak": {
+"province": "ตาก"
+},
+"trang": {
+"province": "ตรัง"
+},
+"trat": {
+"province": "ตราด"
+},
+"ubonratchathani": {
+"province": "อุบลราชธานี"
+},
+"udonthani": {
+"province": "อุดรธานี"
+},
+"uthaithani": {
+"province": "อุทัยธานี"
+},
+"uttaradit": {
+"province": "อุตรดิตถ์"
+},
+"yala": {
+"province": "ยะลา"
+},
+"yasothon": {
+"province": "ยโสธร"
+}
+}
