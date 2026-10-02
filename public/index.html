@@ -129,6 +129,21 @@ h2{font-size:16px;margin:0 0 8px;font-weight:600}
 @media (max-width:420px){.provpill:not(.sub)>svg:first-child{display:none}}
 
 
+.provpill.areabtn{display:none}
+@media (max-width:899px){
+  .row2{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .row2::-webkit-scrollbar{display:none}
+  .row2>.provpill:not(.sub){flex:none;min-width:0}
+  .row2>.provpill select{width:auto;max-width:150px}
+  .row2>.provpill.sub{display:none}
+  .row2>.provpill.areabtn{flex:none;display:flex;align-items:center;gap:6px;max-width:200px;border:0;color:var(--ink);cursor:pointer}
+  .row2>.areabtn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row2>.areabtn:disabled{color:var(--muted);opacity:.7}
+  .row2>.areabtn svg{flex:none;color:var(--muted)}
+  .row2>.chiprow{flex:none;flex-basis:auto;overflow:visible;padding:2px 0;margin:0}
+  .row2>.chiprow .chips{flex-wrap:nowrap}
+}
+
 /* ---- labelled layers button + quick layer chips ---- */
 .searchbox{min-width:0}.iconbtn.labelbtn{width:auto;display:flex;align-items:center;gap:6px;padding:0 14px;font-weight:600;font-size:14px;white-space:nowrap}
 .chiprow{flex-basis:100%;display:flex;gap:6px;align-items:center;overflow-x:auto;scrollbar-width:none;padding:2px 2px 6px;margin-bottom:-4px;min-width:0}
@@ -203,14 +218,16 @@ h2{font-size:16px;margin:0 0 8px;font-weight:600}
 #sumTitle{font-size:22px;line-height:1.25;margin:0;font-weight:700}
 .sumhead{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
 .linkbtn{flex:none;font-size:13px;font-weight:600;text-decoration:none;background:var(--accent-soft);padding:6px 12px;border-radius:999px}
-.sumbody{display:flex;gap:16px;align-items:center;margin-top:12px}
-.ring{position:relative;flex:none;width:104px;height:104px}
-.ring .mid{position:absolute;inset:0;display:grid;place-content:center;text-align:center;line-height:1.1}
-.ring .mid b{font-size:28px}.ring .mid small{font-size:11px;color:var(--muted)}
-.sumlist{flex:1;display:grid;gap:6px;font-size:14px}
-.sumlist li{display:flex;align-items:center;gap:8px}
-.sumlist .dot{width:10px;height:10px;border-radius:50%;flex:none}
-.sumlist b{margin-left:auto;font-size:15px}
+.verdict{margin-top:12px;border-left:6px solid var(--vc,var(--line));padding:2px 0 2px 12px}
+.verdict .vh{font-size:18px;font-weight:700;line-height:1.3}
+.verdict .vm{font-size:14px;margin-top:6px}
+.verdict .vn{font-size:12px;color:var(--muted);margin-top:6px}
+.near{border-width:2px;border-color:var(--accent)}
+.nearbtn{display:block;width:100%;text-align:left;background:none;border:0;padding:6px 0 0;color:var(--ink)}
+.nearbtn .nh{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:17px;font-weight:700}
+.nearbtn .nh span:first-child{min-width:0}
+.nearbtn .nm{font-size:14px;margin-top:4px}
+.nearbtn .nn{font-size:12px;color:var(--muted);margin-top:4px}
 .skel{border-radius:12px;background:linear-gradient(90deg,var(--line),var(--bg),var(--line));background-size:200% 100%;animation:sh 1.3s linear infinite}
 @keyframes sh{to{background-position:-200% 0}}
 .btn{padding:9px 14px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-weight:500;min-height:40px}
@@ -238,11 +255,6 @@ h2{font-size:16px;margin:0 0 8px;font-weight:600}
 .rel{margin-top:10px}.rel h3{font-size:14px;margin:12px 0 6px}
 .sharebar{display:flex;gap:8px;align-items:center;margin-top:12px}
 svg.chart{width:100%;height:auto;display:block}
-.replay label{font-size:13px;font-weight:600}
-.replay input[type=range]{width:100%;margin:8px 0 0;accent-color:var(--accent)}
-.tlrow{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;color:var(--muted);min-height:40px}
-.replay.on{border-color:var(--alert)}
-.replay.on .tlrow span{color:var(--alert);font-weight:600}
 .foot{color:var(--muted);font-size:12px;margin:14px 2px 0}
 
 /* ---- popovers ---- */
@@ -308,8 +320,9 @@ svg.chart{width:100%;height:auto;display:block}
       <select id="prov" aria-label="เลือกจังหวัด"></select>
       <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
     </label>
-    <label class="provpill glass sub"><select id="dist" aria-label="เลือกอำเภอหรือเขต" disabled><option value="">อำเภอ</option></select><svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></label>
-    <label class="provpill glass sub"><select id="tam" aria-label="เลือกตำบลหรือแขวง" disabled><option value="">ตำบล</option></select><svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></label>
+    <label class="provpill glass sub" id="pillDist"><select id="dist" aria-label="เลือกอำเภอหรือเขต" disabled><option value="">อำเภอ</option></select><svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></label>
+    <label class="provpill glass sub" id="pillTam"><select id="tam" aria-label="เลือกตำบลหรือแขวง" disabled><option value="">ตำบล</option></select><svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></label>
+    <button class="provpill glass areabtn" id="btnArea" type="button" aria-haspopup="dialog" disabled><span id="areaTxt">อำเภอ / ตำบล</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
     <div class="topacts" id="topActs"></div>
     <div class="chiprow"><div class="qchips" id="qchips"></div><div class="chips" id="chips" aria-live="polite"></div></div>
   </div>
@@ -374,6 +387,14 @@ svg.chart{width:100%;height:auto;display:block}
     <p class="note">คำนวณเส้นทางด้วย OSRM และค้นหาสถานที่ด้วย OpenStreetMap (ต้นทางและปลายทางที่พิมพ์จะถูกส่งไปยังบริการเหล่านั้น) ผลเป็นการประเมินคร่าวๆ ไม่ได้รับประกันว่าผ่านได้ ถ้าไม่แน่ใจโทร 1784 หรือ 191</p>
   </div>
 </div>
+<div id="ar" hidden role="dialog" aria-modal="true" aria-labelledby="arTitle">
+  <div class="dlg">
+    <h2 id="arTitle">เลือกพื้นที่</h2>
+    <label class="f" id="arLabD">อำเภอ</label><div id="slotDist"></div>
+    <label class="f" id="arLabT">ตำบล</label><div id="slotTam"></div>
+    <div class="acts"><button class="btn" id="arClear" type="button">ล้างพื้นที่</button><button class="btn primary" id="arDone" type="button">เสร็จ</button></div>
+  </div>
+</div>
 <div id="toast" role="status" hidden></div>
 
 <aside id="sheet" data-state="half" aria-label="สถานการณ์น้ำ">
@@ -381,20 +402,16 @@ svg.chart{width:100%;height:auto;display:block}
   <button id="grab" type="button" aria-label="ขยายหรือย่อแผงข้อมูล"><span></span></button>
   <div id="sheetBody">
     <div id="err" class="err" role="alert" hidden></div>
+    <section class="card near" id="nearCard" hidden aria-live="polite"></section>
     <section class="card" id="summary" aria-live="polite">
       <div class="sumhead">
         <div><div class="eyebrow">สถานการณ์น้ำ</div><h2 id="sumTitle">กำลังโหลด…</h2><div class="note" id="sumSub" style="margin:2px 0 0"></div></div>
         <span style="display:flex;gap:6px;flex:none"><a class="linkbtn" href="help.html">วิธีใช้</a><a class="linkbtn" id="repLink" href="report.html">รายงาน →</a></span>
       </div>
-      <div class="sumbody" id="sumBody"><div class="skel" style="width:104px;height:104px;border-radius:50%"></div><div style="flex:1;display:grid;gap:8px"><div class="skel" style="height:14px"></div><div class="skel" style="height:14px"></div><div class="skel" style="height:14px"></div></div></div>
+      <div id="sumBody"><div class="skel" style="height:22px;width:85%;margin-top:12px"></div><div class="skel" style="height:14px;width:60%;margin-top:10px"></div></div>
     </section>
     <section class="card" id="placeCard" hidden></section>
     <section class="card rain" id="rainCard" hidden aria-live="polite"></section>
-    <section class="card replay" id="replayBox">
-      <label for="tl">ย้อนดูสถานการณ์บนแผนที่ (สูงสุด 72 ชม.)</label>
-      <input id="tl" type="range" min="0" max="24" value="24" step="1" aria-describedby="tlLabel">
-      <div class="tlrow"><span id="tlLabel" aria-live="polite">ตอนนี้</span><button class="btn" id="tlNow" type="button" hidden>กลับมาปัจจุบัน</button></div>
-    </section>
     <div class="actrow" id="actrow">
       <button class="rpbtn" id="btnReport" type="button">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.2C9 7.4 6.5 10.3 6.5 13.7a5.5 5.5 0 0 0 11 0C17.5 10.3 15 7.4 12 3.2z"/></svg>
@@ -573,22 +590,11 @@ function revealInSheet(el){
   var body = $("sheetBody"); body.scrollTo({top:Math.max(0, el.offsetTop-8), behavior:"smooth"});
 }
 
-/* ---------- replay (time slider) ---------- */
-var replay = {idx:null, data:null, prov:null, loading:null};
-function pctStatus(p,w,a){ return p>=a ? "alert" : p>=w ? "watch" : "normal"; }
-function view(s){
-  if(replay.idx===null || !replay.data) return s;
-  var arr = replay.data.stations[s.id], p = arr ? arr[replay.idx] : null, v = Object.assign({}, s);
-  v.pct_of_bank = p==null ? null : p;
-  v.status = p==null ? "unknown" : pctStatus(p, s.watch_pct, s.alert_pct);
-  v.stale = p==null; v.trend = null;
-  return v;
-}
 function inProv(s){ return !province || s.province===province; }
 function visible(s){
   if(!inProv(s)) return false;
   if(!filter) return true;
-  var v = view(s);
+  var v = (s);
   return filter==="stale" ? v.stale : v.status===filter;
 }
 
@@ -598,7 +604,7 @@ function drawMarkers(){
   var batch = [];
   stations.forEach(function(s){
     if(!visible(s) && s.id!==sel) return;
-    var v = view(s);
+    var v = (s);
     var m = L.marker([s.lat,s.lng],{icon:icon(v,s.id===sel),keyboard:true,title:s.name+" "+statusText(v),status:v.status,zIndexOffset:(s.id===sel?1000:Z[v.status]||0)});
     m.on("click",function(){ select(s.id,false); });
     markers[s.id] = m; batch.push(m);
@@ -607,7 +613,7 @@ function drawMarkers(){
 }
 function counts(){
   var list = stations.filter(inProv), c = {alert:0,watch:0,normal:0,unknown:0}, stale = 0, latest = 0;
-  list.forEach(function(s0){ var s = view(s0); c[s.status]++; if(s.stale) stale++; var t = s0.ts ? Date.parse(s0.ts) : 0; if(t>latest) latest = t; });
+  list.forEach(function(s0){ var s = (s0); c[s.status]++; if(s.stale) stale++; var t = s0.ts ? Date.parse(s0.ts) : 0; if(t>latest) latest = t; });
   return {c:c, n:list.length, stale:stale, latest:latest};
 }
 function drawChips(){
@@ -618,29 +624,30 @@ function drawChips(){
   html += '<button type="button" class="chip" data-f="stale" aria-pressed="'+(filter==="stale")+'">'+shapeSvg("unknown",16,true)+'ข้อมูลค้าง '+k.stale+'</button>';
   $("chips").innerHTML = html;
 }
-function ringSvg(c, n){
-  var R = 40, C = 2*Math.PI*R, off = 0, segs = "";
-  [["alert",c.alert],["watch",c.watch],["normal",c.normal],["unknown",c.unknown]].forEach(function(p){
-    if(!p[1] || !n) return;
-    var len = C*p[1]/n;
-    segs += '<circle cx="52" cy="52" r="'+R+'" fill="none" stroke="'+COLOR[p[0]]+'" stroke-width="12" stroke-dasharray="'+Math.max(0,len-2).toFixed(2)+' '+(C-Math.max(0,len-2)).toFixed(2)+'" stroke-dashoffset="'+(-off).toFixed(2)+'" transform="rotate(-90 52 52)"/>';
-    off += len;
-  });
-  if(!segs) segs = '<circle cx="52" cy="52" r="'+R+'" fill="none" stroke="var(--line)" stroke-width="12"/>';
-  var top = c.alert ? ["alert",c.alert,"เตือนภัย"] : c.watch ? ["watch",c.watch,"เฝ้าระวัง"] : ["normal",c.normal,"ปกติ"];
-  return '<div class="ring"><svg width="104" height="104" viewBox="0 0 104 104" role="img" aria-label="สัดส่วนสถานะของ '+n+' สถานี">'+
-    '<circle cx="52" cy="52" r="'+R+'" fill="none" stroke="var(--line)" stroke-width="12" opacity=".5"/>'+segs+'</svg>'+
-    '<div class="mid"><b style="color:'+COLOR[top[0]]+'">'+top[1]+'</b><small>'+top[2]+'</small></div></div>';
-}
+function pctHint(p){ return p>=100 ? "ล้นตลิ่งแล้ว" : p>=90 ? "ใกล้ล้นตลิ่ง" : p>=70 ? "น้ำสูงใกล้ตลิ่ง" : "ยังต่ำกว่าตลิ่ง"; }
 function drawSummary(){
-  var k = counts(), c = k.c;
+  var k = counts(), c = k.c, list = stations.filter(inProv);
   $("sumTitle").textContent = province ? "จ."+province : "ทั้งประเทศ";
-  $("sumSub").textContent = k.n+" สถานี"+(replay.idx!==null ? " · กำลังดูย้อนหลัง" : k.latest ? " · อัปเดต "+fmtTs(new Date(k.latest).toISOString()) : "");
-  var rows = [["alert",c.alert],["watch",c.watch],["normal",c.normal]];
-  if(c.unknown) rows.push(["unknown",c.unknown]);
-  $("sumBody").innerHTML = ringSvg(c,k.n)+'<ul class="sumlist">'+rows.map(function(r){
-    return '<li><span class="dot" style="background:'+COLOR[r[0]]+'"></span>'+LABEL[r[0]]+'<b>'+r[1]+'</b></li>';
-  }).join("")+(k.stale?'<li class="note" style="margin:0">ข้อมูลค้าง '+k.stale+' สถานี</li>':'')+'</ul>';
+  $("sumSub").textContent = k.n+" สถานี"+(k.latest ? " · อัปเดต "+fmtTs(new Date(k.latest).toISOString()) : "");
+  var top = null, rising = 0;
+  list.forEach(function(s){
+    if(s.stale) return;
+    if(s.pct_of_bank!=null && (!top || s.pct_of_bank>top.pct_of_bank)) top = s;
+    if(s.trend==="rising" && (s.status==="alert" || s.status==="watch")) rising++;
+  });
+  var kind, head;
+  if(!k.n){ kind = "unknown"; head = "ยังไม่มีข้อมูลสถานี"; }
+  else if(c.alert){ kind = "alert"; head = "เตือนภัย: น้ำสูงใกล้หรือล้นตลิ่ง "+c.alert+" จาก "+k.n+" สถานี"; }
+  else if(c.watch){ kind = "watch"; head = "เฝ้าระวัง: น้ำเริ่มสูง "+c.watch+" จาก "+k.n+" สถานี"; }
+  else if(c.normal){ kind = "normal"; head = "ระดับน้ำปกติ"+(k.n>1 ? " ทุกสถานีที่มีเกณฑ์เทียบ" : ""); }
+  else { kind = "unknown"; head = "ยังประเมินไม่ได้ (ไม่มีเกณฑ์เทียบ)"; }
+  var line2 = top ? '<div class="vm">น้ำสูงสุด <b>'+Math.round(top.pct_of_bank)+'%</b> ของตลิ่ง ('+pctHint(top.pct_of_bank)+') ที่ '+esc(top.name)+'</div>' : "";
+  var bits = [];
+  if(rising) bits.push("▲ กำลังสูงขึ้น "+rising+" สถานี");
+  if(k.stale) bits.push("ข้อมูลค้าง "+k.stale+" สถานี");
+  $("sumBody").innerHTML = '<div class="verdict" style="--vc:'+COLOR[kind]+'"><div class="vh" style="color:'+COLOR[kind]+'">'+esc(head)+'</div>'+line2+
+    (bits.length ? '<div class="vm">'+esc(bits.join(" · "))+'</div>' : "")+
+    '<div class="vn">% ของตลิ่ง = ระดับน้ำเทียบกับความสูงตลิ่ง 100% คือน้ำเสมอตลิ่ง</div></div>';
 }
 function redraw(){ drawMarkers(); drawChips(); drawSummary(); drawRivers(); if(typeof updateBoundary==="function") updateBoundary(); if(typeof refreshShelters==="function") refreshShelters(); if(typeof refreshRain==="function") refreshRain(); }
 
@@ -652,7 +659,7 @@ function kmBetween(a,b){
   return 12742*Math.asin(Math.sqrt(x*x + Math.cos(a.lat*p)*Math.cos(b.lat*p)*y*y));
 }
 function riverSeg(a,b){
-  var va = view(a), vb = view(b), st = RANK[va.status]>=RANK[vb.status] ? va.status : vb.status;
+  var va = (a), vb = (b), st = RANK[va.status]>=RANK[vb.status] ? va.status : vb.status;
   L.polyline([[a.lat,a.lng],[b.lat,b.lng]],{color:COLOR[st]||COLOR.unknown,weight:4,opacity:.7,lineCap:"round"}).addTo(riverLayer)
     .bindTooltip(esc(a.river)+": "+esc(a.name)+" → "+esc(b.name)+" ("+Math.round(kmBetween(a,b))+" กม.)",{sticky:true});
 }
@@ -691,33 +698,6 @@ $("floodPeriod").addEventListener("change", drawFlood);
 fetch(API+"/api/gistda/status").then(function(r){ return r.ok ? r.json() : null; }).then(function(j){
   if(j && j.enabled){ $("floodBox").hidden = false; syncQuick(); syncLayerCount(); }
 }).catch(function(){});
-
-function tlLabel(){
-  var d = replay.data;
-  if(!d || replay.idx===null){ $("tlLabel").textContent = "ตอนนี้"; $("tlNow").hidden = true; $("replayBox").classList.remove("on"); return; }
-  var hrs = (d.times.length-1-replay.idx)*d.step_h;
-  $("tlLabel").textContent = "ย้อนหลัง "+hrs+" ชม. · "+fmtTs(d.times[replay.idx]);
-  $("tlNow").hidden = false; $("replayBox").classList.add("on");
-}
-function loadReplay(){
-  if(replay.data && replay.prov===province) return Promise.resolve();
-  if(replay.loading) return replay.loading;
-  var p = province;
-  $("tlLabel").textContent = "กำลังโหลดข้อมูลย้อนหลัง…";
-  replay.loading = getJSON("/history/snapshots?hours=72&step=3"+(p?"&province="+encodeURIComponent(p):"")).then(function(d){
-    replay.loading = null; replay.data = d; replay.prov = p; $("tl").max = d.times.length-1;
-  }, function(e){ replay.loading = null; $("tlLabel").textContent = "โหลดข้อมูลย้อนหลังไม่ได้ ลองใหม่อีกครั้ง"; throw e; });
-  return replay.loading;
-}
-function resetReplay(){ replay.idx = null; replay.data = null; $("tl").value = $("tl").max; tlLabel(); }
-$("tl").addEventListener("input",function(e){
-  var v = +e.target.value, input = e.target;
-  loadReplay().then(function(){
-    replay.idx = v >= replay.data.times.length-1 ? null : v;
-    tlLabel(); redraw();
-  }).catch(function(){ input.value = input.max; });
-});
-$("tlNow").addEventListener("click",function(){ replay.idx = null; $("tl").value = $("tl").max; tlLabel(); redraw(); });
 
 /* ---------- lists & detail ---------- */
 function rowHtml(s, extra){
@@ -774,7 +754,7 @@ function gaugeHtml(s){
 }
 function drawDetail(s, rs, rel){
   var h='<div class="head"><div><h2 style="margin:0;font-size:18px">'+esc(s.name)+'</h2><div class="note" style="margin:0">'+esc(s.province||"")+(s.source?" · "+esc(s.source):"")+'</div></div><span class="badge '+s.status+'">'+esc(statusText(s))+'</span></div>';
-  h+='<div class="big">'+pctText(s)+' <small>ของตลิ่ง</small></div>'+gaugeHtml(s);
+  h+='<div class="big">'+pctText(s)+' <small>ของตลิ่ง</small></div>'+(s.pct_of_bank!=null ? '<div class="note" style="margin:2px 0 6px">'+pctHint(s.pct_of_bank)+' (100% = น้ำเสมอตลิ่ง)</div>' : '')+gaugeHtml(s);
   h+='<p class="note" style="margin:0">ระดับน้ำ '+(s.water_level==null?"-":s.water_level.toFixed(2))+' ม.รทก. · ตลิ่ง '+(s.bank_level==null?"-":s.bank_level.toFixed(2))+' · ท้องน้ำ '+(s.ground_level==null?"-":s.ground_level.toFixed(2))+'</p>';
   if(s.trend) h+='<p style="margin:6px 0 0">'+trendHtml(s)+'</p>';
   h+='<p class="note">อัปเดตล่าสุด '+esc(fmtTs(s.ts))+' ('+esc(fmtAge(s.age_min))+')</p>';
@@ -788,8 +768,8 @@ function drawDetail(s, rs, rel){
 }
 function select(id, fly){
   var prev = sel; sel = id; var s = byId[id]; if(!s) return;
-  if(prev && markers[prev]){ markers[prev].setIcon(icon(view(byId[prev]),false)); markers[prev].setZIndexOffset(Z[view(byId[prev]).status]||0); }
-  if(markers[id]){ markers[id].setIcon(icon(view(s),true)); markers[id].setZIndexOffset(1000); }
+  if(prev && markers[prev]){ markers[prev].setIcon(icon((byId[prev]),false)); markers[prev].setZIndexOffset(Z[(byId[prev]).status]||0); }
+  if(markers[id]){ markers[id].setIcon(icon((s),true)); markers[id].setZIndexOffset(1000); }
   if(fly) flyToVisible([s.lat,s.lng], Math.max(map.getZoom(),CLUSTER_OFF_ZOOM+1));
   else if(markers[id] && layer.getVisibleParent(markers[id])!==markers[id]) layer.zoomToShowLayer(markers[id]);
   drawDetail(s,null);
@@ -816,11 +796,11 @@ function setOrigin(o){
   if((!o || o.kind!=="area") && $("tam").value!=="") $("tam").value = "";   // another kind of place replaces the picked subdistrict
   say(!o ? "" : (o.kind==="home" ? "ใช้ตำแหน่งบ้านที่ปักไว้ (ใช้เฉพาะตอนเปิดหน้านี้ ไม่ถูกเก็บไว้)" : o.kind==="area" ? "ตรวจพื้นที่ "+o.label+" (พิกัดกลางพื้นที่โดยประมาณ)" : "ใช้ตำแหน่งปัจจุบันของคุณ"));
   showNearShelters(o); refreshRain();
-  if(!o){ $("results").hidden = true; return; }
+  if(!o){ $("results").hidden = true; drawNear(null); return; }
   getJSON("/stations/nearby?lat="+o.lat+"&lng="+o.lng+"&limit=3").then(function(list){
     list.forEach(function(s){ byId[s.id]=Object.assign(byId[s.id]||{},s); });
     if(province && o.kind!=="area" && list.some(function(s){ return s.province!==province; })){  // don't hide the stations near the user
-      province = ""; $("prov").value = ""; resetReplay(); redraw(); updateRepLink();
+      province = ""; $("prov").value = ""; redraw(); updateRepLink();
     }
     showResults("สถานีใกล้ที่สุด 3 แห่ง", list, function(s){return s.distance_km+" กม.";});
     var pick = list[0];
@@ -829,11 +809,30 @@ function setOrigin(o){
       stations.forEach(function(s){ if(s.province!==province) return; var d = kmBetween(o,s); if(d<bd){ bd = d; best = s; } });
       if(best) pick = best;
     }
-    if(pick) select(pick.id,false);
+    if(pick){ select(pick.id,false); drawNear(o, pick); $("sheetBody").scrollTo({top:0, behavior:"smooth"}); }
     var b = L.latLngBounds([[o.lat,o.lng]].concat(list.map(function(s){return [s.lat,s.lng];})));
     map.fitBounds(b,Object.assign({maxZoom:12},fitPad()));
   }).catch(function(){ showErr("เรียกข้อมูลสถานีใกล้เคียงไม่ได้"); });
 }
+function drawNear(o, s0){
+  var el = $("nearCard");
+  if(!o || !s0){ el.hidden = true; el.innerHTML = ""; return; }
+  var s = byId[s0.id] || s0, d = kmBetween(o, s);
+  var who = o.kind==="home" ? "บ้านของคุณ" : o.kind==="area" ? (o.label || "พื้นที่ที่เลือก") : "ตำแหน่งของคุณ";
+  var col = COLOR[s.status] || COLOR.unknown, t = TREND[s.trend];
+  var line = s.pct_of_bank!=null
+    ? '<div class="nm">น้ำ <b>'+pctText(s)+'</b> ของตลิ่ง ('+pctHint(s.pct_of_bank)+')'+(t && s.trend!=="steady" ? ' · '+t[0]+' '+t[1] : s.trend==="steady" ? ' · ทรงตัว' : '')+'</div>'
+    : '<div class="nm">ยังไม่มีเกณฑ์เทียบสำหรับสถานีนี้</div>';
+  el.innerHTML = '<div class="eyebrow">สถานีที่ใกล้'+(o.kind==="area" ? ' ' : '')+esc(who)+(o.kind==="area" ? ' ' : '')+'ที่สุด</div>'+
+    '<button type="button" class="nearbtn" data-id="'+esc(s.id)+'"><div class="nh"><span>'+esc(s.name)+'</span><span class="badge '+s.status+'">'+esc(statusText(s))+'</span></div>'+
+    '<div class="nn">ห่างประมาณ '+(d<10 ? d.toFixed(1) : Math.round(d))+' กม.'+(s.province ? ' · จ.'+esc(s.province) : '')+'</div>'+line+
+    (s.stale ? '<div class="nn" style="color:var(--watch)">⚠ สถานีนี้ข้อมูลไม่อัปเดต ใช้ประกอบอย่างระวัง</div>' : '')+
+    '<div class="nn">แตะเพื่อดูรายละเอียดและกราฟ →</div></button>';
+  el.hidden = false;
+}
+$("nearCard").addEventListener("click",function(e){
+  var b = e.target.closest ? e.target.closest(".nearbtn") : null; if(b) select(b.getAttribute("data-id"), true);
+});
 function updateRepLink(){
   $("repLink").href = "report.html" + (province ? "?province="+encodeURIComponent(province) : "");
 }
@@ -870,7 +869,7 @@ $("chips").addEventListener("click",function(e){
 });
 function deselect(){   // forget the open station and take ?station= out of the address so the page and the link agree
   var prev = sel; sel = null;
-  if(prev && markers[prev] && byId[prev]){ markers[prev].setIcon(icon(view(byId[prev]),false)); markers[prev].setZIndexOffset(Z[view(byId[prev]).status]||0); }
+  if(prev && markers[prev] && byId[prev]){ markers[prev].setIcon(icon((byId[prev]),false)); markers[prev].setZIndexOffset(Z[(byId[prev]).status]||0); }
   $("detail").hidden = true;
   try{ var u = new URL(location.href); u.searchParams.delete("station"); history.replaceState(null,"",u); }catch(e){}
 }
@@ -878,7 +877,7 @@ $("prov").addEventListener("change",function(e){
   province = e.target.value;
   if(sel && province && byId[sel] && byId[sel].province!==province) deselect();   // the open station is outside the newly chosen province
   if(origin && origin.kind==="area") setOrigin(null);
-  resetReplay(); redraw(); showProvince(true); updateRepLink(); syncAreaPills();
+  redraw(); showProvince(true); updateRepLink(); syncAreaPills();
 });
 var geoSeq = 0;
 function geocode(q){
@@ -1199,7 +1198,7 @@ function rtEvaluate(route){
     if(d.km<=RT_REPORT_KM) pts.push({kind:"report", lat:r.lat, lng:r.lng, name:"รายงานผู้ใช้: "+r.label, sev:3, at:cum[d.idx], off:d.km});
   });
   stations.forEach(function(s0){
-    var s = view(s0); if(s.stale || (s.status!=="alert" && s.status!=="watch") || !near(s)) return;
+    var s = (s0); if(s.stale || (s.status!=="alert" && s.status!=="watch") || !near(s)) return;
     var d = distKmToLine(s, line);
     if(d.km<=RT_STATION_KM) pts.push({kind:"station", lat:s.lat, lng:s.lng, name:s.name+" ("+(s.status==="alert"?"เตือนภัย":"เฝ้าระวัง")+(s.pct_of_bank!=null?" "+Math.round(s.pct_of_bank)+"%":"")+")", sev:s.status==="alert"?2:1, at:cum[d.idx], off:d.km});
   });
@@ -1302,8 +1301,31 @@ function arPre(prov){ return prov==="กรุงเทพมหานคร" ? 
 function arFill(sel, items, placeholder){
   sel.innerHTML = '<option value="">'+placeholder+'</option>'+items.map(function(t,i){ return '<option value="'+i+'">'+esc(t)+'</option>'; }).join("");
   sel.disabled = !items.length; sel.value = "";
+  if(typeof areaBtnText==="function") areaBtnText();
 }
 function arReset(){ var pre = arPre(province); areaCur = null; arFill($("dist"), [], pre.d); arFill($("tam"), [], pre.t); }
+/* phones: district + subdistrict live in one dialog behind a single button (the same <select>s are moved, so all their logic is unchanged) */
+function areaBtnText(){
+  var d = $("dist"), t = $("tam"), pre = arPre(province);
+  var dn = d.value!=="" ? d.options[d.selectedIndex].text : "", tn = t.value!=="" ? t.options[t.selectedIndex].text : "";
+  $("areaTxt").textContent = tn ? tn+" · "+dn : dn || pre.d+" / "+pre.t;
+  $("btnArea").disabled = d.disabled;
+  $("arLabD").textContent = pre.d; $("arLabT").textContent = pre.t;
+}
+function placeAreaSelects(){
+  var wide = window.matchMedia("(min-width:900px)").matches;
+  var dp = $("pillDist"), tp = $("pillTam"), d = $("dist"), t = $("tam");
+  if(wide){ if(d.parentNode!==dp) dp.insertBefore(d, dp.firstChild); if(t.parentNode!==tp) tp.insertBefore(t, tp.firstChild); $("ar").hidden = true; }
+  else { if(d.parentNode!==$("slotDist")) $("slotDist").appendChild(d); if(t.parentNode!==$("slotTam")) $("slotTam").appendChild(t); }
+}
+$("btnArea").addEventListener("click",function(){ areaBtnText(); $("ar").hidden = false; $("dist").focus(); });
+$("arDone").addEventListener("click",function(){ $("ar").hidden = true; });
+$("arClear").addEventListener("click",function(){
+  var d = $("dist"); d.value = ""; d.dispatchEvent(new Event("change")); $("ar").hidden = true;
+});
+$("ar").addEventListener("click",function(e){ if(e.target===$("ar")) $("ar").hidden = true; });
+document.addEventListener("keydown",function(e){ if(e.key==="Escape" && !$("ar").hidden) $("ar").hidden = true; });
+window.addEventListener("resize", placeAreaSelects);
 function syncAreaPills(){          // call whenever the province may have changed; keeps the picks while it has not
   if(!province){ arReset(); updateBoundary(); return; }
   if(areaCur && areaCur.province===province) return;
@@ -1317,6 +1339,7 @@ function syncAreaPills(){          // call whenever the province may have change
   getJSON("/api/areas?province="+encodeURIComponent(name)).then(function(d){ areaCache[name] = d; show(d); }).catch(function(){});   // no list for this province: pills stay disabled
 }
 $("dist").addEventListener("change", function(){
+  setTimeout(areaBtnText, 0);
   var pre = arPre(province);
   if(origin && origin.kind==="area") setOrigin(null);
   if(this.value==="" || !areaCur){ arFill($("tam"), [], pre.t); updateBoundary(); refreshShelters(); return; }
@@ -1325,6 +1348,7 @@ $("dist").addEventListener("change", function(){
   map.fitBounds(L.latLngBounds(d.tambons.map(function(t){return [t.lat,t.lng];})), Object.assign({maxZoom:12}, fitPad()));
 });
 $("tam").addEventListener("change", function(){
+  setTimeout(areaBtnText, 0);
   updateBoundary(); refreshShelters();
   if(this.value===""){ if(origin && origin.kind==="area") setOrigin(null); return; }
   var d = areaCur.districts[+$("dist").value], t = d.tambons[+this.value], pre = arPre(areaCur.province);
@@ -1369,6 +1393,7 @@ window.addEventListener("resize", placeActions);   // some browsers skip the med
 placeActions();
 
 /* ---------- start ---------- */
+placeAreaSelects();
 // pretty area links (/rangsit, /pathumthani ...): the path names an entry of places.json, which only those visits download
 var SLUG = (location.pathname.replace(/^\/+|\/+$/g,"").split("/")[0]||"").toLowerCase();
 var placeP = /^[a-z]+$/.test(SLUG)
@@ -1380,12 +1405,12 @@ load().then(function(){
   var want = QS.get("station");
   if(want && byId[want]){   // a shared station link wins; show that station's province too so the page agrees with itself
     var sp = byId[want].province;
-    if(sp && sp!==province){ province = sp; $("prov").value = province; resetReplay(); redraw(); updateRepLink(); syncAreaPills(); }
+    if(sp && sp!==province){ province = sp; $("prov").value = province; redraw(); updateRepLink(); syncAreaPills(); }
     select(want,true); return;
   }
   return placeP.then(function(pl){
     if(pl && pl.province && stations.some(function(s){ return s.province===pl.province; })){   // a pretty link such as /rangsit or /pathumthani
-      province = pl.province; $("prov").value = province; resetReplay(); redraw(); updateRepLink(); syncAreaPills();
+      province = pl.province; $("prov").value = province; redraw(); updateRepLink(); syncAreaPills();
       document.title = "น้ำใกล้บ้านฉัน · "+(pl.name || "จ."+pl.province);
       showProvince(true);
       if(pl.view) map.setView([pl.view[0],pl.view[1]], pl.view[2]);
