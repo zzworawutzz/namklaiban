@@ -91,6 +91,11 @@ h2{font-size:16px;margin:0 0 8px;font-weight:600}
 #rt label.f{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
 #rt .frow{display:flex;gap:8px}#rt .frow input{flex:1;min-width:0}
 #rt .frow .btn{flex:none}
+.sugwrap{position:relative;flex:1;min-width:0}
+.sug{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:5;margin:0;padding:4px;list-style:none;background:var(--surface);border:1.5px solid var(--line);border-radius:12px;box-shadow:var(--shadow);max-height:260px;overflow:auto}
+.sug li{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 12px;border-radius:8px;cursor:pointer;font-size:14px;line-height:1.3}
+.sug li small{flex:none;color:var(--muted);font-size:11px}
+.sug li[aria-selected=true],.sug li:hover{background:var(--accent-soft)}
 .verd{border-radius:14px;padding:10px 12px;font-weight:600;margin:8px 0}
 .verd.ok{background:var(--normal-bg);color:var(--normal)}.verd.warn{background:var(--watch-bg);color:var(--watch)}.verd.bad{background:var(--alert-bg);color:var(--alert)}
 .rtopt{display:flex;justify-content:space-between;gap:8px;width:100%;text-align:left;border:1.5px solid var(--line);background:var(--surface);border-radius:12px;padding:8px 12px;margin-top:6px}
@@ -379,9 +384,10 @@ svg.chart{width:100%;height:auto;display:block}
     <h2 id="rtTitle">เช็กเส้นทาง</h2>
     <p class="note" style="margin-top:0">ดูว่าเส้นทางขับรถผ่านจุดน้ำท่วมที่ผู้ใช้รายงาน หรือใกล้สถานีเฝ้าระวัง/เตือนภัยหรือไม่</p>
     <label class="f" for="rtFrom">ต้นทาง</label>
-    <div class="frow"><input type="text" id="rtFrom" placeholder="ชื่อสถานที่ เช่น ตลาดบางปะอิน" autocomplete="off"><button class="btn" id="rtGps" type="button">ตำแหน่งฉัน</button></div>
+    <div class="frow"><div class="sugwrap"><input type="text" id="rtFrom" placeholder="ชื่อสถานที่ เช่น ตลาดบางปะอิน" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="sugFrom"><ul class="sug" id="sugFrom" role="listbox" hidden></ul></div><button class="btn" id="rtGps" type="button">ตำแหน่งฉัน</button></div>
     <label class="f" for="rtTo">ปลายทาง</label>
-    <div class="frow"><input type="text" id="rtTo" placeholder="ชื่อสถานที่ เช่น สยามพารากอน" autocomplete="off"></div>
+    <div class="frow"><div class="sugwrap"><input type="text" id="rtTo" placeholder="ชื่อสถานที่ เช่น สยามพารากอน" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="sugTo"><ul class="sug" id="sugTo" role="listbox" hidden></ul></div></div>
+    <p class="note" style="margin:6px 0 0">พิมพ์ 2 ตัวอักษรขึ้นไป จะมีชื่อตำบล อำเภอ จังหวัด สถานีวัดน้ำ และศูนย์พักพิงให้เลือก (ตำแหน่งกลางพื้นที่โดยประมาณ) ถ้าเป็นห้างหรือตลาด พิมพ์ชื่อเองแล้วกดตรวจเส้นทางได้เลย</p>
     <p class="note" id="rtErr" role="alert" hidden style="color:var(--alert)"></p>
     <div class="acts"><button class="btn" id="rtCancel" type="button">ยกเลิก</button><button class="btn" id="rtReset" type="button">ล้างค่า</button><button class="btn primary" id="rtGo" type="button">ตรวจเส้นทาง</button></div>
     <p class="note">คำนวณเส้นทางด้วย OSRM และค้นหาสถานที่ด้วย OpenStreetMap (ต้นทางและปลายทางที่พิมพ์จะถูกส่งไปยังบริการเหล่านั้น) ผลเป็นการประเมินคร่าวๆ ไม่ได้รับประกันว่าผ่านได้ ถ้าไม่แน่ใจโทร 1784 หรือ 191</p>
@@ -1162,9 +1168,40 @@ loadReports(); setInterval(loadReports, 60000);
 /* ---------- route check: OSRM route + our station statuses + user flood reports ---------- */
 var ROUTER = "https://router.project-osrm.org";
 var RT_STATION_KM = 1.0, RT_REPORT_KM = 0.3;
-var rtLayer = L.layerGroup().addTo(map), rtFromPt = null, rtRoutes = null, rtSel = 0, rtNames = null;
+var rtLayer = L.layerGroup().addTo(map), rtFromPt = null, rtToPt = null, rtRoutes = null, rtSel = 0, rtNames = null;
+var sugClose = [];
+function attachSuggest(input, list, onPick){   // type-ahead from our own place data (/api/suggest); picking one skips the street-map lookup
+  var items = [], active = -1, timer = null, seq = 0;
+  function close(){ list.hidden = true; list.innerHTML = ""; items = []; active = -1; input.setAttribute("aria-expanded","false"); input.removeAttribute("aria-activedescendant"); }
+  function mark(){ [].forEach.call(list.children, function(li,i){ li.setAttribute("aria-selected", String(i===active)); }); if(active>=0){ input.setAttribute("aria-activedescendant", list.children[active].id); list.children[active].scrollIntoView({block:"nearest"}); } }
+  function pick(i){ var it = items[i]; if(!it) return; input.value = it.name; close(); onPick({lat:it.lat, lng:it.lng, name:it.name}); }
+  input.addEventListener("input", function(){
+    clearTimeout(timer); var q = input.value.trim();
+    if(q.length<2){ seq++; close(); return; }
+    var my = ++seq;
+    timer = setTimeout(function(){
+      getJSON("/api/suggest?q="+encodeURIComponent(q)).then(function(l){
+        if(my!==seq || document.activeElement!==input) return;
+        items = l; active = -1;
+        if(!l.length){ close(); return; }
+        list.innerHTML = l.map(function(it,i){ return '<li role="option" id="'+list.id+'-'+i+'" data-i="'+i+'" aria-selected="false"><span>'+esc(it.label)+'</span><small>'+esc(it.type)+'</small></li>'; }).join("");
+        list.hidden = false; input.setAttribute("aria-expanded","true");
+      }).catch(function(){});
+    }, 200);
+  });
+  input.addEventListener("keydown", function(e){
+    if(list.hidden) return;
+    if(e.key==="ArrowDown"){ e.preventDefault(); active = (active+1)%items.length; mark(); }
+    else if(e.key==="ArrowUp"){ e.preventDefault(); active = (active-1+items.length)%items.length; mark(); }
+    else if(e.key==="Enter" && active>=0){ e.preventDefault(); pick(active); }
+    else if(e.key==="Escape"){ e.stopPropagation(); close(); }   // closes the list first, not the whole dialog
+  });
+  list.addEventListener("pointerdown", function(e){ var li = e.target.closest ? e.target.closest("li") : null; if(!li) return; e.preventDefault(); pick(+li.getAttribute("data-i")); });
+  input.addEventListener("blur", function(){ setTimeout(close, 150); });
+  sugClose.push(close);
+}
 function rtClear(){   // remove the drawn route, its card and the typed places so the next check starts clean
-  rtLayer.clearLayers(); rtRoutes = null; rtFromPt = null;
+  rtLayer.clearLayers(); rtRoutes = null; rtFromPt = null; rtToPt = null; sugClose.forEach(function(f){ f(); });
   var c = $("routeCard"); c.hidden = true; c.innerHTML = "";
   $("rtFrom").value = ""; $("rtTo").value = ""; $("rtErr").hidden = true;
   if(typeof syncQuick==="function") syncQuick();
@@ -1257,6 +1294,9 @@ $("rtReset").addEventListener("click", function(){ rtClear(); $("rtFrom").focus(
 $("rt").addEventListener("click", function(e){ if(e.target===$("rt")) rtClose(); });
 document.addEventListener("keydown",function(e){ if(e.key==="Escape" && !$("rt").hidden) rtClose(); });
 $("rtFrom").addEventListener("input", function(){ rtFromPt = null; });
+$("rtTo").addEventListener("input", function(){ rtToPt = null; });
+attachSuggest($("rtFrom"), $("sugFrom"), function(p){ rtFromPt = p; });
+attachSuggest($("rtTo"), $("sugTo"), function(p){ rtToPt = p; });
 $("rtGps").addEventListener("click",function(){
   if(!navigator.geolocation){ rtFail("เบราว์เซอร์นี้ไม่รองรับการระบุตำแหน่ง พิมพ์ชื่อสถานที่แทน"); return; }
   $("rtErr").hidden = true; $("rtFrom").value = "กำลังหาตำแหน่ง…";
@@ -1267,7 +1307,7 @@ $("rtGo").addEventListener("click",function(){
   var f = $("rtFrom").value.trim(), t = $("rtTo").value.trim();
   if(!(rtFromPt || f.length>=2) || t.length<2){ rtFail("กรอกต้นทางและปลายทางก่อน"); return; }
   $("rtErr").hidden = true; this.disabled = true; this.textContent = "กำลังตรวจ…";
-  Promise.all([rtFromPt ? Promise.resolve(rtFromPt) : geo1(f), geo1(t)]).then(function(ab){
+  Promise.all([rtFromPt ? Promise.resolve(rtFromPt) : geo1(f), rtToPt ? Promise.resolve(rtToPt) : geo1(t)]).then(function(ab){
     rtNames = [ab[0].name, ab[1].name]; return rtRun(ab[0], ab[1]);
   }).then(function(){ $("rtGo").disabled = false; $("rtGo").textContent = "ตรวจเส้นทาง"; rtClose(); })
     .catch(function(e){ var m = String(e&&e.message||"");
