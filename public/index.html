@@ -109,6 +109,12 @@ h2{font-size:16px;margin:0 0 8px;font-weight:600}
 /* ---- area picker ---- */
 #ar .dlg select{width:100%;height:46px;border:1.5px solid var(--line);border-radius:12px;padding:0 12px;background:var(--bg);font-size:16px}
 #ar label.f{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+.ewsm{position:relative;width:22px;height:22px}
+.ewsm i{position:absolute;inset:2px;transform:rotate(45deg);border-radius:4px;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.45)}
+.ewsm b{position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:11px;font-weight:700}
+.ewsm.s1 i{background:#c98a00}.ewsm.s2 i{background:#e07b1a}.ewsm.s3 i{background:#d2372f}
+.ewsm.stale{opacity:.45}.ewsm.stale i{box-shadow:none}
+.ewsp b.t{display:block;font-size:15px}.ewsp .stl{color:var(--watch);font-weight:600}
 .flowcard h3{margin:0 0 2px;font-size:16px}
 .flowcard .fl{margin:12px 0 0}.flowcard .fl>b{display:block;font-size:14px;margin-bottom:6px}
 .flowcard ol{list-style:none;margin:0;padding:0 0 4px;display:flex;align-items:flex-start;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
@@ -334,6 +340,7 @@ svg.chart{width:100%;height:auto;display:block}
     </select>
   </div>
   <label class="chk"><input type="checkbox" id="chkShl"><span>ศูนย์พักพิงชั่วคราว (ปภ.)<br><span class="note">แสดงตามพื้นที่ที่เลือก (จังหวัด / อำเภอ / ตำบล) ข้อมูลอาจไม่เป็นปัจจุบัน โทรสอบถามก่อนเดินทาง</span></span></label>
+  <label class="chk"><input type="checkbox" id="chkEws"><span>สถานีเตือนภัยน้ำป่า/ดินถล่ม (DWR)<br><span class="note">แสดงสถานีที่กรมทรัพยากรน้ำตั้งสถานะเฝ้าระวัง–วิกฤต ธงที่เก่ากว่า 24 ชม. แสดงจางๆ และอาจเป็นธงค้าง ไม่ใช่ประกาศของเรา โทร 1784 เพื่อยืนยัน</span></span></label>
   <label class="chk"><input type="checkbox" id="chkRadar"><span>เรดาร์ฝน (ย้อนหลัง 2 ชม.)<br><span class="note">ภาพจาก RainViewer ความละเอียดต่ำ ใช้ดูทิศทางฝนคร่าวๆ</span></span></label>
   <div id="radarCtl" hidden><button class="btn" id="radarPlay" type="button">▶ เล่น</button><span id="radarTime" aria-live="polite"></span></div>
   <label class="chk"><input type="checkbox" id="chkRpt" checked><span>จุดน้ำท่วมที่ผู้ใช้รายงาน<br><span class="note">ข้อมูลจากผู้ใช้ ยังไม่ผ่านการตรวจสอบ แสดง 12 ชม. ล่าสุด</span></span></label>
@@ -1067,6 +1074,41 @@ function drawShelters(){
       .bindPopup(shelterPopup(s)).addTo(shelterLayer);
   });
 }
+/* ---------- DWR early-warning stations (flash flood / landslide) ---------- */
+var ewsLayer = L.layerGroup().addTo(map), ewsData = null, ewsAt = 0, ewsBusy = false;
+function ewsPopup(e){
+  var meas = e.kind==="wl" ? (e.wl!=null ? "ระดับน้ำ "+e.wl+" ม." : "") : (e.rain!=null ? "ฝนสะสมวันนี้ "+e.rain+" มม."+(e.rain12h!=null ? " (12 ชม. "+e.rain12h+" มม.)" : "") : "");
+  return '<div class="ewsp"><b class="t">'+esc(e.name)+'</b><div class="note">'+(e.subdistrict?'ต.'+esc(e.subdistrict)+' ':'')+(e.district?'อ.'+esc(e.district)+' ':'')+'จ.'+esc(e.province||"")+'</div>'+
+    '<div>สถานะตาม DWR: <b>'+esc(e.label)+'</b> ('+e.status+'/3) · สถานี'+(e.kind==="wl"?"ระดับน้ำ":"ฝน")+'</div>'+
+    (meas?'<div>'+esc(meas)+'</div>':'')+
+    '<div class="note">อัปเดต '+(e.updated ? fmtTs(e.updated)+' ('+fmtAge(Math.round(e.age_h*60))+')' : 'ไม่ทราบเวลา')+'</div>'+
+    (e.stale?'<div class="stl">⚠ ธงนี้เก่า อาจเป็นธงค้างหลังเหตุการณ์ผ่านไปแล้ว โปรดตรวจสอบกับ ปภ. 1784 ก่อนตัดสินใจ</div>':'')+
+    '<div class="note">ข้อมูลจากสถานีเตือนภัย กรมทรัพยากรน้ำ (DWR) เราไม่ได้ตรวจสอบหรือคำนวณเพิ่ม</div></div>';
+}
+function drawEws(){
+  ewsLayer.clearLayers();
+  if(!$("chkEws").checked || !ewsData) return;
+  ewsData.stations.forEach(function(e){
+    L.marker([e.lat,e.lng],{icon:L.divIcon({className:"",html:'<div class="ewsm s'+e.status+(e.stale?' stale':'')+'"><i></i><b>'+e.status+'</b></div>',iconSize:[22,22],iconAnchor:[11,11]}),
+      title:"สถานีเตือนภัย DWR: "+e.name+" ("+e.label+(e.stale?", ธงเก่า":"")+")",keyboard:true,zIndexOffset:e.stale?-100:800})
+      .bindPopup(ewsPopup(e)).addTo(ewsLayer);
+  });
+}
+function refreshEws(){
+  if(!$("chkEws").checked){ drawEws(); return; }
+  if(ewsData && Date.now()-ewsAt < 10*60*1000){ drawEws(); return; }
+  if(ewsBusy) return;
+  ewsBusy = true; toast("กำลังโหลดสถานีเตือนภัย DWR (ครั้งแรกอาจใช้เวลาครู่หนึ่ง)", true);
+  getJSON("/api/ews/warnings").then(function(d){
+    ewsData = d; ewsAt = Date.now(); ewsBusy = false; drawEws();
+    var fresh = d.stations.filter(function(e){ return !e.stale; }).length, old = d.stations.length-fresh;
+    toast(fresh ? "DWR ตั้งสถานะเตือนใหม่ใน 24 ชม. "+fresh+" สถานี"+(old?" (และธงเก่า "+old+")":"")
+                : "ไม่มีสถานีที่ DWR ตั้งสถานะเตือนใหม่ใน 24 ชม."+(old?" (มีธงเก่าค้าง "+old+" สถานี แสดงจางๆ)":""));
+  }).catch(function(){
+    ewsBusy = false; $("chkEws").checked = false; syncQuick(); syncLayerCount(); toast("โหลดข้อมูลสถานีเตือนภัย DWR ไม่ได้ ลองใหม่ภายหลัง");
+  });
+}
+$("chkEws").addEventListener("change", refreshEws);
 function areaSel(){   // the district / subdistrict picked in the bar, or null for each
   var di = $("dist").value, ti = $("tam").value;
   var d = (areaCur && di!=="" && areaCur.province===province) ? areaCur.districts[+di] : null;
@@ -1379,7 +1421,7 @@ $("tam").addEventListener("change", function(){
 });
 
 /* ---------- quick layer chips (mirror the checkboxes in the layers panel) ---------- */
-var QUICK = [["chkFlood","🛰","ดาวเทียม","น้ำท่วมจากดาวเทียม"],["chkRadar","🌧","ฝน","เรดาร์ฝน"],["chkShl","🏠","พักพิง","ศูนย์พักพิง"]];
+var QUICK = [["chkFlood","🛰","ดาวเทียม","น้ำท่วมจากดาวเทียม"],["chkRadar","🌧","ฝน","เรดาร์ฝน"],["chkShl","🏠","พักพิง","ศูนย์พักพิง"],["chkEws","⛰","น้ำป่า","สถานีเตือนภัยน้ำป่า DWR"]];
 function syncQuick(){
   var clr = rtRoutes ? '<button type="button" class="chip qc clr" data-clear="route" title="ลบเส้นทางที่ตรวจไว้ออกจากแผนที่">✕ ล้างเส้นทาง</button>' : "";
   $("qchips").innerHTML = clr + QUICK.filter(function(q){ return q[0]!=="chkFlood" || !$("floodBox").hidden; }).map(function(q){
@@ -1387,7 +1429,7 @@ function syncQuick(){
   }).join("");
 }
 /* number of extra map layers switched on, shown on the "ชั้นแผนที่" button (the user-reports layer is on by default, so it is not counted) */
-var LAYER_IDS = ["chkRiver","chkFlood","chkShl","chkRadar"];
+var LAYER_IDS = ["chkRiver","chkFlood","chkShl","chkRadar","chkEws"];
 function syncLayerCount(){
   var n = LAYER_IDS.filter(function(id){ return $(id).checked && (id!=="chkFlood" || !$("floodBox").hidden); }).length;
   var el = $("lcount"), btn = $("btnLayers");
