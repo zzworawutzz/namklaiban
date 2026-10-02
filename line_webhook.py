@@ -30,7 +30,7 @@ import floodreports
 import report
 import shelters
 from ingest import utc_now
-from notify import _invoke, message, province_of, report_link
+from notify import _invoke, message, province_of, public_url, report_link
 
 MAX_SUBSCRIBERS = int(os.environ.get("MAX_SUBSCRIBERS", "50"))   # people, not places
 MAX_PLACES = 3
@@ -44,8 +44,9 @@ DIGEST_OFF = {"ปิดสรุป", "หยุดสรุป"}
 DIGEST_ON = {"เปิดสรุป"}
 SETTINGS = {"ตั้งค่า", "settings"}
 GROUP_HELP_WORDS = {"ช่วยเหลือ", "help"}
-MENU = ["สถานะ", "รายงาน", "แจ้งน้ำท่วม", "ศูนย์พักพิง", "ตำแหน่งของฉัน", "ตั้งค่า"]
+MENU = ["สถานะ", "รายงาน", "แจ้งน้ำท่วม", "ศูนย์พักพิง", "ตำแหน่งของฉัน", "ตั้งค่า", "วิธีใช้"]
 SHELTER_CMD = {"ศูนย์พักพิง", "ที่พักพิง", "shelter"}
+MANUAL_CMD = {"วิธีใช้", "คู่มือ", "help", "ช่วยเหลือ"}
 FLOOD_CMD = "แจ้งน้ำท่วม"
 FLOOD_BUTTONS = {"ท่วม" + label.replace("ท่วมถึง", "").replace("ท่วม", ""): lvl for lvl, label in floodreports.LEVELS.items()}
 # command -> (column, value, confirmation)
@@ -144,6 +145,9 @@ def handle_event(conn, ev, at, reply):
     if text in CANCEL:
         _delete(conn, user)
         return _reply(reply, token, "หยุดแจ้งเตือนและลบตำแหน่งของคุณแล้ว ส่งตำแหน่งมาใหม่ได้ทุกเมื่อ")
+    if text in MANUAL_CMD:
+        base = public_url()
+        return _reply(reply, token, HELP + (f"\n\nคู่มือการใช้งานฉบับเต็ม: {base}/help.html" if base else ""), quick=cards.quick(MENU))
     if text in PLACES_CMD:
         return _list_places(conn, user, token, reply)
     if text.startswith("ลบจุดที่"):

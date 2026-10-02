@@ -123,7 +123,7 @@ def test_endpoint_passes_cards_and_buttons_through_to_line(tmp_path, monkeypatch
     post(text("สถานะ"))
     post(text("ตั้งค่า"))
     status, settings = got[1], got[2]
-    assert status[1]["type"] == "bubble" and [q["action"]["text"] for q in status[2]] == ["สถานะ", "รายงาน", "แจ้งน้ำท่วม", "ศูนย์พักพิง", "ตำแหน่งของฉัน", "ตั้งค่า"]
+    assert status[1]["type"] == "bubble" and [q["action"]["text"] for q in status[2]] == ["สถานะ", "รายงาน", "แจ้งน้ำท่วม", "ศูนย์พักพิง", "ตำแหน่งของฉัน", "ตั้งค่า", "วิธีใช้"]
     assert settings[1] is None and "แจ้งเฉพาะเตือนภัย" in [q["action"]["text"] for q in settings[2]]
 
 

@@ -127,3 +127,13 @@ def test_alerts_use_the_label_of_each_place_and_morning_report_is_sent_once_per_
     notify.run_digest(conn, morning, {"line": lambda t, m: digests.append(m)})
     assert len(digests) == 1                                                  # one report for the province, not one per place
     assert all(p["last_digest"] for p in places(conn))
+
+
+def test_manual_command_replies_with_help_and_a_link(conn, monkeypatch):
+    rec = Rec()
+    monkeypatch.setenv("PUBLIC_URL", "https://example.test")
+    say(conn, rec, "วิธีใช้")
+    assert "https://example.test/help.html" in rec.last[0] and "ส่งตำแหน่งบ้าน" in rec.last[0]
+    monkeypatch.delenv("PUBLIC_URL", raising=False); monkeypatch.delenv("VERCEL_PROJECT_PRODUCTION_URL", raising=False)
+    say(conn, rec, "คู่มือ")
+    assert "help.html" not in rec.last[0]            # no public URL configured: help text only
