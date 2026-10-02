@@ -261,8 +261,8 @@ def ews_warnings(response: Response):
     """Stations the DWR early-warning system currently flags (status 1-3), for the map layer."""
     try:
         data = ews.current()
-    except Exception:
-        raise HTTPException(502, "DWR early-warning data unavailable")
+    except Exception as e:  # the type and message help tell a timeout from a blocked connection or a TLS problem
+        raise HTTPException(502, f"DWR early-warning data unavailable: {type(e).__name__}: {e}"[:300])
     response.headers["Cache-Control"] = "public, max-age=300, s-maxage=600, stale-while-revalidate=3600"
     return data
 
