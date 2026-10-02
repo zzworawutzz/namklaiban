@@ -32,6 +32,7 @@ import line_webhook
 import notify
 import report
 import shelters
+import suggest
 import watchdog
 
 HEALTH_MAX_INGEST_AGE_MIN = 60  # ingest runs every ~20 min; this long means it is stuck
@@ -257,6 +258,17 @@ def ews_warnings(response: Response):
         raise HTTPException(502, f"DWR early-warning data unavailable: {type(e).__name__}: {e}"[:300])
     response.headers["Cache-Control"] = "public, max-age=300, s-maxage=600, stale-while-revalidate=3600"
     return data
+
+
+@app.get("/api/suggest", include_in_schema=False)
+def suggest_places(response: Response, q: str = Query("", max_length=80)):
+    """Type-ahead for the route check: subdistricts, districts, provinces, water stations and shelters."""
+    if len(suggest.norm(q)) < suggest.MIN_Q:
+        return []
+    with conn() as c:
+        rows = c.execute("SELECT name, province, lat, lng FROM stations").fetchall()
+    response.headers["Cache-Control"] = "public, max-age=3600"
+    return suggest.search(q, [dict(r) for r in rows])
 
 
 def _cron_authorized(authorization):
