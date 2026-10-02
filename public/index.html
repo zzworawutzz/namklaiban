@@ -801,7 +801,13 @@ function setOrigin(o){
       province = ""; $("prov").value = ""; resetReplay(); redraw(); updateRepLink();
     }
     showResults("สถานีใกล้ที่สุด 3 แห่ง", list, function(s){return s.distance_km+" กม.";});
-    if(list[0]) select(list[0].id,false);
+    var pick = list[0];
+    if(o.kind==="area" && province){   // a picked subdistrict: open the nearest station of the chosen province, not one across the border
+      var best = null, bd = 1e9;
+      stations.forEach(function(s){ if(s.province!==province) return; var d = kmBetween(o,s); if(d<bd){ bd = d; best = s; } });
+      if(best) pick = best;
+    }
+    if(pick) select(pick.id,false);
     var b = L.latLngBounds([[o.lat,o.lng]].concat(list.map(function(s){return [s.lat,s.lng];})));
     map.fitBounds(b,Object.assign({maxZoom:12},fitPad()));
   }).catch(function(){ showErr("เรียกข้อมูลสถานีใกล้เคียงไม่ได้"); });
@@ -1270,7 +1276,11 @@ syncQuick();
 setSheet(isMobile() && !QS.get("station") ? "peek" : "half");   // phones: map first, drag the sheet up for details
 load().then(function(){
   var want = QS.get("station");
-  if(want && byId[want]){ select(want,true); return; }  // shared link wins over the saved home pin
+  if(want && byId[want]){   // a shared station link wins; show that station's province too so the page agrees with itself
+    var sp = byId[want].province;
+    if(sp && sp!==province){ province = sp; $("prov").value = province; resetReplay(); redraw(); updateRepLink(); syncAreaPills(); }
+    select(want,true); return;
+  }
   showProvince(true);  // no shared link and no saved home: start on the chosen province
 });
 // "add the LINE bot" button: shown only when the server can tell us the bot's add-friend link
