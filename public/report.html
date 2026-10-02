@@ -40,6 +40,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}
 th,td{text-align:left;padding:9px 4px;border-top:1px solid var(--line)}
 th{color:var(--muted);font-weight:500;border-top:0}
 td.n,th.n{text-align:right;white-space:nowrap}
+.tr{font-weight:700}.tr.normal{color:var(--normal)}.tr.watch{color:var(--watch)}.tr.alert{color:var(--alert)}.tr.unknown{color:var(--unknown)}
 .badge{display:inline-flex;padding:2px 10px;border-radius:999px;font-weight:600;font-size:12px;white-space:nowrap}
 .badge.normal{background:var(--normal-bg);color:var(--normal)}.badge.watch{background:var(--watch-bg);color:var(--watch)}.badge.alert{background:var(--alert-bg);color:var(--alert)}.badge.unknown{background:var(--unknown-bg);color:var(--unknown)}
 .legend{display:flex;flex-wrap:wrap;gap:4px 14px;color:var(--muted);font-size:12px;margin-top:8px}
@@ -117,7 +118,7 @@ function stationRows(list, withRate){
   return '<table><thead><tr><th>สถานี</th><th class="n">% ตลิ่ง</th><th class="n">'+(withRate?'อัตรา/ชม.':'แนวโน้ม')+'</th><th>สถานะ</th></tr></thead><tbody>'+
     list.map(function(r){
       var t = withRate && r.trend_pct_per_hr!=null ? sign(r.trend_pct_per_hr.toFixed(1))+"%" : (TREND[r.trend]||"");
-      return '<tr><td>'+esc(r.name)+(r.stale?' <small class="sub">· ข้อมูลไม่อัปเดต</small>':'')+(r.twin_conflict?' <small class="sub">· ⚠ สองแหล่งขัดกัน</small>':'')+'</td><td class="n">'+pct(r.pct_of_bank)+'</td><td class="n">'+t+'</td><td><span class="badge '+r.status+'">'+LABEL[r.status]+'</span></td></tr>';
+      return '<tr><td>'+esc(r.name)+(r.stale?' <small class="sub">· ข้อมูลไม่อัปเดต</small>':'')+(r.twin_conflict?' <small class="sub">· ⚠ สองแหล่งขัดกัน</small>':'')+'</td><td class="n">'+pct(r.pct_of_bank)+'</td><td class="n tr '+r.status+'">'+t+'</td><td><span class="badge '+r.status+'">'+LABEL[r.status]+'</span></td></tr>';
     }).join("")+'</tbody></table>';
 }
 
