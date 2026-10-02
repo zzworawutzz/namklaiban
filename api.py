@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 import areas
 import boundaries
 import core
+import ews
 import db
 import floodreports
 import ingest
@@ -253,6 +254,17 @@ def gistda_flood_tile(period: str, z: int, x: int, y: int):
     if not ctype.startswith("image/"):
         raise HTTPException(502, "tile unavailable")
     return Response(body, media_type=ctype, headers={"Cache-Control": "public, max-age=1800, s-maxage=1800"})
+
+
+@app.get("/api/ews/warnings", include_in_schema=False)
+def ews_warnings(response: Response):
+    """Stations the DWR early-warning system currently flags (status 1-3), for the map layer."""
+    try:
+        data = ews.current()
+    except Exception:
+        raise HTTPException(502, "DWR early-warning data unavailable")
+    response.headers["Cache-Control"] = "public, max-age=300, s-maxage=600, stale-while-revalidate=3600"
+    return data
 
 
 def _cron_authorized(authorization):
