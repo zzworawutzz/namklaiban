@@ -171,7 +171,8 @@ def flood_reports_flag(report_id: int, request: Request):
 
 
 @app.get("/api/shelters")
-def shelters_list(response: Response, province: Optional[str] = None,
+def shelters_list(response: Response, province: Optional[str] = None, district: Optional[str] = None,
+                  tambon: Optional[str] = None,
                   lat: Optional[float] = Query(None, ge=-90, le=90), lng: Optional[float] = Query(None, ge=-180, le=180),
                   limit: int = Query(5, ge=1, le=20)):
     """Temporary flood shelters (DDPM open data): all in a province, or the nearest to lat/lng."""
@@ -179,7 +180,9 @@ def shelters_list(response: Response, province: Optional[str] = None,
     if lat is not None and lng is not None:
         return shelters.nearest(lat, lng, limit)
     if province:
-        return shelters.by_province(province)
+        if tambon and not district:
+            raise HTTPException(422, "tambon needs district")
+        return shelters.by_area(province, district, tambon)
     raise HTTPException(422, "give province, or lat and lng")
 
 

@@ -4,6 +4,7 @@ import json
 from functools import lru_cache
 from pathlib import Path
 
+import boundaries
 from core import km
 
 DATA = Path(__file__).parent / "shelters_data.json"
@@ -49,3 +50,44 @@ def line_text(items):
             row += f" · โทร {s['phone']}"
         lines.append(row + "\n   นำทาง: " + directions_url(s))
     return "\n".join(lines)
+
+
+def _same(a, b):
+    """Place names in the DDPM sheet are sometimes abbreviated or prefixed; accept equal names, or one starting with the other."""
+    a, b = (a or "").strip().removeprefix("เมือง"), (b or "").strip().removeprefix("เมือง")
+    return bool(a and b) and (a == b or (min(len(a), len(b)) >= 6 and (a.startswith(b) or b.startswith(a))))
+
+
+def _inside(lat, lng, multipolygon):
+    """Ray casting over a GeoJSON MultiPolygon's coordinates ([[ring, hole...], ...] with [lng, lat] points)."""
+    for poly in multipolygon:
+        if not _in_ring(lng, lat, poly[0]):
+            continue
+        if not any(_in_ring(lng, lat, hole) for hole in poly[1:]):
+            return True
+    return False
+
+
+def _in_ring(x, y, ring):
+    c = False
+    for i in range(len(ring) - 1):
+        (x1, y1), (x2, y2) = ring[i], ring[i + 1]
+        if (y1 > y) != (y2 > y) and x < (x2 - x1) * (y - y1) / (y2 - y1) + x1:
+            c = not c
+    return c
+
+
+def by_area(province, district=None, tambon=None):
+    """Shelters of a province, narrowed to a district or subdistrict. A shelter counts when its recorded
+    names match OR its point lies inside the area's outline (the names in the source sheet are untidy)."""
+    rows = by_province(province)
+    if not district:
+        return rows
+    outline = boundaries.outline(province, district, tambon if tambon else None)
+    coords = outline["geometry"]["coordinates"] if outline else None
+    out = []
+    for s in rows:
+        by_name = _same(s["district"], district) and (not tambon or _same(s["subdistrict"], tambon))
+        if by_name or (coords and _inside(s["lat"], s["lng"], coords)):
+            out.append(s)
+    return out

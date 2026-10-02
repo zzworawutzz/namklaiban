@@ -38,3 +38,32 @@ def test_line_shelter_command_needs_a_saved_location_then_lists_three(tmp_path):
     lw.handle_event(c, ev({"type": "location", "latitude": 14.35, "longitude": 100.57}), AT, send)
     lw.handle_event(c, ev({"type": "text", "text": "ศูนย์พักพิง"}), AT, send)
     assert out[-1].count("นำทาง: https://www.google.com/maps/dir/") == 3 and "1784" in out[-1]
+
+
+def test_shelters_narrow_to_district_and_subdistrict():
+    prov = shelters.by_province("พระนครศรีอยุธยา")
+    dist = shelters.by_area("พระนครศรีอยุธยา", "ผักไห่")
+    assert 0 < len(dist) < len(prov) and all(s["province"] == "พระนครศรีอยุธยา" for s in dist)
+    assert shelters.by_area("พระนครศรีอยุธยา") == prov                       # no district: the whole province
+    sub = shelters.by_area("พระนครศรีอยุธยา", "ผักไห่", "ลาดน้ำเค็ม")
+    assert 0 < len(sub) <= len(dist) and all(s in dist for s in sub)
+    assert shelters.by_area("พระนครศรีอยุธยา", "ไม่มีอำเภอนี้") == []
+
+
+def test_point_in_polygon_with_a_hole():
+    square = [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]], [[4, 4], [6, 4], [6, 6], [4, 6], [4, 4]]]
+    assert shelters._inside(1, 1, [square]) and not shelters._inside(5, 5, [square]) and not shelters._inside(20, 5, [square])
+
+
+def test_name_matching_tolerates_untidy_names():
+    assert shelters._same("เมืองนครศรีธรรมราช", "นครศรีธรรมราช") and shelters._same("พนมทวน", "พนมทวน")
+    assert not shelters._same("บางปะอิน", "ผักไห่") and not shelters._same("", "ผักไห่")
+
+
+def test_api_shelters_by_district_and_tambon():
+    cl = TestClient(api.app)
+    whole = cl.get("/api/shelters", params={"province": "พระนครศรีอยุธยา"}).json()
+    d = cl.get("/api/shelters", params={"province": "พระนครศรีอยุธยา", "district": "ผักไห่"}).json()
+    t = cl.get("/api/shelters", params={"province": "พระนครศรีอยุธยา", "district": "ผักไห่", "tambon": "ลาดน้ำเค็ม"}).json()
+    assert 0 < len(t) <= len(d) < len(whole)
+    assert cl.get("/api/shelters", params={"province": "พระนครศรีอยุธยา", "tambon": "x"}).status_code == 422
