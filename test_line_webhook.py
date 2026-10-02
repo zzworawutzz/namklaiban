@@ -154,3 +154,11 @@ def test_bot_basic_id_is_cached_and_failures_are_not(monkeypatch):
     monkeypatch.setattr(notify.urllib.request, "urlopen", lambda *a, **k: (_ for _ in ()).throw(OSError("down")))
     assert notify.bot_basic_id() is None and "id" not in notify._basic_id_cache
     notify._basic_id_cache.clear()
+
+
+def test_my_id_command_shows_the_senders_id():
+    out = []
+    lw.handle_event(None, {"type": "message", "replyToken": "t", "source": {"userId": "U123"},
+                                     "message": {"type": "text", "text": "ไอดีของฉัน"}}, None,
+                              lambda tok, text, flex=None, quick=None: out.append(text))
+    assert "U123" in out[0] and "ADMIN_LINE_ID" in out[0]

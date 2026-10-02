@@ -30,6 +30,7 @@ import line_webhook
 import notify
 import report
 import shelters
+import watchdog
 
 HEALTH_MAX_INGEST_AGE_MIN = 60  # ingest runs every ~20 min; this long means it is stuck
 
@@ -273,9 +274,11 @@ def cron_ingest(authorization: Optional[str] = Header(None)):
             digests, digest_failed = notify.run_digest(c, now())
         except Exception as e:
             c.rollback()
+            watchdog.check(c, now())
             raise HTTPException(502, f"{type(e).__name__}: {e}"[:300])
         finally:
             ingest.release_lock(c, "cron")
+        watchdog.check(c, now())
     return {"stations": n_st, "new_readings": n_rd, "skipped": skipped, "pruned": pruned,
             "notifications_sent": sent, "notifications_failed": failed,
             "digests_sent": digests, "digests_failed": digest_failed}

@@ -43,6 +43,7 @@ REPORT = {"รายงาน", "report", "สรุป"}
 DIGEST_OFF = {"ปิดสรุป", "หยุดสรุป"}
 DIGEST_ON = {"เปิดสรุป"}
 SETTINGS = {"ตั้งค่า", "settings"}
+MY_ID_CMD = {"ไอดีของฉัน", "my id"}
 GROUP_HELP_WORDS = {"ช่วยเหลือ", "help"}
 MENU = ["สถานะ", "รายงาน", "แจ้งน้ำท่วม", "ศูนย์พักพิง", "ตำแหน่งของฉัน", "ตั้งค่า", "วิธีใช้"]
 SHELTER_CMD = {"ศูนย์พักพิง", "ที่พักพิง", "shelter"}
@@ -151,6 +152,8 @@ def handle_event(conn, ev, at, reply):
     if text in CANCEL:
         _delete(conn, user)
         return _reply(reply, token, "หยุดแจ้งเตือนและลบตำแหน่งของคุณแล้ว ส่งตำแหน่งมาใหม่ได้ทุกเมื่อ")
+    if text in MY_ID_CMD:
+        return _reply(reply, token, f"ไอดี LINE ของคุณ:\n{user}\n(ใช้ตั้งค่า ADMIN_LINE_ID เพื่อรับแจ้งเตือนเมื่อระบบดึงข้อมูลไม่ได้ อย่าแชร์ให้ใคร)")
     if text in MANUAL_CMD:
         return _reply(reply, token, _with_manual(HELP), quick=cards.quick(MENU))
     if text in PLACES_CMD:
