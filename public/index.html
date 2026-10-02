@@ -111,6 +111,17 @@ h2{font-size:16px;margin:0 0 8px;font-weight:600}
 #ar label.f{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
 @media (max-width:420px){.actrow .rpbtn svg{display:none}.actrow .rpbtn{font-size:14px;padding:0 6px}}
 
+
+/* ---- province > district > subdistrict pills ---- */
+.row2{flex-wrap:wrap}
+.chips{flex-basis:100%}
+.provpill.sub{flex:1 1 0;min-width:0}
+.provpill:not(.sub){flex:1.5 1 0;min-width:0}
+.provpill select{max-width:none;width:100%;min-width:0;font-size:13px}
+.provpill select:disabled{color:var(--muted);opacity:.7}
+@media (min-width:900px){.provpill,.provpill.sub,.provpill:not(.sub){flex:none}.provpill select{width:auto;max-width:170px;font-size:14px}}
+@media (max-width:420px){.provpill:not(.sub)>svg:first-child{display:none}}
+
 /* ---- top bar ---- */
 #topbar{position:fixed;z-index:1000;left:12px;right:12px;top:calc(12px + env(safe-area-inset-top,0px));display:flex;flex-direction:column;gap:8px;pointer-events:none}
 #topbar>*{pointer-events:auto}
@@ -266,6 +277,8 @@ svg.chart{width:100%;height:auto;display:block}
       <select id="prov" aria-label="เลือกจังหวัด"></select>
       <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
     </label>
+    <label class="provpill glass sub"><select id="dist" aria-label="เลือกอำเภอหรือเขต" disabled><option value="">อำเภอ</option></select><svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></label>
+    <label class="provpill glass sub"><select id="tam" aria-label="เลือกตำบลหรือแขวง" disabled><option value="">ตำบล</option></select><svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></label>
     <div class="chips" id="chips" aria-live="polite"></div>
   </div>
 </header>
@@ -329,17 +342,6 @@ svg.chart{width:100%;height:auto;display:block}
     <p class="note">คำนวณเส้นทางด้วย OSRM และค้นหาสถานที่ด้วย OpenStreetMap (ต้นทางและปลายทางที่พิมพ์จะถูกส่งไปยังบริการเหล่านั้น) ผลเป็นการประเมินคร่าวๆ ไม่ได้รับประกันว่าผ่านได้ ถ้าไม่แน่ใจโทร 1784 หรือ 191</p>
   </div>
 </div>
-<div id="ar" hidden role="dialog" aria-modal="true" aria-labelledby="arTitle">
-  <div class="dlg">
-    <h2 id="arTitle">เลือกตำบล/แขวงที่ต้องการตรวจ</h2>
-    <p class="note" style="margin-top:0">ไม่ต้องเปิดตำแหน่งของคุณ ใช้พิกัดกลางตำบล/แขวงโดยประมาณเพื่อดูสถานีวัดน้ำใกล้เคียง ศูนย์พักพิง และพยากรณ์ฝนของพื้นที่นั้น</p>
-    <label class="f" for="arProv">จังหวัด</label><select id="arProv"></select>
-    <label class="f" for="arDist">อำเภอ</label><select id="arDist" disabled></select>
-    <label class="f" for="arTam">ตำบล</label><select id="arTam" disabled></select>
-    <p class="note" id="arErr" role="alert" hidden style="color:var(--alert)"></p>
-    <div class="acts"><button class="btn" id="arCancel" type="button">ยกเลิก</button><button class="btn primary" id="arGo" type="button" disabled>ตรวจพื้นที่นี้</button></div>
-  </div>
-</div>
 <div id="toast" role="status" hidden></div>
 
 <aside id="sheet" data-state="half" aria-label="สถานการณ์น้ำ">
@@ -367,10 +369,6 @@ svg.chart{width:100%;height:auto;display:block}
       <button class="rpbtn" id="btnRoute" type="button">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"/></svg>
         เช็กเส้นทาง
-      </button>
-      <button class="rpbtn" id="btnArea" type="button">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
-        เลือกตำบล
       </button>
     </div>
     <section class="card" id="routeCard" hidden></section>
@@ -781,12 +779,13 @@ function setOrigin(o){
       : L.circleMarker([o.lat,o.lng],{radius:8,color:"#fff",weight:2,fillColor:"#0b6e8f",fillOpacity:1}).addTo(map);
   }
   $("btnClear").hidden = !o;
+  if((!o || o.kind!=="area") && $("tam").value!=="") $("tam").value = "";   // another kind of place replaces the picked subdistrict
   say(!o ? "" : (o.kind==="home" ? "ใช้ตำแหน่งบ้านที่ปักไว้ (ใช้เฉพาะตอนเปิดหน้านี้ ไม่ถูกเก็บไว้)" : o.kind==="area" ? "ตรวจพื้นที่ "+o.label+" (พิกัดกลางพื้นที่โดยประมาณ)" : "ใช้ตำแหน่งปัจจุบันของคุณ"));
   showNearShelters(o); refreshRain();
   if(!o){ $("results").hidden = true; return; }
   getJSON("/stations/nearby?lat="+o.lat+"&lng="+o.lng+"&limit=3").then(function(list){
     list.forEach(function(s){ byId[s.id]=Object.assign(byId[s.id]||{},s); });
-    if(province && list.some(function(s){ return s.province!==province; })){  // don't hide the stations near the user
+    if(province && o.kind!=="area" && list.some(function(s){ return s.province!==province; })){  // don't hide the stations near the user
       province = ""; $("prov").value = ""; resetReplay(); redraw(); updateRepLink();
     }
     showResults("สถานีใกล้ที่สุด 3 แห่ง", list, function(s){return s.distance_km+" กม.";});
@@ -804,7 +803,7 @@ function drawProvinceSelect(){
   if(province && !names[province]) province = "";  // saved province has no stations any more
   $("prov").innerHTML = '<option value="">ทั้งประเทศ ('+stations.length+')</option>' +
     list.map(function(n){ return '<option value="'+esc(n)+'">'+esc(n)+' ('+names[n]+')</option>'; }).join("");
-  $("prov").value = province; updateRepLink();
+  $("prov").value = province; updateRepLink(); syncAreaPills();
 }
 function showProvince(fit){
   var list = stations.filter(inProv);
@@ -831,7 +830,8 @@ $("chips").addEventListener("click",function(e){
 });
 $("prov").addEventListener("change",function(e){
   province = e.target.value;
-  resetReplay(); redraw(); showProvince(true); updateRepLink();
+  if(origin && origin.kind==="area") setOrigin(null);
+  resetReplay(); redraw(); showProvince(true); updateRepLink(); syncAreaPills();
 });
 var geoSeq = 0;
 function geocode(q){
@@ -1206,50 +1206,38 @@ $("rtGo").addEventListener("click",function(){
       rtFail(m.indexOf("nf:")===0 ? "ไม่พบสถานที่ \""+m.slice(3)+"\" ลองพิมพ์ให้ละเอียดขึ้น เช่นเพิ่มชื่ออำเภอหรือจังหวัด" : m==="noroute" ? "หาเส้นทางระหว่างสองจุดนี้ไม่ได้" : "คำนวณเส้นทางไม่ได้ในขณะนี้ ลองใหม่อีกครั้ง"); });
 });
 
-/* ---------- area picker: province > district > subdistrict, using the subdistrict's centre point ---------- */
-var areaCache = {}, areaCur = null;
-function arPre(prov){ return prov==="กรุงเทพมหานคร" ? {d:"เขต", t:"แขวง"} : {d:"อ.", t:"ต."}; }
+/* ---------- area pills: province > district > subdistrict (centre point of the subdistrict) ---------- */
+var areaCache = {}, areaCur = null, areaSeq = 0;
+function arPre(prov){ return prov==="กรุงเทพมหานคร" ? {d:"เขต", t:"แขวง"} : {d:"อำเภอ", t:"ตำบล"}; }
 function arFill(sel, items, placeholder){
   sel.innerHTML = '<option value="">'+placeholder+'</option>'+items.map(function(t,i){ return '<option value="'+i+'">'+esc(t)+'</option>'; }).join("");
-  sel.disabled = !items.length;
+  sel.disabled = !items.length; sel.value = "";
 }
-function arCheck(){ $("arGo").disabled = !($("arTam").value!==""); }
-function arLoadProvince(name){
-  $("arErr").hidden = true; arFill($("arDist"), [], "เลือกอำเภอ"); arFill($("arTam"), [], "เลือกตำบล"); arCheck(); areaCur = null;
-  if(!name) return;
+function arReset(){ var pre = arPre(province); areaCur = null; arFill($("dist"), [], pre.d); arFill($("tam"), [], pre.t); }
+function syncAreaPills(){          // call whenever the province may have changed; keeps the picks while it has not
+  if(!province){ arReset(); return; }
+  if(areaCur && areaCur.province===province) return;
+  arReset(); var my = ++areaSeq, name = province;
   var show = function(d){
-    areaCur = d; var pre = arPre(d.province); arFill($("arDist"), d.districts.map(function(x){return pre.d+x.name;}), pre.d==="เขต" ? "เลือกเขต" : "เลือกอำเภอ"); arFill($("arTam"), [], pre.t==="แขวง" ? "เลือกแขวง" : "เลือกตำบล");
+    if(my!==areaSeq || province!==name) return;
+    areaCur = d; var pre = arPre(name);
+    arFill($("dist"), d.districts.map(function(x){return x.name;}), pre.d); arFill($("tam"), [], pre.t);
   };
   if(areaCache[name]){ show(areaCache[name]); return; }
-  getJSON("/api/areas?province="+encodeURIComponent(name)).then(function(d){ areaCache[name] = d; if($("arProv").value===name) show(d); })
-    .catch(function(e){ $("arErr").hidden = false; $("arErr").textContent = e.message==="HTTP 404" ? "ยังไม่มีรายชื่อตำบลของจังหวัดนี้ ลองใช้ช่องค้นหาด้านบนแทน" : "โหลดรายชื่อตำบลไม่ได้ ลองใหม่อีกครั้ง"; });
+  getJSON("/api/areas?province="+encodeURIComponent(name)).then(function(d){ areaCache[name] = d; show(d); }).catch(function(){});   // no list for this province: pills stay disabled
 }
-function arOpen(){
-  var names = {}; stations.forEach(function(s){ if(s.province && s.province!=="สาธารณรัฐแห่งสหภาพเมียนมา") names[s.province]=1; });
-  var keys = Object.keys(names).sort(function(a,b){return a.localeCompare(b,"th");});
-  $("arProv").innerHTML = '<option value="">เลือกจังหวัด</option>'+keys.map(function(n){ return '<option value="'+esc(n)+'">'+esc(n)+'</option>'; }).join("");
-  $("arProv").value = province && names[province] ? province : "";
-  arLoadProvince($("arProv").value);
-  $("ar").hidden = false; closeLayers(); $("arProv").focus();
-}
-function arClose(){ $("ar").hidden = true; }
-$("btnArea").addEventListener("click", arOpen);
-$("arCancel").addEventListener("click", arClose);
-$("ar").addEventListener("click", function(e){ if(e.target===$("ar")) arClose(); });
-document.addEventListener("keydown",function(e){ if(e.key==="Escape" && !$("ar").hidden) arClose(); });
-$("arProv").addEventListener("change", function(){ arLoadProvince(this.value); });
-$("arDist").addEventListener("change", function(){
-  var pre = arPre(areaCur ? areaCur.province : ""); arFill($("arTam"), this.value==="" ? [] : areaCur.districts[+this.value].tambons.map(function(t){return pre.t+t.name;}), pre.t==="แขวง" ? "เลือกแขวง" : "เลือกตำบล"); arCheck();
+$("dist").addEventListener("change", function(){
+  var pre = arPre(province);
+  if(origin && origin.kind==="area") setOrigin(null);
+  if(this.value==="" || !areaCur){ arFill($("tam"), [], pre.t); return; }
+  var d = areaCur.districts[+this.value];
+  arFill($("tam"), d.tambons.map(function(t){return t.name;}), pre.t);
+  map.fitBounds(L.latLngBounds(d.tambons.map(function(t){return [t.lat,t.lng];})), Object.assign({maxZoom:12}, fitPad()));
 });
-$("arTam").addEventListener("change", arCheck);
-$("arGo").addEventListener("click",function(){
-  if(!areaCur || $("arDist").value==="" || $("arTam").value==="") return;
-  var d = areaCur.districts[+$("arDist").value], t = d.tambons[+$("arTam").value];
-  arClose();
-  province = areaCur.province; if($("prov")) $("prov").value = province;   // show that province, then centre the check on the subdistrict
-  resetReplay(); redraw(); updateRepLink();
-  var pre = arPre(areaCur.province);
-  setOrigin({lat:t.lat, lng:t.lng, kind:"area", label:pre.t+t.name+" "+pre.d+d.name+(pre.t==="แขวง" ? " กทม." : " จ."+areaCur.province)});
+$("tam").addEventListener("change", function(){
+  if(this.value===""){ if(origin && origin.kind==="area") setOrigin(null); return; }
+  var d = areaCur.districts[+$("dist").value], t = d.tambons[+this.value], pre = arPre(areaCur.province);
+  setOrigin({lat:t.lat, lng:t.lng, kind:"area", label:(pre.t==="แขวง" ? "แขวง" : "ต.")+t.name+" "+(pre.d==="เขต" ? "เขต" : "อ.")+d.name+(pre.t==="แขวง" ? " กทม." : " จ."+areaCur.province)});
 });
 
 /* ---------- start ---------- */
