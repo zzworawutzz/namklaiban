@@ -79,3 +79,18 @@ def test_failed_send_is_retried_and_never_raises(tmp_path, monkeypatch):
     run(c, AT, False, "boom")
     assert watchdog.check(c, AT, lambda t, m: 1 / 0) is None   # LINE down: swallowed, state not saved
     assert watchdog.check(c, AT + timedelta(minutes=20), lambda t, m: out.append(m)) == "down"
+
+
+def test_test_alert_endpoint(monkeypatch):
+    from fastapi.testclient import TestClient
+    import api, notify
+    sent = []
+    monkeypatch.setattr(notify, "send_line", lambda t, m, flex=None: sent.append((t, m)))
+    monkeypatch.setenv("CRON_SECRET", "s")
+    c = TestClient(api.app)
+    assert c.get("/api/cron/test-alert").status_code == 401
+    monkeypatch.delenv("ADMIN_LINE_ID", raising=False)
+    assert c.get("/api/cron/test-alert", headers={"Authorization": "Bearer s"}).status_code == 400
+    monkeypatch.setenv("ADMIN_LINE_ID", "UADMIN")
+    r = c.get("/api/cron/test-alert", headers={"Authorization": "Bearer s"})
+    assert r.status_code == 200 and sent[0][0] == "UADMIN" and "ทดสอบ" in sent[0][1]

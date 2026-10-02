@@ -254,15 +254,19 @@ def gistda_flood_tile(period: str, z: int, x: int, y: int):
     return Response(body, media_type=ctype, headers={"Cache-Control": "public, max-age=1800, s-maxage=1800"})
 
 
+def _cron_authorized(authorization):
+    secrets = [os.environ.get(k, "") for k in ("CRON_SECRET", "CRON_SECRET_EXTERNAL")]
+    given = (authorization or "").encode()
+    return any(s and hmac.compare_digest(given, f"Bearer {s}".encode()) for s in secrets)
+
+
 @app.get("/api/cron/ingest", include_in_schema=False)
 def cron_ingest(authorization: Optional[str] = Header(None)):
     """Fetch new readings, then send notifications. Called by Vercel Cron or any scheduler
     with `Authorization: Bearer $CRON_SECRET`. Refuses to run when CRON_SECRET is unset."""
     # CRON_SECRET is for Vercel Cron / GitHub Actions; CRON_SECRET_EXTERNAL lets a third-party
     # scheduler call this endpoint with its own key that can be revoked on its own.
-    secrets = [os.environ.get(k, "") for k in ("CRON_SECRET", "CRON_SECRET_EXTERNAL")]
-    given = (authorization or "").encode()
-    if not any(s and hmac.compare_digest(given, f"Bearer {s}".encode()) for s in secrets):
+    if not _cron_authorized(authorization):
         raise HTTPException(401, "unauthorized")
     with conn() as c:
         if not ingest.try_lock(c, "cron"):
@@ -282,6 +286,22 @@ def cron_ingest(authorization: Optional[str] = Header(None)):
     return {"stations": n_st, "new_readings": n_rd, "skipped": skipped, "pruned": pruned,
             "notifications_sent": sent, "notifications_failed": failed,
             "digests_sent": digests, "digests_failed": digest_failed}
+
+
+@app.get("/api/cron/test-alert", include_in_schema=False)
+def cron_test_alert(authorization: Optional[str] = Header(None)):
+    """Send one test message to ADMIN_LINE_ID so the owner can confirm alerts arrive.
+    Same auth as /api/cron/ingest; changes no state."""
+    if not _cron_authorized(authorization):
+        raise HTTPException(401, "unauthorized")
+    target = os.environ.get("ADMIN_LINE_ID", "").strip()
+    if not target:
+        raise HTTPException(400, "ADMIN_LINE_ID is not set (redeploy after adding it)")
+    try:
+        notify.send_line(target, "🔔 น้ำใกล้บ้านฉัน: ข้อความทดสอบ ถ้าเห็นข้อความนี้ แปลว่าระบบแจ้งเตือนผู้ดูแลทำงานปกติ")
+    except Exception as e:
+        raise HTTPException(502, f"{type(e).__name__}: {e}"[:300])
+    return {"sent": True}
 
 
 @app.post("/api/line/webhook", include_in_schema=False)
