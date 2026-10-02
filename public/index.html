@@ -161,6 +161,8 @@ h2{font-size:16px;margin:0 0 8px;font-weight:600}
 .searchbox input::placeholder{color:var(--muted)}
 .searchbox:focus-within{outline:3px solid var(--accent)}
 .iconbtn{flex:none;width:48px;height:48px;border-radius:14px;display:grid;place-items:center;color:var(--ink)}
+.lcount{min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--accent);color:var(--accent-ink);font-size:12px;line-height:20px;text-align:center;font-weight:700}
+.iconbtn[aria-expanded=true] .lcount{background:var(--accent-ink);color:var(--accent)}
 .iconbtn[aria-expanded=true],.iconbtn.on{background:var(--accent);color:var(--accent-ink)}
 .clearq{width:36px;height:36px;border:0;border-radius:10px;background:transparent;color:var(--muted);font-size:20px;line-height:1}
 .provpill{flex:none;position:relative;display:flex;align-items:center;gap:6px;height:36px;padding:0 10px 0 10px;border-radius:999px;font-weight:600;font-size:14px}
@@ -297,7 +299,7 @@ svg.chart{width:100%;height:auto;display:block}
     </button>
     <button class="iconbtn labelbtn glass" id="btnLayers" type="button" aria-label="ชั้นแผนที่ เปิดปิดน้ำท่วมดาวเทียม เรดาร์ฝน ศูนย์พักพิง" aria-expanded="false" aria-controls="layers" title="ชั้นแผนที่">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5z"/><path d="m3 13 9 5 9-5"/></svg>
-      <span>ชั้นแผนที่</span>
+      <span>ชั้นแผนที่</span><b class="lcount" id="lcount" hidden></b>
     </button>
   </div>
   <div class="row2">
@@ -686,7 +688,7 @@ function drawFlood(){
 $("chkFlood").addEventListener("change", drawFlood);
 $("floodPeriod").addEventListener("change", drawFlood);
 fetch(API+"/api/gistda/status").then(function(r){ return r.ok ? r.json() : null; }).then(function(j){
-  if(j && j.enabled){ $("floodBox").hidden = false; syncQuick(); }
+  if(j && j.enabled){ $("floodBox").hidden = false; syncQuick(); syncLayerCount(); }
 }).catch(function(){});
 
 function tlLabel(){
@@ -1336,6 +1338,16 @@ function syncQuick(){
     return '<button type="button" class="chip qc" data-q="'+q[0]+'" aria-pressed="'+$(q[0]).checked+'" aria-label="ชั้นแผนที่: '+q[3]+'" title="เปิด/ปิดชั้นแผนที่: '+q[3]+'"><span aria-hidden="true">'+q[1]+'</span>'+q[2]+'</button>';
   }).join("");
 }
+/* number of extra map layers switched on, shown on the "ชั้นแผนที่" button (the user-reports layer is on by default, so it is not counted) */
+var LAYER_IDS = ["chkRiver","chkFlood","chkShl","chkRadar"];
+function syncLayerCount(){
+  var n = LAYER_IDS.filter(function(id){ return $(id).checked && (id!=="chkFlood" || !$("floodBox").hidden); }).length;
+  var el = $("lcount"), btn = $("btnLayers");
+  el.hidden = !n; el.textContent = n;
+  btn.setAttribute("aria-label", "ชั้นแผนที่" + (n ? " เปิดอยู่ "+n+" ชั้น" : "") + " เปิดปิดน้ำท่วมดาวเทียม เรดาร์ฝน ศูนย์พักพิง");
+}
+LAYER_IDS.forEach(function(id){ $(id).addEventListener("change", syncLayerCount); });
+syncLayerCount();
 $("qchips").addEventListener("click",function(e){
   var b = e.target.closest ? e.target.closest(".qc") : null; if(!b) return;
   if(b.getAttribute("data-clear")==="route"){ rtClear(); return; }
