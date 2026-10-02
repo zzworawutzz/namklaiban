@@ -21,6 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 import areas
+import boundaries
 import core
 import db
 import floodreports
@@ -190,6 +191,18 @@ def areas_list(response: Response, province: str):
     if data is None:
         raise HTTPException(404, "ไม่มีรายชื่อตำบลของจังหวัดนี้")
     return {"province": province, "districts": data}
+
+
+@app.get("/api/boundary")
+def boundary(response: Response, province: str, district: Optional[str] = None, tambon: Optional[str] = None):
+    """Outline (GeoJSON Feature) of a province, a district of it, or a subdistrict of that district."""
+    response.headers["Cache-Control"] = "public, max-age=86400"
+    if tambon and not district:
+        raise HTTPException(422, "tambon needs district")
+    f = boundaries.outline(province, district, tambon)
+    if f is None:
+        raise HTTPException(404, "ไม่มีขอบเขตของพื้นที่นี้")
+    return f
 
 
 @app.get("/api/line/add-friend", include_in_schema=False)
