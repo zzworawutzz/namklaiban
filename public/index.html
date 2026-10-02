@@ -109,23 +109,6 @@ h2{font-size:16px;margin:0 0 8px;font-weight:600}
 /* ---- area picker ---- */
 #ar .dlg select{width:100%;height:46px;border:1.5px solid var(--line);border-radius:12px;padding:0 12px;background:var(--bg);font-size:16px}
 #ar label.f{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
-.flowcard{padding:0}
-.flowcard summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:12px 16px;min-height:48px}
-.flowcard summary::-webkit-details-marker{display:none}
-.flowcard summary b{font-size:16px}
-.flowcard summary .fsum{flex:1;min-width:0;font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.flowcard summary .fsum i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
-.flowcard summary::after{content:"";width:8px;height:8px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);margin:0 4px 3px 0;transition:transform .15s}
-.flowcard[open] summary::after{transform:rotate(-135deg);margin-bottom:-3px}
-.flowcard .fbody{padding:0 16px 14px}
-.flowcard .fl{margin:10px 0 0}.flowcard .fl>b{display:block;font-size:13px;margin-bottom:4px}
-.flowcard ol{list-style:none;margin:0;padding:0 0 2px;display:flex;align-items:flex-start;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
-.flowcard li{flex:none;width:68px;position:relative;text-align:center}
-.flowcard li+li::before{content:"";position:absolute;top:14px;right:50%;width:100%;height:3px;background:var(--line);z-index:0}
-.flowcard .fn{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:2px;width:100%;padding:0 1px;background:none;border:0;color:var(--ink);font-size:11px;line-height:1.2;overflow-wrap:anywhere}
-.flowcard .fn i{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;border:2px solid var(--surface);color:#fff;font-style:normal;font-weight:700;font-size:12px}
-.flowcard .fn[aria-current=true] i{outline:3px solid var(--accent)}
-.flowcard .fdir{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
 .fab{display:none}
 @media (max-width:899px){
   .fab{display:flex;position:absolute;right:12px;bottom:calc(100% + 12px);z-index:5;pointer-events:none}
@@ -406,7 +389,6 @@ svg.chart{width:100%;height:auto;display:block}
       <div class="sumbody" id="sumBody"><div class="skel" style="width:104px;height:104px;border-radius:50%"></div><div style="flex:1;display:grid;gap:8px"><div class="skel" style="height:14px"></div><div class="skel" style="height:14px"></div><div class="skel" style="height:14px"></div></div></div>
     </section>
     <section class="card" id="placeCard" hidden></section>
-    <section class="card flowcard" id="flowCard" hidden aria-live="polite"></section>
     <section class="card rain" id="rainCard" hidden aria-live="polite"></section>
     <section class="card replay" id="replayBox">
       <label for="tl">ย้อนดูสถานการณ์บนแผนที่ (สูงสุด 72 ชม.)</label>
@@ -660,49 +642,7 @@ function drawSummary(){
     return '<li><span class="dot" style="background:'+COLOR[r[0]]+'"></span>'+LABEL[r[0]]+'<b>'+r[1]+'</b></li>';
   }).join("")+(k.stale?'<li class="note" style="margin:0">ข้อมูลค้าง '+k.stale+' สถานี</li>':'')+'</ul>';
 }
-function redraw(){ drawMarkers(); drawChips(); drawSummary(); drawFlow(); drawRivers(); if(typeof updateBoundary==="function") updateBoundary(); if(typeof refreshShelters==="function") refreshShelters(); if(typeof refreshRain==="function") refreshRain(); }
-
-/* ---------- water path: stations of one river in a row, upstream -> downstream ---------- */
-function flowGroups(){
-  var g = {}, out = [];
-  stations.forEach(function(s){
-    if(!s.river || s.ground_level==null || !inProv(s)) return;
-    var k = s.river+"|"+(s.basin||""); (g[k] = g[k]||[]).push(s);
-  });
-  Object.keys(g).forEach(function(k){
-    var cur = [], prev = null;
-    function flush(){ if(cur.length>=2) out.push(cur); cur = []; prev = null; }
-    g[k].sort(function(a,b){ return b.ground_level-a.ground_level; }).forEach(function(s){   // high bed first = upstream
-      if(prev){ var d = kmBetween(prev,s); if(d<0.5) return; if(d>RIVER_MAX_KM) flush(); }
-      cur.push(s); prev = s;
-    });
-    flush();
-  });
-  return out;
-}
-var flowOpen = false;   // remembered across the 5-minute refresh redraws
-function drawFlow(){
-  var el = $("flowCard"), gs = province ? flowGroups() : [];
-  if(!gs.length){ el.hidden = true; el.innerHTML = ""; return; }
-  function worst(g){ return g.reduce(function(m,s){ return Math.max(m, RANK[view(s).status]||0); }, 0); }
-  gs.sort(function(a,b){ return worst(b)-worst(a) || b.length-a.length; });
-  var top = null; gs.forEach(function(g){ g.forEach(function(s){ var v = view(s); if(v.pct_of_bank!=null && (!top || v.pct_of_bank>top.v.pct_of_bank)) top = {s:s, v:v}; }); });
-  var more = gs.length>4 ? gs.length-4 : 0;
-  el.innerHTML = '<details class="flowcard-d"'+(flowOpen?' open':'')+'><summary><b>เส้นทางน้ำ</b><span class="fsum">'+gs.length+' สาย'+
-      (top ? ' · สูงสุด <i style="background:'+(COLOR[top.v.status]||COLOR.unknown)+'"></i>'+Math.round(top.v.pct_of_bank)+'%' : '')+'</span></summary>'+
-    '<div class="fbody"><p class="note" style="margin:0">เรียงจากต้นน้ำไปปลายน้ำ (ประมาณจากระดับท้องน้ำ ไม่ใช่แนวแม่น้ำจริง) แตะสถานีเพื่อดูรายละเอียด</p>'+
-    gs.slice(0,4).map(function(g){
-      return '<div class="fl"><b>'+esc(g[0].river)+'</b><ol>'+g.map(function(s){
-        var v = view(s), c = COLOR[v.status]||COLOR.unknown;
-        return '<li><button type="button" class="fn" data-sid="'+esc(s.id)+'"'+(sel===s.id?' aria-current="true"':'')+' aria-label="'+esc(s.name)+' '+esc(statusText(v))+' '+esc(pctText(v))+'"><i style="background:'+c+'">'+(v.pct_of_bank==null?"-":Math.round(v.pct_of_bank))+'</i><span>'+esc(s.name)+'</span></button></li>';
-      }).join("")+'</ol><div class="fdir"><span>ต้นน้ำ</span><span>ปลายน้ำ</span></div></div>';
-    }).join("")+(more?'<p class="note" style="margin:10px 0 0">และอีก '+more+' สาย (ดูได้จากรายชื่อสถานี)</p>':'')+'</div></details>';
-  el.hidden = false;
-}
-$("flowCard").addEventListener("toggle", function(e){ if(e.target && e.target.tagName==="DETAILS") flowOpen = e.target.open; }, true);
-$("flowCard").addEventListener("click",function(e){
-  var b = e.target.closest ? e.target.closest(".fn") : null; if(b) select(b.getAttribute("data-sid"), true);
-});
+function redraw(){ drawMarkers(); drawChips(); drawSummary(); drawRivers(); if(typeof updateBoundary==="function") updateBoundary(); if(typeof refreshShelters==="function") refreshShelters(); if(typeof refreshRain==="function") refreshRain(); }
 
 /* ---------- river lines ---------- */
 var RIVER_MAX_KM = 80;
@@ -852,7 +792,7 @@ function select(id, fly){
   if(markers[id]){ markers[id].setIcon(icon(view(s),true)); markers[id].setZIndexOffset(1000); }
   if(fly) flyToVisible([s.lat,s.lng], Math.max(map.getZoom(),CLUSTER_OFF_ZOOM+1));
   else if(markers[id] && layer.getVisibleParent(markers[id])!==markers[id]) layer.zoomToShowLayer(markers[id]);
-  drawDetail(s,null); drawFlow();
+  drawDetail(s,null);
   revealInSheet($("detail"));
   try{ var u = new URL(location.href); u.searchParams.set("station",id); history.replaceState(null,"",u); }catch(e){}
   var rel = null;
@@ -931,7 +871,7 @@ $("chips").addEventListener("click",function(e){
 function deselect(){   // forget the open station and take ?station= out of the address so the page and the link agree
   var prev = sel; sel = null;
   if(prev && markers[prev] && byId[prev]){ markers[prev].setIcon(icon(view(byId[prev]),false)); markers[prev].setZIndexOffset(Z[view(byId[prev]).status]||0); }
-  $("detail").hidden = true; drawFlow();
+  $("detail").hidden = true;
   try{ var u = new URL(location.href); u.searchParams.delete("station"); history.replaceState(null,"",u); }catch(e){}
 }
 $("prov").addEventListener("change",function(e){
