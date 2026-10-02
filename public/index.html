@@ -56,11 +56,11 @@ h2{font-size:16px;margin:0 0 8px;font-weight:600}
 .rp.l1{background:#5b9bea}.rp.l2{background:#3f7fe0}.rp.l3{background:#2a5bc4}.rp.l4{background:#7a3fc4}
 .rpp{min-width:200px}.rpp b{font-size:15px}.rpp .note{margin:4px 0}
 .rpp button{margin-top:6px;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:6px 10px;font-size:13px}
-#rpt,#rt{position:fixed;inset:0;z-index:1300;display:grid;place-items:end center;background:rgba(5,15,20,.5)}
-@media (min-width:900px){#rpt,#rt{place-items:center}}
-#rpt .dlg,#rt .dlg{width:min(460px,100%);max-height:92vh;overflow:auto;background:var(--surface);border-radius:20px 20px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px));box-shadow:var(--shadow)}
-@media (min-width:900px){#rpt .dlg,#rt .dlg{border-radius:20px}}
-#rpt h2,#rt h2{margin:0 0 4px}
+#rpt,#rt,#ar{position:fixed;inset:0;z-index:1300;display:grid;place-items:end center;background:rgba(5,15,20,.5)}
+@media (min-width:900px){#rpt,#rt,#ar{place-items:center}}
+#rpt .dlg,#rt .dlg,#ar .dlg{width:min(460px,100%);max-height:92vh;overflow:auto;background:var(--surface);border-radius:20px 20px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px));box-shadow:var(--shadow)}
+@media (min-width:900px){#rpt .dlg,#rt .dlg,#ar .dlg{border-radius:20px}}
+#rpt h2,#rt h2,#ar h2{margin:0 0 4px}
 #rpt .where,#rt .where{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 4px}
 #rpt .where .btn,#rt .where .btn{flex:1;min-width:140px}
 #rpt .lv,#rt .lv{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
@@ -68,9 +68,9 @@ h2{font-size:16px;margin:0 0 8px;font-weight:600}
 #rpt .lv input,#rt .lv input{accent-color:var(--accent);width:18px;height:18px}
 #rpt .lv label:has(input:checked),#rt .lv label:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
 #rpt input[type=text],#rt input[type=text]{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--bg);font-size:16px}
-#rpt .acts,#rt .acts{display:flex;gap:8px;margin-top:14px}
-#rpt .acts .btn,#rt .acts .btn{flex:1}
-#rpt .btn:disabled,#rt .btn:disabled{opacity:.45}
+#rpt .acts,#rt .acts,#ar .acts{display:flex;gap:8px;margin-top:14px}
+#rpt .acts .btn,#rt .acts .btn,#ar .acts .btn{flex:1}
+#rpt .btn:disabled,#rt .btn:disabled,#ar .btn:disabled{opacity:.45}
 
 
 /* ---- shelters, rain radar, emergency numbers ---- */
@@ -97,6 +97,19 @@ h2{font-size:16px;margin:0 0 8px;font-weight:600}
 .rtopt[aria-pressed=true]{border-color:var(--accent);background:var(--accent-soft)}
 .rtpts li{display:flex;gap:8px;justify-content:space-between;padding:6px 0;border-top:1px solid var(--line);font-size:14px}
 .rtpts small{color:var(--muted)}
+
+
+/* ---- rain forecast ---- */
+.rain .big{font-size:26px;font-weight:700;line-height:1.1}.rain .big small{font-size:13px;font-weight:500;color:var(--muted)}
+.rain svg{width:100%;height:auto;display:block;margin:8px 0 2px}
+.rain .days{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+.rain .day{background:var(--bg);border-radius:12px;padding:8px 10px;font-size:13px}.rain .day b{display:block;font-size:16px}
+
+
+/* ---- area picker ---- */
+#ar .dlg select{width:100%;height:46px;border:1.5px solid var(--line);border-radius:12px;padding:0 12px;background:var(--bg);font-size:16px}
+#ar label.f{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+@media (max-width:420px){.actrow .rpbtn svg{display:none}.actrow .rpbtn{font-size:14px;padding:0 6px}}
 
 /* ---- top bar ---- */
 #topbar{position:fixed;z-index:1000;left:12px;right:12px;top:calc(12px + env(safe-area-inset-top,0px));display:flex;flex-direction:column;gap:8px;pointer-events:none}
@@ -316,12 +329,24 @@ svg.chart{width:100%;height:auto;display:block}
     <p class="note">คำนวณเส้นทางด้วย OSRM และค้นหาสถานที่ด้วย OpenStreetMap (ต้นทางและปลายทางที่พิมพ์จะถูกส่งไปยังบริการเหล่านั้น) ผลเป็นการประเมินคร่าวๆ ไม่ได้รับประกันว่าผ่านได้ ถ้าไม่แน่ใจโทร 1784 หรือ 191</p>
   </div>
 </div>
+<div id="ar" hidden role="dialog" aria-modal="true" aria-labelledby="arTitle">
+  <div class="dlg">
+    <h2 id="arTitle">เลือกตำบล/แขวงที่ต้องการตรวจ</h2>
+    <p class="note" style="margin-top:0">ไม่ต้องเปิดตำแหน่งของคุณ ใช้พิกัดกลางตำบล/แขวงโดยประมาณเพื่อดูสถานีวัดน้ำใกล้เคียง ศูนย์พักพิง และพยากรณ์ฝนของพื้นที่นั้น</p>
+    <label class="f" for="arProv">จังหวัด</label><select id="arProv"></select>
+    <label class="f" for="arDist">อำเภอ</label><select id="arDist" disabled></select>
+    <label class="f" for="arTam">ตำบล</label><select id="arTam" disabled></select>
+    <p class="note" id="arErr" role="alert" hidden style="color:var(--alert)"></p>
+    <div class="acts"><button class="btn" id="arCancel" type="button">ยกเลิก</button><button class="btn primary" id="arGo" type="button" disabled>ตรวจพื้นที่นี้</button></div>
+  </div>
+</div>
 <div id="toast" role="status" hidden></div>
 
 <aside id="sheet" data-state="half" aria-label="สถานการณ์น้ำ">
   <button id="grab" type="button" aria-label="ขยายหรือย่อแผงข้อมูล"><span></span></button>
   <div id="sheetBody">
     <div id="err" class="err" role="alert" hidden></div>
+    <section class="card rain" id="rainCard" hidden aria-live="polite"></section>
     <section class="card" id="summary" aria-live="polite">
       <div class="sumhead">
         <div><div class="eyebrow">สถานการณ์น้ำ</div><h2 id="sumTitle">กำลังโหลด…</h2><div class="note" id="sumSub" style="margin:2px 0 0"></div></div>
@@ -343,6 +368,10 @@ svg.chart{width:100%;height:auto;display:block}
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"/></svg>
         เช็กเส้นทาง
       </button>
+      <button class="rpbtn" id="btnArea" type="button">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
+        เลือกตำบล
+      </button>
     </div>
     <section class="card" id="routeCard" hidden></section>
     <section class="card cta" id="lineCta" hidden>
@@ -361,7 +390,7 @@ svg.chart{width:100%;height:auto;display:block}
         <a href="tel:1460"><b>1460</b><span>กรมชลประทาน ข้อมูลน้ำ/เขื่อน</span></a>
         <a href="tel:1182"><b>1182</b><span>กรมอุตุฯ สภาพอากาศ</span></a>
       </div></section>
-    <p class="foot" id="foot">ข้อมูลระดับน้ำจาก ThaiWater (สสน.) ใช้ประกอบการตัดสินใจเท่านั้น ไม่ใช่ประกาศทางการ ให้ยึดคำสั่งของ ปภ. ในพื้นที่เป็นหลัก (สายด่วน 1784) · การค้นหาสถานที่ใช้ Nominatim ของ OpenStreetMap (คำที่ค้นหาจะถูกส่งไปยังบริการนั้น) · แผนที่ © OpenStreetMap contributors · ศูนย์พักพิง: ปภ. (Open Data Common) · เรดาร์: RainViewer · เส้นทาง: OSRM</p>
+    <p class="foot" id="foot">ข้อมูลระดับน้ำจาก ThaiWater (สสน.) ใช้ประกอบการตัดสินใจเท่านั้น ไม่ใช่ประกาศทางการ ให้ยึดคำสั่งของ ปภ. ในพื้นที่เป็นหลัก (สายด่วน 1784) · การค้นหาสถานที่ใช้ Nominatim ของ OpenStreetMap (คำที่ค้นหาจะถูกส่งไปยังบริการนั้น) · แผนที่ © OpenStreetMap contributors · ศูนย์พักพิง: ปภ. (Open Data Common) · เรดาร์: RainViewer · เส้นทาง: OSRM · พยากรณ์ฝน: Open-Meteo</p>
   </div>
 </aside>
 
@@ -581,7 +610,7 @@ function drawSummary(){
     return '<li><span class="dot" style="background:'+COLOR[r[0]]+'"></span>'+LABEL[r[0]]+'<b>'+r[1]+'</b></li>';
   }).join("")+(k.stale?'<li class="note" style="margin:0">ข้อมูลค้าง '+k.stale+' สถานี</li>':'')+'</ul>';
 }
-function redraw(){ drawMarkers(); drawChips(); drawSummary(); drawRivers(); if(typeof refreshShelters==="function") refreshShelters(); }
+function redraw(){ drawMarkers(); drawChips(); drawSummary(); drawRivers(); if(typeof refreshShelters==="function") refreshShelters(); if(typeof refreshRain==="function") refreshRain(); }
 
 /* ---------- river lines ---------- */
 var RIVER_MAX_KM = 80;
@@ -752,8 +781,8 @@ function setOrigin(o){
       : L.circleMarker([o.lat,o.lng],{radius:8,color:"#fff",weight:2,fillColor:"#0b6e8f",fillOpacity:1}).addTo(map);
   }
   $("btnClear").hidden = !o;
-  say(!o ? "" : (o.kind==="home" ? "ใช้ตำแหน่งบ้านที่ปักไว้ (ใช้เฉพาะตอนเปิดหน้านี้ ไม่ถูกเก็บไว้)" : "ใช้ตำแหน่งปัจจุบันของคุณ"));
-  showNearShelters(o);
+  say(!o ? "" : (o.kind==="home" ? "ใช้ตำแหน่งบ้านที่ปักไว้ (ใช้เฉพาะตอนเปิดหน้านี้ ไม่ถูกเก็บไว้)" : o.kind==="area" ? "ตรวจพื้นที่ "+o.label+" (พิกัดกลางพื้นที่โดยประมาณ)" : "ใช้ตำแหน่งปัจจุบันของคุณ"));
+  showNearShelters(o); refreshRain();
   if(!o){ $("results").hidden = true; return; }
   getJSON("/stations/nearby?lat="+o.lat+"&lng="+o.lng+"&limit=3").then(function(list){
     list.forEach(function(s){ byId[s.id]=Object.assign(byId[s.id]||{},s); });
@@ -884,6 +913,48 @@ $("btnMe").addEventListener("click",function(){
     {timeout:10000,maximumAge:300000});
 });
 
+
+/* ---------- rain forecast (Open-Meteo, next 24 h + 3 days) ---------- */
+var rainCache = {}, rainTimer = null, rainSeq = 0;
+function rainPoint(){
+  if(origin) return {lat:origin.lat, lng:origin.lng, name: origin.label || (origin.kind==="home" ? "บ้านของฉัน" : "ตำแหน่งของคุณ")};
+  if(!province) return null;
+  var l = stations.filter(function(s){ return s.province===province; }); if(!l.length) return null;
+  return {lat:l.reduce(function(a,s){return a+s.lat;},0)/l.length, lng:l.reduce(function(a,s){return a+s.lng;},0)/l.length, name:"จ."+province};
+}
+function rainClass(mm){ return mm<0.1 ? "ไม่มีฝน" : mm<=10 ? "ฝนเล็กน้อย" : mm<=35 ? "ฝนปานกลาง" : mm<=90 ? "ฝนหนัก" : "ฝนหนักมาก"; }
+function refreshRain(){ clearTimeout(rainTimer); rainTimer = setTimeout(loadRain, 400); }
+function loadRain(){
+  var pt = rainPoint(), card = $("rainCard"), my = ++rainSeq;
+  if(!pt){ card.hidden = true; return; }
+  var key = pt.lat.toFixed(1)+","+pt.lng.toFixed(1), hit = rainCache[key];
+  if(hit && Date.now()-hit.t < 30*60000){ drawRain(hit.j, pt); return; }
+  fetch("https://api.open-meteo.com/v1/forecast?latitude="+pt.lat.toFixed(3)+"&longitude="+pt.lng.toFixed(3)+
+        "&hourly=precipitation,precipitation_probability&daily=precipitation_sum,precipitation_probability_max&timezone=Asia%2FBangkok&forecast_days=3")
+    .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+    .then(function(j){ if(my!==rainSeq) return; rainCache[key] = {t:Date.now(), j:j}; drawRain(j, pt); })
+    .catch(function(e){ console.warn("rain forecast:", e); if(my===rainSeq) card.hidden = true; });
+}
+function drawRain(j, pt){
+  var card = $("rainCard"), H = j.hourly, now = new Date().toLocaleString("sv-SE",{timeZone:"Asia/Bangkok"}).slice(0,13).replace(" ","T")+":00";
+  var i0 = Math.max(0, H.time.indexOf(now)), mm = H.precipitation.slice(i0, i0+24), pr = H.precipitation_probability.slice(i0, i0+24);
+  if(mm.length<6){ card.hidden = true; return; }
+  var total = mm.reduce(function(a,b){return a+(b||0);},0), pmax = Math.max.apply(null, pr.map(function(x){return x||0;}));
+  var peak = mm.indexOf(Math.max.apply(null, mm)), mx = Math.max(2, Math.max.apply(null, mm));
+  var W = 300, Hh = 64, bw = W/mm.length, bars = mm.map(function(v,i){
+    var h = Math.max(v>0?2:0, (v||0)/mx*(Hh-14));
+    return '<rect x="'+(i*bw+1).toFixed(1)+'" y="'+(Hh-14-h).toFixed(1)+'" width="'+(bw-2).toFixed(1)+'" height="'+h.toFixed(1)+'" rx="2" fill="var(--accent)" opacity="'+(pr[i]>=60?1:.55)+'"><title>'+H.time[i0+i].slice(11,16)+' น. '+(v||0).toFixed(1)+' มม. โอกาสฝน '+(pr[i]||0)+'%</title></rect>';
+  }).join("");
+  var ticks = [0,6,12,18].filter(function(i){return i<mm.length;}).map(function(i){ return '<text x="'+(i*bw+2)+'" y="'+(Hh-2)+'" font-size="9" fill="var(--muted)">'+(i===0?"ตอนนี้":H.time[i0+i].slice(11,13)+":00")+'</text>'; }).join("");
+  var D = j.daily, names = ["วันนี้","พรุ่งนี้","มะรืนนี้"];
+  card.innerHTML = '<div class="eyebrow">พยากรณ์ฝน · '+esc(pt.name)+'</div>'+
+    '<div class="big">'+total.toFixed(0)+' มม. <small>ใน 24 ชม. · '+rainClass(total)+' · โอกาสฝนสูงสุด '+pmax+'%</small></div>'+
+    (total>=0.5 ? '<div class="note" style="margin:2px 0">ช่วงที่ฝนแรงสุด ~'+H.time[i0+peak].slice(11,16)+' น. ('+mm[peak].toFixed(1)+' มม./ชม.)</div>' : '<div class="note" style="margin:2px 0">ช่วง 24 ชม. ข้างหน้าแทบไม่มีฝน</div>')+
+    '<svg viewBox="0 0 '+W+' '+Hh+'" role="img" aria-label="ปริมาณฝนรายชั่วโมงใน 24 ชั่วโมงข้างหน้า">'+bars+ticks+'</svg>'+
+    '<div class="days">'+D.time.map(function(d,i){ return '<div class="day">'+names[i]+'<b>'+(D.precipitation_sum[i]||0).toFixed(0)+' มม.</b><span class="note">โอกาส '+(D.precipitation_probability_max[i]||0)+'%</span></div>'; }).join("")+'</div>'+
+    '<p class="note">ข้อมูลพยากรณ์จาก <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> เป็นผลจากแบบจำลอง ไม่ใช่ประกาศของกรมอุตุนิยมวิทยา ตำแหน่งที่ใช้ดึงพยากรณ์จะถูกส่งไปยังบริการนี้</p>';
+  card.hidden = false;
+}
 
 /* ---------- shelters (DDPM open data, via our API) ---------- */
 var shelterLayer = L.layerGroup().addTo(map), shelterProv = null, shelterData = [];
@@ -1133,6 +1204,52 @@ $("rtGo").addEventListener("click",function(){
   }).then(function(){ $("rtGo").disabled = false; $("rtGo").textContent = "ตรวจเส้นทาง"; rtClose(); })
     .catch(function(e){ var m = String(e&&e.message||"");
       rtFail(m.indexOf("nf:")===0 ? "ไม่พบสถานที่ \""+m.slice(3)+"\" ลองพิมพ์ให้ละเอียดขึ้น เช่นเพิ่มชื่ออำเภอหรือจังหวัด" : m==="noroute" ? "หาเส้นทางระหว่างสองจุดนี้ไม่ได้" : "คำนวณเส้นทางไม่ได้ในขณะนี้ ลองใหม่อีกครั้ง"); });
+});
+
+/* ---------- area picker: province > district > subdistrict, using the subdistrict's centre point ---------- */
+var areaCache = {}, areaCur = null;
+function arPre(prov){ return prov==="กรุงเทพมหานคร" ? {d:"เขต", t:"แขวง"} : {d:"อ.", t:"ต."}; }
+function arFill(sel, items, placeholder){
+  sel.innerHTML = '<option value="">'+placeholder+'</option>'+items.map(function(t,i){ return '<option value="'+i+'">'+esc(t)+'</option>'; }).join("");
+  sel.disabled = !items.length;
+}
+function arCheck(){ $("arGo").disabled = !($("arTam").value!==""); }
+function arLoadProvince(name){
+  $("arErr").hidden = true; arFill($("arDist"), [], "เลือกอำเภอ"); arFill($("arTam"), [], "เลือกตำบล"); arCheck(); areaCur = null;
+  if(!name) return;
+  var show = function(d){
+    areaCur = d; var pre = arPre(d.province); arFill($("arDist"), d.districts.map(function(x){return pre.d+x.name;}), pre.d==="เขต" ? "เลือกเขต" : "เลือกอำเภอ"); arFill($("arTam"), [], pre.t==="แขวง" ? "เลือกแขวง" : "เลือกตำบล");
+  };
+  if(areaCache[name]){ show(areaCache[name]); return; }
+  getJSON("/api/areas?province="+encodeURIComponent(name)).then(function(d){ areaCache[name] = d; if($("arProv").value===name) show(d); })
+    .catch(function(e){ $("arErr").hidden = false; $("arErr").textContent = e.message==="HTTP 404" ? "ยังไม่มีรายชื่อตำบลของจังหวัดนี้ ลองใช้ช่องค้นหาด้านบนแทน" : "โหลดรายชื่อตำบลไม่ได้ ลองใหม่อีกครั้ง"; });
+}
+function arOpen(){
+  var names = {}; stations.forEach(function(s){ if(s.province && s.province!=="สาธารณรัฐแห่งสหภาพเมียนมา") names[s.province]=1; });
+  var keys = Object.keys(names).sort(function(a,b){return a.localeCompare(b,"th");});
+  $("arProv").innerHTML = '<option value="">เลือกจังหวัด</option>'+keys.map(function(n){ return '<option value="'+esc(n)+'">'+esc(n)+'</option>'; }).join("");
+  $("arProv").value = province && names[province] ? province : "";
+  arLoadProvince($("arProv").value);
+  $("ar").hidden = false; closeLayers(); $("arProv").focus();
+}
+function arClose(){ $("ar").hidden = true; }
+$("btnArea").addEventListener("click", arOpen);
+$("arCancel").addEventListener("click", arClose);
+$("ar").addEventListener("click", function(e){ if(e.target===$("ar")) arClose(); });
+document.addEventListener("keydown",function(e){ if(e.key==="Escape" && !$("ar").hidden) arClose(); });
+$("arProv").addEventListener("change", function(){ arLoadProvince(this.value); });
+$("arDist").addEventListener("change", function(){
+  var pre = arPre(areaCur ? areaCur.province : ""); arFill($("arTam"), this.value==="" ? [] : areaCur.districts[+this.value].tambons.map(function(t){return pre.t+t.name;}), pre.t==="แขวง" ? "เลือกแขวง" : "เลือกตำบล"); arCheck();
+});
+$("arTam").addEventListener("change", arCheck);
+$("arGo").addEventListener("click",function(){
+  if(!areaCur || $("arDist").value==="" || $("arTam").value==="") return;
+  var d = areaCur.districts[+$("arDist").value], t = d.tambons[+$("arTam").value];
+  arClose();
+  province = areaCur.province; if($("prov")) $("prov").value = province;   // show that province, then centre the check on the subdistrict
+  resetReplay(); redraw(); updateRepLink();
+  var pre = arPre(areaCur.province);
+  setOrigin({lat:t.lat, lng:t.lng, kind:"area", label:pre.t+t.name+" "+pre.d+d.name+(pre.t==="แขวง" ? " กทม." : " จ."+areaCur.province)});
 });
 
 /* ---------- start ---------- */
