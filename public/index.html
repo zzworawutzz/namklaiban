@@ -130,6 +130,7 @@ h2{font-size:16px;margin:0 0 8px;font-weight:600}
 .chiprow .chips{flex:none;overflow:visible;padding:0;margin:0;flex-basis:auto}
 .qchips{flex:none;display:flex;gap:6px;align-items:center;padding-right:8px;margin-right:2px;border-right:1px solid var(--line)}
 .qchips:empty{display:none}
+.chip.qc.clr{background:var(--alert-bg);border-color:var(--alert);color:var(--alert)}
 .chip.qc[aria-pressed=true]{background:#2f6fd6;border-color:#2f6fd6;color:#fff}
 @media (min-width:900px){.chiprow{flex-wrap:wrap;overflow:visible}.chiprow .chips{flex-wrap:wrap}}
 
@@ -361,7 +362,7 @@ svg.chart{width:100%;height:auto;display:block}
     <label class="f" for="rtTo">ปลายทาง</label>
     <div class="frow"><input type="text" id="rtTo" placeholder="ชื่อสถานที่ เช่น สยามพารากอน" autocomplete="off"></div>
     <p class="note" id="rtErr" role="alert" hidden style="color:var(--alert)"></p>
-    <div class="acts"><button class="btn" id="rtCancel" type="button">ยกเลิก</button><button class="btn primary" id="rtGo" type="button">ตรวจเส้นทาง</button></div>
+    <div class="acts"><button class="btn" id="rtCancel" type="button">ยกเลิก</button><button class="btn" id="rtReset" type="button">ล้างค่า</button><button class="btn primary" id="rtGo" type="button">ตรวจเส้นทาง</button></div>
     <p class="note">คำนวณเส้นทางด้วย OSRM และค้นหาสถานที่ด้วย OpenStreetMap (ต้นทางและปลายทางที่พิมพ์จะถูกส่งไปยังบริการเหล่านั้น) ผลเป็นการประเมินคร่าวๆ ไม่ได้รับประกันว่าผ่านได้ ถ้าไม่แน่ใจโทร 1784 หรือ 191</p>
   </div>
 </div>
@@ -859,8 +860,15 @@ $("chips").addEventListener("click",function(e){
   var f = b.getAttribute("data-f"); filter = (filter===f) ? null : f;
   redraw();
 });
+function deselect(){   // forget the open station and take ?station= out of the address so the page and the link agree
+  var prev = sel; sel = null;
+  if(prev && markers[prev] && byId[prev]){ markers[prev].setIcon(icon(view(byId[prev]),false)); markers[prev].setZIndexOffset(Z[view(byId[prev]).status]||0); }
+  $("detail").hidden = true;
+  try{ var u = new URL(location.href); u.searchParams.delete("station"); history.replaceState(null,"",u); }catch(e){}
+}
 $("prov").addEventListener("change",function(e){
   province = e.target.value;
+  if(sel && province && byId[sel] && byId[sel].province!==province) deselect();   // the open station is outside the newly chosen province
   if(origin && origin.kind==="area") setOrigin(null);
   resetReplay(); redraw(); showProvince(true); updateRepLink(); syncAreaPills();
 });
@@ -1133,6 +1141,12 @@ loadReports(); setInterval(loadReports, 60000);
 var ROUTER = "https://router.project-osrm.org";
 var RT_STATION_KM = 1.0, RT_REPORT_KM = 0.3;
 var rtLayer = L.layerGroup().addTo(map), rtFromPt = null, rtRoutes = null, rtSel = 0, rtNames = null;
+function rtClear(){   // remove the drawn route, its card and the typed places so the next check starts clean
+  rtLayer.clearLayers(); rtRoutes = null; rtFromPt = null;
+  var c = $("routeCard"); c.hidden = true; c.innerHTML = "";
+  $("rtFrom").value = ""; $("rtTo").value = ""; $("rtErr").hidden = true;
+  if(typeof syncQuick==="function") syncQuick();
+}
 function rtOpen(){ $("rt").hidden = false; closeLayers(); $("rtErr").hidden = true; $("rtTo").focus(); }
 function rtClose(){ $("rt").hidden = true; }
 function rtFail(msg){ $("rtErr").hidden = false; $("rtErr").textContent = msg; $("rtGo").disabled = false; $("rtGo").textContent = "ตรวจเส้นทาง"; }
@@ -1201,7 +1215,7 @@ function rtCard(){
       '<div class="note">'+ev.km.toFixed(0)+' กม. · ประมาณ '+ev.min+' นาที</div>')+
     (ev.pts.length ? '<ul class="rtpts" style="margin-top:8px">'+ev.pts.slice(0,10).map(function(p){ return '<li><span>'+esc(p.name)+'</span><small>ที่ ~'+p.at.toFixed(0)+' กม.</small></li>'; }).join("")+'</ul>' : "")+
     '<p class="note">ตรวจเฉพาะรายงานผู้ใช้และสถานีวัดน้ำ ยังไม่รวมพื้นที่น้ำท่วมจากดาวเทียม (ดูได้ที่ชั้นแผนที่) ไม่ใช่ประกาศทางการ โทร 1784</p>';
-  $("rtClear").addEventListener("click",function(){ rtLayer.clearLayers(); c.hidden = true; c.innerHTML = ""; rtRoutes = null; });
+  $("rtClear").addEventListener("click", rtClear);
   Array.prototype.forEach.call(c.querySelectorAll(".rtopt"),function(b){ b.addEventListener("click",function(){ rtSel = +b.getAttribute("data-i"); rtDraw(); rtCard(); }); });
 }
 function rtRun(a, b){
@@ -1212,11 +1226,12 @@ function rtRun(a, b){
       rtRoutes = j.routes.slice(0,3).map(rtEvaluate).sort(function(x,y){ return x.score-y.score || x.min-y.min; });
       rtSel = 0; rtDraw(); rtCard();
       map.fitBounds(L.latLngBounds(rtRoutes[0].route.geometry.coordinates.map(function(c){return [c[1],c[0]];})), Object.assign({maxZoom:13}, fitPad()));
-      revealInSheet($("routeCard"));
+      revealInSheet($("routeCard")); syncQuick();
     });
 }
 $("btnRoute").addEventListener("click", rtOpen);
 $("rtCancel").addEventListener("click", rtClose);
+$("rtReset").addEventListener("click", function(){ rtClear(); $("rtFrom").focus(); });
 $("rt").addEventListener("click", function(e){ if(e.target===$("rt")) rtClose(); });
 document.addEventListener("keydown",function(e){ if(e.key==="Escape" && !$("rt").hidden) rtClose(); });
 $("rtFrom").addEventListener("input", function(){ rtFromPt = null; });
@@ -1274,12 +1289,14 @@ $("tam").addEventListener("change", function(){
 /* ---------- quick layer chips (mirror the checkboxes in the layers panel) ---------- */
 var QUICK = [["chkFlood","🛰","ดาวเทียม","น้ำท่วมจากดาวเทียม"],["chkRadar","🌧","ฝน","เรดาร์ฝน"],["chkShl","🏠","พักพิง","ศูนย์พักพิง"]];
 function syncQuick(){
-  $("qchips").innerHTML = QUICK.filter(function(q){ return q[0]!=="chkFlood" || !$("floodBox").hidden; }).map(function(q){
+  var clr = rtRoutes ? '<button type="button" class="chip qc clr" data-clear="route" title="ลบเส้นทางที่ตรวจไว้ออกจากแผนที่">✕ ล้างเส้นทาง</button>' : "";
+  $("qchips").innerHTML = clr + QUICK.filter(function(q){ return q[0]!=="chkFlood" || !$("floodBox").hidden; }).map(function(q){
     return '<button type="button" class="chip qc" data-q="'+q[0]+'" aria-pressed="'+$(q[0]).checked+'" aria-label="ชั้นแผนที่: '+q[3]+'" title="เปิด/ปิดชั้นแผนที่: '+q[3]+'"><span aria-hidden="true">'+q[1]+'</span>'+q[2]+'</button>';
   }).join("");
 }
 $("qchips").addEventListener("click",function(e){
   var b = e.target.closest ? e.target.closest(".qc") : null; if(!b) return;
+  if(b.getAttribute("data-clear")==="route"){ rtClear(); return; }
   var c = $(b.getAttribute("data-q")); c.checked = !c.checked; c.dispatchEvent(new Event("change"));
 });
 QUICK.forEach(function(q){ $(q[0]).addEventListener("change", syncQuick); });
