@@ -24,6 +24,7 @@ def test_every_screen_meets_wcag_aa_contrast(browser, site, scheme, phone):
         found[name] = failing(page)
 
     open_page(page, site, "/pathumthani")
+    page.wait_for_selector("#lineCta:not([hidden])", timeout=15000)       # the "add the LINE bot" card is part of the page in production
     page.wait_for_timeout(2000)                                  # rain card, shelters etc. settle
     check("province")
     page.evaluate("document.querySelector('#resList .row').click()")

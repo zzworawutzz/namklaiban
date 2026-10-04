@@ -110,6 +110,7 @@ def stub_outside_world(context):
     context.route("**/api.rainviewer.com/**", lambda r: r.fulfill(status=200, content_type="application/json", body='{"host":"https://tilecache.invalid","radar":{"past":[{"path":"/v2/radar/1","time":1}]}}'))
     context.route("**/tilecache.invalid/**", lambda r: r.abort())
     context.route("**/api.open-meteo.com/**", lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps(fake_forecast())))
+    context.route("**/api/line/add-friend", lambda r: r.fulfill(status=200, content_type="application/json", body='{"url":"https://line.me/R/ti/p/%40test"}'))   # production has the LINE button; the test server has no bot
     context.route("**/nominatim.openstreetmap.org/**", lambda r: r.fulfill(status=200, content_type="application/json", body="[]"))
 
 
