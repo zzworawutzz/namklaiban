@@ -13,6 +13,11 @@
 <script>
 /* Start fetching the stations right now, while the map libraries download; the app picks this request up (getJSON). */
 (function(){ try{
+  /* The emergency numbers and the footer sit at the bottom of the panel; keep them out of the layout until the cards above
+     have appeared (so they are not pushed down in front of the reader), but never longer than 3 s even if scripts fail. */
+  var de = document.documentElement; de.classList.add("booting");
+  window.__unboot = function(){ de.classList.remove("booting"); };
+  setTimeout(window.__unboot, 3000);
   if(location.protocol==="file:" || new URLSearchParams(location.search).get("api")) return;
   window.__stations = fetch("/stations").then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); });
   window.__stations.catch(function(){});
@@ -220,6 +225,7 @@ h2{font-size:16px;margin:0 0 8px;font-weight:600}
 #sheet{position:fixed;z-index:900;background:var(--bg);box-shadow:var(--shadow);border:1px solid var(--line);display:flex;flex-direction:column}
 #grab{flex:none;height:28px;display:grid;place-items:center;touch-action:none;cursor:grab;border:0;background:transparent;width:100%}
 #grab span{width:42px;height:5px;border-radius:3px;background:var(--line)}
+html.booting #emergency, html.booting #foot{display:none}
 #sumBody{min-height:210px}   /* the card is about this tall once filled: reserve it so nothing below jumps */
 .oneline{min-height:2.8em}
 #sheetBody{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:4px 14px 24px;position:relative;scroll-behavior:smooth}
@@ -249,7 +255,7 @@ h2{font-size:16px;margin:0 0 8px;font-weight:600}
 .shbox h3{font-size:14px;margin:0 0 4px}.shbox .nm{font-weight:600}.shbox small{display:block;color:var(--muted);font-size:13px}
 .shbox .acts{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}.shbox .acts a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:inherit;text-decoration:none;font-weight:600}
 .seg{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 8px}.seg .btn{font-size:13px;padding:6px 12px}.seg .btn[disabled]{opacity:.5}
-.oneline{font-size:15px;font-weight:600;margin:8px 0 0;line-height:1.4}
+.oneline{font-size:14px;font-weight:600;margin:8px 0 0;line-height:1.4}
 .cmpbtn{margin:-2px 0 6px 0;font-size:13px;padding:4px 12px;min-height:36px}
 .cmp h2{margin-top:14px}.cmp .lg{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;margin:4px 0}.cmp .lg i{display:inline-block;width:14px;height:4px;border-radius:2px;vertical-align:middle;margin-right:5px}
 .fast{margin-top:12px}.fast h3{font-size:14px;margin:0 0 6px}
@@ -708,6 +714,8 @@ function oneLineText(list){
   return "วันนี้ "+(province ? "จ."+province : "ทั้งประเทศ")+": "+bits.join(" · ");
 }
 function drawOneLine(){ var el = $("oneLine"); if(el) el.textContent = oneLineText(stations.filter(inProv)); }
+var bootTimer = null;   // reveal the bottom of the panel shortly after the first data has been drawn
+function endBoot(){ clearTimeout(bootTimer); bootTimer = setTimeout(function(){ if(window.__unboot) window.__unboot(); }, 600); }
 function drawSummary(){
   var k = counts(), c = k.c, list = stations.filter(inProv);
   $("sumTitle").textContent = province ? "จ."+province : "ทั้งประเทศ";
@@ -731,7 +739,7 @@ function drawSummary(){
   $("sumBody").innerHTML = '<div class="oneline" id="oneLine"></div><div class="verdict" style="--vc:'+COLOR[kind]+'"><div class="vh" style="color:'+COLOR[kind]+'">'+esc(head)+'</div>'+line2+
     (bits.length ? '<div class="vm">'+esc(bits.join(" · "))+'</div>' : "")+
     '<div class="vn">% ของตลิ่ง = ระดับน้ำเทียบกับความสูงตลิ่ง 100% คือน้ำเสมอตลิ่ง</div></div>'+fastHtml(list);
-  drawOneLine();
+  drawOneLine(); endBoot();
 }
 function fastHtml(list){
   var f = fastRisers(list); if(!f.length) return "";
