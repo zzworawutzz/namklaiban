@@ -27,6 +27,7 @@ import core
 import ews
 import db
 import floodreports
+import gauges
 import ingest
 import line_webhook
 import notify
@@ -186,6 +187,22 @@ def flood_reports_flag(report_id: int, request: Request):
         if not floodreports.flag(c, report_id, client_id(request)):
             raise HTTPException(404, "ไม่พบรายงานนี้")
     return {"ok": True}
+
+
+@app.get("/api/rain")
+def rain_gauges(response: Response, province: Optional[str] = None,
+                lat: Optional[float] = Query(None, ge=-90, le=90), lng: Optional[float] = Query(None, ge=-180, le=180),
+                limit: int = Query(3, ge=1, le=10)):
+    """Rain measured by gauges over the last 24 h (ThaiWater): a province summary, or the gauges nearest to lat/lng."""
+    if province is None and (lat is None or lng is None):
+        raise HTTPException(422, "give province, or lat and lng")
+    rows = gauges.get()
+    if rows is None:
+        raise HTTPException(503, "สถานีวัดฝนไม่พร้อมให้บริการตอนนี้")
+    response.headers["Cache-Control"] = "public, max-age=300, s-maxage=600, stale-while-revalidate=600"
+    if province is not None:
+        return gauges.for_province(rows, province) or {"stations": 0}
+    return {"nearby": gauges.nearest(rows, lat, lng, limit)}
 
 
 @app.get("/api/shelters")

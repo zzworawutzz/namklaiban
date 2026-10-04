@@ -38,6 +38,14 @@ def _fresh_rate_limiter(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_real_rain_gauges(monkeypatch):
+    """Tests never call ThaiWater's rain feed: no gauges unless a test supplies some."""
+    import gauges
+    gauges._cache.update(at=0.0, rows=None)
+    monkeypatch.setattr(gauges, "fetch", lambda: {"data": []})
+
+
+@pytest.fixture(autouse=True)
 def _no_real_rain_forecast(monkeypatch):
     """Tests never call Open-Meteo: dry forecast by default, and a fresh cache per test."""
     import rainalert

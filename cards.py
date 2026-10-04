@@ -83,6 +83,9 @@ def digest_card(rep, when_text, url=None):
     if rep.get("rain"):
         import rainalert
         body.append(_text(rainalert.line(rep["rain"]), size="xs", color=COLORS["watch"], weight="bold"))
+    if rep.get("gauge"):
+        import gauges
+        body.append(_text(gauges.line(rep["gauge"]), size="xs", color=COLORS["watch"], weight="bold"))
     if rep.get("top"):
         body.append(_text("น้ำสูงสุด", size="sm", weight="bold", margin="md"))
         for r in rep["top"][:5]:

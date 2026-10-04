@@ -136,6 +136,9 @@ def digest_text(rep, at, url=None):
     if rep.get("rain"):
         import rainalert
         lines.append(rainalert.line(rep["rain"]))
+    if rep.get("gauge"):
+        import gauges
+        lines.append(gauges.line(rep["gauge"]))
     if rep["top"]:
         lines.append("น้ำสูงสุด:")
         for i, r in enumerate(rep["top"][:TEXT_TOP], 1):
