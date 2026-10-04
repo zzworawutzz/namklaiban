@@ -1080,7 +1080,7 @@ function loadRain(){
   var key = pt.lat.toFixed(1)+","+pt.lng.toFixed(1), hit = rainCache[key];
   if(hit && Date.now()-hit.t < 30*60000){ drawRain(hit.j, pt); return; }
   fetch("https://api.open-meteo.com/v1/forecast?latitude="+pt.lat.toFixed(3)+"&longitude="+pt.lng.toFixed(3)+
-        "&hourly=precipitation,precipitation_probability&daily=precipitation_sum,precipitation_probability_max&timezone=Asia%2FBangkok&forecast_days=3")
+        "&hourly=precipitation,precipitation_probability&daily=precipitation_sum,precipitation_probability_max&timezone=Asia%2FBangkok&forecast_days=3&past_hours=24")
     .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
     .then(function(j){ if(my!==rainSeq) return; rainCache[key] = {t:Date.now(), j:j}; drawRain(j, pt); })
     .catch(function(e){ console.warn("rain forecast:", e); if(my===rainSeq) card.hidden = true; });
@@ -1089,6 +1089,7 @@ function drawRain(j, pt){
   var card = $("rainCard"), H = j.hourly, now = new Date().toLocaleString("sv-SE",{timeZone:"Asia/Bangkok"}).slice(0,13).replace(" ","T")+":00";
   var i0 = Math.max(0, H.time.indexOf(now)), mm = H.precipitation.slice(i0, i0+24), pr = H.precipitation_probability.slice(i0, i0+24);
   if(mm.length<6){ card.hidden = true; return; }
+  var past = i0>=24 ? H.precipitation.slice(i0-24, i0).reduce(function(a,b){return a+(b||0);},0) : null;   // rain that already fell (model analysis, not a gauge)
   var total = mm.reduce(function(a,b){return a+(b||0);},0), pmax = Math.max.apply(null, pr.map(function(x){return x||0;}));
   var peak = mm.indexOf(Math.max.apply(null, mm)), mx = Math.max(2, Math.max.apply(null, mm));
   var W = 300, Hh = 64, bw = W/mm.length, bars = mm.map(function(v,i){
@@ -1099,10 +1100,11 @@ function drawRain(j, pt){
   var D = j.daily, names = ["วันนี้","พรุ่งนี้","มะรืนนี้"];
   card.innerHTML = '<div class="eyebrow">พยากรณ์ฝน · '+esc(pt.name)+'</div>'+
     '<div class="big">'+total.toFixed(0)+' มม. <small>ใน 24 ชม. · '+rainClass(total)+' · โอกาสฝนสูงสุด '+pmax+'%</small></div>'+
+    (past!==null ? '<div class="note" style="margin:2px 0">ที่ผ่านมา 24 ชม. ตกไปแล้ว ~'+past.toFixed(0)+' มม. ('+rainClass(past)+')</div>' : "")+
     (total>=0.5 ? '<div class="note" style="margin:2px 0">ช่วงที่ฝนแรงสุด ~'+H.time[i0+peak].slice(11,16)+' น. ('+mm[peak].toFixed(1)+' มม./ชม.)</div>' : '<div class="note" style="margin:2px 0">ช่วง 24 ชม. ข้างหน้าแทบไม่มีฝน</div>')+
     '<svg viewBox="0 0 '+W+' '+Hh+'" role="img" aria-label="ปริมาณฝนรายชั่วโมงใน 24 ชั่วโมงข้างหน้า">'+bars+ticks+'</svg>'+
     '<div class="days">'+D.time.map(function(d,i){ return '<div class="day">'+names[i]+'<b>'+(D.precipitation_sum[i]||0).toFixed(0)+' มม.</b><span class="note">โอกาส '+(D.precipitation_probability_max[i]||0)+'%</span></div>'; }).join("")+'</div>'+
-    '<p class="note">ข้อมูลพยากรณ์จาก <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> เป็นผลจากแบบจำลอง ไม่ใช่ประกาศของกรมอุตุนิยมวิทยา ตำแหน่งที่ใช้ดึงพยากรณ์จะถูกส่งไปยังบริการนี้</p>';
+    '<p class="note">ข้อมูลพยากรณ์และฝนที่ผ่านมาจาก <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> เป็นผลจากแบบจำลอง ไม่ใช่เครื่องวัดฝนจริง ไม่ใช่ประกาศของกรมอุตุนิยมวิทยา ตำแหน่งที่ใช้ดึงพยากรณ์จะถูกส่งไปยังบริการนี้</p>';
   card.hidden = false;
 }
 
