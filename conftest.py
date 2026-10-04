@@ -27,3 +27,11 @@ def _no_ambient_database(monkeypatch):
     """Tests use SQLite unless they opt in; never touch a DATABASE_URL from the shell."""
     for k in ("DATABASE_URL", "POSTGRES_URL", "CRON_SECRET", "VERCEL"):
         monkeypatch.delenv(k, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_rain_forecast(monkeypatch):
+    """Tests never call Open-Meteo: dry forecast by default, and a fresh cache per test."""
+    import rainalert
+    rainalert._cache.clear()
+    monkeypatch.setattr(rainalert, "fetch", lambda lat, lng: {"hourly": {"precipitation": [0.0] * 24}})

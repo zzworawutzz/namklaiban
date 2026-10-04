@@ -132,6 +132,9 @@ def digest_text(rep, at, url=None):
     if rep["over_bank"]:
         new = f" (ล้นตลิ่งใหม่ใน 24 ชม. {len(rep['newly_over_bank'])})" if rep["newly_over_bank"] else ""
         lines.append(f"ล้นตลิ่งแล้ว {rep['over_bank']} สถานี{new}")
+    if rep.get("rain"):
+        import rainalert
+        lines.append(rainalert.line(rep["rain"]))
     if rep["top"]:
         lines.append("น้ำสูงสุด:")
         for i, r in enumerate(rep["top"][:TEXT_TOP], 1):

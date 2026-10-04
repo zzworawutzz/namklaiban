@@ -78,6 +78,9 @@ def digest_card(rep, when_text, url=None):
     if rep.get("stale"):
         notes.append(f"ข้อมูลค้าง {rep['stale']} สถานี")
     body += [_text(n, size="xs", color=MUTED) for n in notes]
+    if rep.get("rain"):
+        import rainalert
+        body.append(_text(rainalert.line(rep["rain"]), size="xs", color=COLORS["watch"], weight="bold"))
     if rep.get("top"):
         body.append(_text("น้ำสูงสุด", size="sm", weight="bold", margin="md"))
         for r in rep["top"][:5]:

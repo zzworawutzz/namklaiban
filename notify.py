@@ -27,6 +27,7 @@ import cards
 import core
 import floodreports
 import db
+import rainalert
 import report
 from ingest import TZ_TH, init_db, utc_now
 
@@ -324,6 +325,8 @@ def run_digest(conn, at=None, senders=SENDERS):
             continue
         if prov not in cache:
             cache[prov] = report.build(conn, prov, at, rows=rows)
+            if cache[prov] is not None:
+                cache[prov]["rain"] = rainalert.for_province(rows, prov)   # one forecast per province, None unless heavy
         rep = cache[prov]
         try:
             if rep is None:
