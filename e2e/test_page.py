@@ -230,18 +230,33 @@ def test_rain_card_shows_what_the_gauges_measured_next_to_the_forecast(page, sit
     assert page.eval_on_selector("#gaugeLine", "e => getComputedStyle(e).display") == "block"
 
 
-def test_a_gps_position_shows_nearby_gauges_and_the_ground_height_against_the_stations_water_level(context, site):
+def test_gps_near_an_alert_station_shows_the_ground_height_but_never_compares_it_with_the_water(context, site):
     context.grant_permissions(["geolocation"])
-    context.set_geolocation({"latitude": 14.031, "longitude": 100.731})              # next to station A (alert, water about 2.4 m)
+    context.set_geolocation({"latitude": 14.031, "longitude": 100.731})              # next to station A, which is at alert level
     page = context.new_page()
     errors = watch(page)
     open_page(page, site)
     page.evaluate("document.getElementById('btnMe').click()")
     page.wait_for_selector("#elevBox b", timeout=20000)
     elev = page.inner_text("#elevBox")
-    assert "≈ 2.6 ม.รทก." in elev and "ท่าช้าง" in elev
-    assert any(w in elev for w in ("ใกล้เคียง", "ต่ำกว่า", "สูงกว่า")), elev
-    assert "ไม่ได้บอกว่าจะท่วมหรือไม่ท่วม" in elev                                     # never presented as a flood verdict
+    assert "≈ 2.6 ม.รทก." in elev
+    assert not any(w in elev for w in ("สูงกว่า", "ต่ำกว่า", "ใกล้เคียง", "ระดับน้ำที่สถานี")), elev   # no "you are above the water" next to an alert
+    assert "ระดับเตือนภัย" in elev and "ไม่นำมาเทียบกับระดับน้ำ" in elev and "1784" in elev
+    assert "ไม่ได้บอกว่าจะท่วมหรือไม่ท่วม" in elev
     until(page, "document.getElementById('gaugeLine') && document.getElementById('gaugeLine').innerText.includes('ปตร.ทดสอบ')")
     assert "2.4 กม." in page.inner_text("#gaugeLine")
+    assert not errors
+
+
+def test_gps_near_a_normal_station_compares_the_ground_height_with_its_water_level(context, site):
+    context.grant_permissions(["geolocation"])
+    context.set_geolocation({"latitude": 14.201, "longitude": 100.501})              # next to station C (normal, water about 0.3 m)
+    page = context.new_page()
+    errors = watch(page)
+    open_page(page, site)
+    page.evaluate("document.getElementById('btnMe').click()")
+    page.wait_for_selector("#elevBox b", timeout=20000)
+    elev = page.inner_text("#elevBox")
+    assert "คลองหลวง" in elev and "สูงกว่าระดับน้ำที่สถานี" in elev, elev
+    assert "ไม่ได้บอกว่าจะท่วมหรือไม่ท่วม" in elev
     assert not errors
