@@ -83,3 +83,12 @@ def test_app_files_are_versioned_and_match_the_service_worker():
     for f in (f"app.css?v={version}", f"app.js?v={version}"):
         assert f in sw, f                                                         # precached, so the page opens offline
     assert "<style>" not in html and html.count("<script>") == 1                  # only the small head script is inline
+
+
+def test_map_libraries_from_the_cdn_are_pinned_with_integrity_hashes():
+    html = _public("index.html")
+    tags = re.findall(r'<(?:script|link)[^>]*cdnjs\.cloudflare\.com[^>]*>', html)
+    tags = [t for t in tags if "preconnect" not in t]
+    assert len(tags) == 4, tags                                                    # leaflet js+css, markercluster js+css
+    for t in tags:
+        assert re.search(r'integrity="sha384-[A-Za-z0-9+/]{64}"', t) and 'crossorigin="anonymous"' in t, t
