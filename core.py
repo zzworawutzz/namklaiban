@@ -12,6 +12,11 @@ TREND_FLAT = 0.5       # |%/hour| below this counts as steady
 ETA_MAX_H = 48
 RELATED_KM = 150
 COLOCATED_KM = 0.5     # same site reported by another agency (e.g. RID vs EGAT)
+FAST_HOURS = 3         # "rising fast" looks at the last few hours, in metres
+FAST_MIN_RISE_M = 0.30
+FAST_MIN_POINTS, FAST_MIN_SPAN_H = 3, 1.5
+SPIKE_STEP_M = 2.0     # a jump this big between two readings is a sensor glitch, not a flood wave
+SPIKE_TOTAL_M = 3.0
 RANK = {"unknown": 0, "normal": 1, "watch": 2, "alert": 3}
 
 LATEST = """
@@ -79,7 +84,19 @@ def advice(d):
     return "ระดับน้ำปกติ" if not rising else "ระดับน้ำปกติแต่กำลังสูงขึ้น ติดตามต่อเนื่อง"
 
 
-def shape(r, at, points=None):
+def rise_of(levels):
+    """levels: [(datetime, metres)] oldest first -> (rise_m, suspect). rise_m is None when there is too
+    little data; suspect is True when the series jumps like a faulty sensor (rise_m is then None too)."""
+    if len(levels) < FAST_MIN_POINTS or (levels[-1][0] - levels[0][0]).total_seconds() / 3600 < FAST_MIN_SPAN_H:
+        return None, False
+    steps = [b[1] - a[1] for a, b in zip(levels, levels[1:])]
+    total = levels[-1][1] - levels[0][1]
+    if any(abs(x) > SPIKE_STEP_M for x in steps) or abs(total) > SPIKE_TOTAL_M:
+        return None, True
+    return round(total, 2), False
+
+
+def shape(r, at, points=None, levels=None):
     d = dict(r)
     d["watch_pct"] = d["watch_pct"] if d.get("watch_pct") is not None else WATCH_PCT
     d["alert_pct"] = d["alert_pct"] if d.get("alert_pct") is not None else ALERT_PCT
@@ -90,6 +107,7 @@ def shape(r, at, points=None):
         d["status"], d["age_min"], d["stale"] = "unknown", None, True
     d["status"] = d["status"] or "unknown"
     d["trend"], d["trend_pct_per_hr"] = (None, None) if d["stale"] else trend_of(points or [])
+    d["rise_3h_m"], d["rise_suspect"] = (None, False) if d["stale"] else rise_of(levels or [])
     d["eta_to_bank_h"] = eta_to_bank_h(d["pct_of_bank"], d["trend_pct_per_hr"])
     d["advice"] = advice(d)
     return d
@@ -105,6 +123,29 @@ def recent_points(conn, at, hours=TREND_HOURS):
     return out
 
 
+def recent_levels(conn, at, hours=FAST_HOURS):
+    since = iso(at - timedelta(hours=hours))
+    out = {}
+    for r in conn.execute(
+            "SELECT station_id, ts, water_level FROM readings "
+            "WHERE ts >= ? AND water_level IS NOT NULL ORDER BY station_id, ts", (since,)):
+        out.setdefault(r["station_id"], []).append((parse(r["ts"]), r["water_level"]))
+    return out
+
+
+def fast_risers(rows, limit=5):
+    """Stations whose water rose the most over the last FAST_HOURS, even if still far below the bank.
+    One entry per site (twins reported by two agencies count once)."""
+    best = {}
+    for r in rows:
+        if r.get("rise_3h_m") is None or r["rise_3h_m"] < FAST_MIN_RISE_M:
+            continue
+        key = (round(r["lat"], 2), round(r["lng"], 2))
+        if key not in best or r["rise_3h_m"] > best[key]["rise_3h_m"]:
+            best[key] = r
+    return sorted(best.values(), key=lambda r: -r["rise_3h_m"])[:limit]
+
+
 def latest(conn, at, province=None, status=None):
     sql, args, where = LATEST, [], []
     if province:
@@ -115,8 +156,8 @@ def latest(conn, at, province=None, status=None):
         args.append(status)
     if where:
         sql += " WHERE " + " AND ".join(where)
-    pts = recent_points(conn, at)
-    return attach_twins([shape(r, at, pts.get(r["id"])) for r in conn.execute(sql, args)])
+    pts, lv = recent_points(conn, at), recent_levels(conn, at)
+    return attach_twins([shape(r, at, pts.get(r["id"]), lv.get(r["id"])) for r in conn.execute(sql, args)])
 
 
 def attach_twins(rows):

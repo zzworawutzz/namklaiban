@@ -127,3 +127,20 @@ def test_twin_conflict_flagged_but_statuses_untouched():
     assert by["a"]["twin_conflict"] and by["b"]["twin_conflict"] and by["a"]["status"] == "alert"
     assert by["c"]["twins"] == [] and not by["c"]["twin_conflict"]
     assert by["e"]["twins"][0]["id"] == "f" and not by["e"]["twin_conflict"]  # twins agree
+
+
+def test_rise_of_needs_enough_clean_data():
+    from datetime import datetime, timedelta, timezone
+    t0 = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    lv = lambda *v: [(t0 + timedelta(minutes=30 * i), x) for i, x in enumerate(v)]
+    assert core.rise_of(lv(1.0, 1.2, 1.5, 1.7)) == (0.7, False)
+    assert core.rise_of(lv(1.0, 1.4)) == (None, False)            # two points: not enough
+    assert core.rise_of(lv(1.0, 1.1, 1.2)) == (None, False)       # span of one hour: too short
+    assert core.rise_of(lv(1.0, 1.1, 4.5, 4.6)) == (None, True)   # 3.4 m step: sensor glitch
+    assert core.rise_of(lv(5.0, 4.0, 3.0, 2.5)) == (-2.5, False)  # falling is fine, just not "fast rising"
+
+
+def test_fast_risers_ranks_by_metres_and_skips_duplicates():
+    mk = lambda i, rise, lat=14.0: {"id": i, "lat": lat, "lng": 100.0 + len(i), "rise_3h_m": rise}
+    rows = [mk("a", 0.5), mk("bb", 0.9), mk("ccc", 0.2), mk("dddd", None), {**mk("ee", 0.4), "lng": 100.0 + 2}]  # "ee" shares bb's site
+    assert [r["id"] for r in core.fast_risers(rows)] == ["bb", "a"]

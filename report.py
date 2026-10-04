@@ -115,6 +115,7 @@ def build(conn, province, at, days=14, rows=None):
            "over_bank": sum(1 for r in prov if (r["pct_of_bank"] or 0) >= 100),
            "newly_over_bank": newly_over, "delta_24h": delta,
            "top": [_brief(r) for r in by_pct[:TOP_N]], "rising": [_brief(r) for r in rising[:5]],
+           "fast": [{**_brief(r), "rise_3h_m": r["rise_3h_m"]} for r in core.fast_risers(prov, 5)],
            "series": series}
     rep["text"] = digest_text(rep, at)
     return rep
@@ -139,9 +140,8 @@ def digest_text(rep, at, url=None):
         lines.append("น้ำสูงสุด:")
         for i, r in enumerate(rep["top"][:TEXT_TOP], 1):
             lines.append(f"{i}. {r['name']} {round(r['pct_of_bank'])}% {SQUARE.get(r['status'], '')}{ARROW.get(r['trend'], '')}".rstrip())
-    if rep["rising"]:
-        lines.append("กำลังสูงขึ้นเร็ว: " + ", ".join(
-            f"{r['name']} {r['trend_pct_per_hr']:+.1f}%/ชม." for r in rep["rising"][:3]))
+    if rep.get("fast"):
+        lines.append("น้ำขึ้นเร็วใน 3 ชม.: " + ", ".join(f"{r['name']} +{r['rise_3h_m']:.2f} ม." for r in rep["fast"][:3]))
     if url:
         lines.append(url)
     lines.append("ข้อมูลจาก ThaiWater ใช้ประกอบการตัดสินใจเท่านั้น ให้ยึดประกาศ ปภ. (1784) เป็นหลัก")

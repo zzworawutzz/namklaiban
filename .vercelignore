@@ -1,1 +1,15 @@
-
+.venv
+.pytest_cache
+__pycache__
+.github
+raw.json
+*.db
+test_*.py
+conftest.py
+requirements-dev.txt
+Dockerfile
+run.sh
+.dockerignore
+.DS_Store
+richmenu
+smoke_check.py

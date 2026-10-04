@@ -17,12 +17,12 @@ def seed(conn, extra_provinces=()):
     for sid, name, prov, lat, lng in stations:
         conn.execute("INSERT INTO stations(id,name,province,lat,lng) VALUES(?,?,?,?,?)", (sid, name, prov, lat, lng))
 
-    def add(sid, hours_ago, pct):
+    def add(sid, hours_ago, pct, level=1.0):
         ts = core.iso(AT - timedelta(hours=hours_ago, minutes=30 if hours_ago == 0 else 0))
-        conn.execute("INSERT INTO readings VALUES(?,?,?,?,?)", (sid, ts, 1.0, pct, ig.status_of(pct)))
+        conn.execute("INSERT INTO readings VALUES(?,?,?,?,?)", (sid, ts, level, pct, ig.status_of(pct)))
 
     for h in range(0, 49):  # hourly for two days
-        add("A", h, 120 - h * 1.6)      # 120 now, 81.6 a day ago (watch), rising 1.6%/h
+        add("A", h, 120 - h * 1.6, 10 - h * 0.12)   # 120 now, 81.6 a day ago (watch), rising 1.6%/h = 0.12 m/h
         add("B", h, 75)
         add("C", h, 30)
         add("D", h, 50)
@@ -58,7 +58,7 @@ def test_delta_vs_yesterday_counts_stations_that_crossed(conn):
 def test_text_has_headline_delta_and_top(conn):
     text = report.build(conn, PROV, AT)["text"]
     for part in ("สรุปสถานการณ์น้ำ จ.พระนครศรีอยุธยา", "2 ต.ค. 2569 07:30 น.", "เตือนภัย 1", "ล้นตลิ่งแล้ว 1",
-                 "1. สะพานหัวเวียง 120%", "กำลังสูงขึ้นเร็ว", "1784"):
+                 "1. สะพานหัวเวียง 120%", "น้ำขึ้นเร็วใน 3 ชม.: สะพานหัวเวียง +0.3", "1784"):
         assert part in text, part
     assert "เทียบ 24 ชม. ก่อน" in text and len(text) < 4000
 
@@ -173,3 +173,19 @@ def test_init_db_adds_digest_columns_to_old_sqlite(tmp_path):
     ig.init_db(c)
     row = c.execute("SELECT digest, last_digest FROM subscriptions").fetchone()
     assert row["digest"] == 1 and row["last_digest"] is None  # existing subscribers keep getting the report
+
+
+def test_fast_risers_in_report_and_stations(conn):
+    rep = report.build(conn, PROV, AT)
+    assert [r["id"] for r in rep["fast"]] == ["A"] and 0.3 <= rep["fast"][0]["rise_3h_m"] <= 0.4
+    rows = {r["id"]: r for r in core.latest(conn, AT)}
+    assert rows["A"]["rise_3h_m"] > 0.3 and rows["B"]["rise_3h_m"] == 0 and not rows["A"]["rise_suspect"]
+
+
+def test_sensor_glitch_is_not_reported_as_fast_rise(conn):
+    conn.execute("UPDATE readings SET water_level = water_level + 5 WHERE station_id='B' AND ts >= ?",
+                 (core.iso(AT - timedelta(hours=1)),))   # +5 m in one step
+    conn.commit()
+    row = {r["id"]: r for r in core.latest(conn, AT)}["B"]
+    assert row["rise_3h_m"] is None and row["rise_suspect"] is True
+    assert "B" not in [r["id"] for r in report.build(conn, PROV, AT)["fast"]]
