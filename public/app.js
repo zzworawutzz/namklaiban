@@ -485,12 +485,14 @@ function loadElevation(o, s, d){
   function show(e){
     var b = $("elevBox"); if(!b || origin!==o) return;
     var h = '<b>ความสูงของพื้นที่ตรงนี้ ≈ '+e.toFixed(1)+' ม.รทก.</b> <small>(ประมาณจากแผนที่ความสูง ละเอียดราว 90 ม.)</small>';
-    if(s.water_level!=null && !s.stale && d<=15){
+    if(s.status==="watch" || s.status==="alert"){   // near a station that is already high: never set the ground height beside the water level
+      h += '<div class="note" style="margin:4px 0 0">สถานีใกล้บ้านอยู่ระดับ'+esc(LABEL[s.status])+' จึงแสดงเฉพาะความสูงของพื้นที่ ไม่นำมาเทียบกับระดับน้ำ ให้ดูสถานการณ์จากสถานีและประกาศของ ปภ. (1784)</div>';
+    } else if(s.water_level!=null && !s.stale && d<=15){
       var diff = e - s.water_level, a = Math.abs(diff).toFixed(1), cls = diff<0.5 ? " warnv" : "";
       h += '<div class="'+cls.trim()+'">ระดับน้ำที่สถานี '+esc(s.name)+' (ห่าง '+(d<10 ? d.toFixed(1) : Math.round(d))+' กม.) ตอนนี้ '+s.water_level.toFixed(2)+' ม.รทก. → พื้นที่ตรงนี้ '+
            (diff>=0.5 ? 'สูงกว่าระดับน้ำที่สถานีประมาณ '+a+' ม.' : diff>-0.5 ? 'ใกล้เคียงระดับน้ำที่สถานี (ต่างกันไม่ถึง 0.5 ม.)' : 'ต่ำกว่าระดับน้ำที่สถานีประมาณ '+a+' ม.')+'</div>';
     }
-    h += '<div class="note" style="margin:4px 0 0">เป็นการเทียบตัวเลขอย่างหยาบ ไม่รวมความลาดของแม่น้ำ คันกั้นน้ำ หรือน้ำฝนที่ขังในพื้นที่ จึงไม่ได้บอกว่าจะท่วมหรือไม่ท่วม</div>';
+    h += '<div class="note" style="margin:4px 0 0">ตัวเลขความสูงเป็นค่าประมาณ ไม่รวมความลาดของแม่น้ำ คันกั้นน้ำ หรือน้ำฝนที่ขังในพื้นที่ จึงไม่ได้บอกว่าจะท่วมหรือไม่ท่วม</div>';
     b.innerHTML = h;
   }
   if(elevCache[key]!=null){ show(elevCache[key]); return; }
