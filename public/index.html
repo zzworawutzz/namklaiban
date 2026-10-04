@@ -920,7 +920,7 @@ function showProvince(fit){
   if(fit && list.length) map.fitBounds(L.latLngBounds(list.map(function(s){return [s.lat,s.lng];})),Object.assign({maxZoom:11},fitPad()));
   if(!province){ if(!origin) $("results").hidden = true; return; }
   list = list.slice().sort(function(a,b){ return (b.pct_of_bank==null?-1:b.pct_of_bank)-(a.pct_of_bank==null?-1:a.pct_of_bank); });
-  showResults("น้ำสูงสุดใน จ."+province+" (10 จาก "+list.length+" สถานี)", list.slice(0,10));
+  showResults("น้ำสูงสุดใน จ."+province+(list.length>10 ? " (10 จาก "+list.length+" สถานี)" : " ("+list.length+" สถานี)"), list.slice(0,10));
 }
 /* "data may be late" bar: the server tells us when ingest keeps failing or the source stopped sending new readings */
 var DELAY_READING_MIN = 180;
