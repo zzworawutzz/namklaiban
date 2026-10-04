@@ -51,6 +51,8 @@ def station_card(label, st, url=None):
         eta = f" · ถึงตลิ่งใน ~{st['eta_to_bank_h']} ชม." if st.get("eta_to_bank_h") else ""
         body.append(_text(f"{ARROW[st['trend']]} {rate:+.1f}%/ชม.{eta}" if rate is not None else ARROW[st["trend"]],
                           size="sm", color=color if st["trend"] == "rising" else MUTED, margin="sm"))
+    if (st.get("rise_3h_m") or 0) >= 0.3:
+        body.append(_text(f"▲ ระดับน้ำขึ้น +{st['rise_3h_m']:.2f} ม. ใน 3 ชม.", size="sm", color=color, margin="sm"))
     if st.get("twin_conflict"):
         body.append(_text("⚠ อีกหน่วยงานรายงานสถานะต่างกัน ควรตรวจกับหน่วยงานในพื้นที่", size="xs", color=COLORS["watch"]))
     body.append(_text(st.get("advice", ""), size="sm", color="#333333", margin="md"))

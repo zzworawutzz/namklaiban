@@ -144,19 +144,38 @@ def message(sub, st):
 
 EARLY_WITHIN_H = 6        # warn when the nearest station is rising and should reach the bank within this many hours
 EARLY_COOLDOWN_H = 6      # at most one early warning per subscriber per this many hours
+FAST_RISE_M = 0.5         # also warn when the nearest station rose this many metres in the last 3 hours...
+FAST_MIN_PCT = 50.0       # ...and is already at least this far up the bank (a low river that jumped is not news)
 REPORT_RADIUS_KM = 2.0    # user flood reports this close to home are worth a message...
 REPORT_MIN_CONFIRMED = 2  # ...once at least this many different people reported nearby
 REPORT_COOLDOWN_H = 3
 
 
+def fast_rise(st):
+    """True when the station's water rose FAST_RISE_M or more in 3 hours and is already well up the bank.
+    core.rise_of leaves rise_3h_m empty for sensor glitches, so a faulty jump never gets here."""
+    rise, pct = st.get("rise_3h_m"), st.get("pct_of_bank")
+    return bool(rise is not None and rise >= FAST_RISE_M and pct is not None and pct >= FAST_MIN_PCT)
+
+
 def early_message(sub, st):
     where = f" ({sub['label']})" if sub["label"] else ""
     pct = round(st["pct_of_bank"])
+    lines = [f"เตือนล่วงหน้า น้ำใกล้บ้านฉัน{where}",
+             f"สถานี {st['name']} {st['province'] or ''} (ห่าง {st['distance_km']} กม.) กำลังสูงขึ้น {st['trend_pct_per_hr']:+.1f}%/ชม.",
+             f"ตอนนี้ {pct}% ของตลิ่ง คาดถึงตลิ่งใน ~{st['eta_to_bank_h']} ชม. หากยังสูงขึ้นในอัตราเดิม"]
+    if (st.get("rise_3h_m") or 0) >= core.FAST_MIN_RISE_M:
+        lines.append(f"ระดับน้ำขึ้น +{st['rise_3h_m']:.2f} ม. ใน 3 ชม.ที่ผ่านมา")
+    return "\n".join(lines + ["ควรยกของขึ้นที่สูงและเตรียมแผนเดินทาง (ประมาณการจากแนวโน้ม ไม่ใช่ประกาศทางการ)", FOOTER])
+
+
+def fast_message(sub, st):
+    where = f" ({sub['label']})" if sub["label"] else ""
     return "\n".join([
-        f"เตือนล่วงหน้า น้ำใกล้บ้านฉัน{where}",
-        f"สถานี {st['name']} {st['province'] or ''} (ห่าง {st['distance_km']} กม.) กำลังสูงขึ้น {st['trend_pct_per_hr']:+.1f}%/ชม.",
-        f"ตอนนี้ {pct}% ของตลิ่ง คาดถึงตลิ่งใน ~{st['eta_to_bank_h']} ชม. หากยังสูงขึ้นในอัตราเดิม",
-        "ควรยกของขึ้นที่สูงและเตรียมแผนเดินทาง (ประมาณการจากแนวโน้ม ไม่ใช่ประกาศทางการ)",
+        f"เตือนน้ำขึ้นเร็ว น้ำใกล้บ้านฉัน{where}",
+        f"สถานี {st['name']} {st['province'] or ''} (ห่าง {st['distance_km']} กม.) ระดับน้ำขึ้น +{st['rise_3h_m']:.2f} ม. ใน 3 ชม.ที่ผ่านมา",
+        f"ตอนนี้ {round(st['pct_of_bank'])}% ของตลิ่ง ({LABEL[st['status']]})",
+        "ควรติดตามสถานการณ์ใกล้ชิด และเตรียมยกของขึ้นที่สูงหากยังขึ้นต่อ (ดูจากระดับน้ำจริง ไม่ใช่ประกาศทางการ)",
         FOOTER])
 
 
@@ -213,11 +232,12 @@ def run(conn, at=None, senders=SENDERS):
         if not changed:
             # 1) rising water that should reach the bank soon (the status itself has not changed yet)
             urgent = st["status"] == "alert"
-            if (st["trend"] == "rising" and st["eta_to_bank_h"] and st["eta_to_bank_h"] <= EARLY_WITHIN_H
-                    and st["status"] in ("watch", "alert") and (sub["notify_level"] != "alert" or urgent)
+            eta_soon = (st["trend"] == "rising" and st["eta_to_bank_h"] and st["eta_to_bank_h"] <= EARLY_WITHIN_H
+                        and st["status"] in ("watch", "alert"))
+            if ((eta_soon or fast_rise(st)) and (sub["notify_level"] != "alert" or urgent)
                     and not (quiet_now and not urgent) and _since(sub["last_early"], at, EARLY_COOLDOWN_H)):
                 try:
-                    _invoke(senders[sub["channel"]], sub["target"], early_message(sub, st),
+                    _invoke(senders[sub["channel"]], sub["target"], (early_message if eta_soon else fast_message)(sub, st),
                             flex=cards.station_card(sub["label"], st, report_link(st["province"])))
                     conn.execute("UPDATE subscriptions SET last_early=? WHERE id=?", (_iso(at), sub["id"]))
                     sent += 1

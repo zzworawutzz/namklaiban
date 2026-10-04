@@ -115,6 +115,23 @@ def test_no_early_warning_when_far_falling_normal_or_user_wants_alerts_only(tmp_
         assert go() == (0, 0), kw
 
 
+def test_fast_rise_warns_even_when_far_from_the_bank_but_not_when_low_or_a_glitch(tmp_path, monkeypatch):
+    quick = dict(trend="steady", eta_to_bank_h=None, status="normal", pct_of_bank=60.0, rise_3h_m=0.62)
+    c, out, go = _run(tmp_path, monkeypatch, _station(**quick))
+    assert go() == (1, 0) and "เตือนน้ำขึ้นเร็ว" in out[0] and "+0.62 ม. ใน 3 ชม." in out[0] and "60%" in out[0]
+    assert go() == (0, 0)                                           # shares the six-hour cooldown
+    for kw in (dict(pct_of_bank=30.0), dict(rise_3h_m=0.4), dict(rise_3h_m=None), dict(pct_of_bank=None)):
+        c, out, go = _run(tmp_path, monkeypatch, _station(**{**quick, **kw}))
+        assert go() == (0, 0), kw
+    c, out, go = _run(tmp_path, monkeypatch, _station(**quick), "notify_level='alert'")
+    assert go() == (0, 0)                                           # this user only wants alert-level news
+
+
+def test_early_warning_mentions_the_rise_when_both_apply(tmp_path, monkeypatch):
+    c, out, go = _run(tmp_path, monkeypatch, _station(rise_3h_m=0.55))
+    assert go() == (1, 0) and "เตือนล่วงหน้า" in out[0] and "+0.55 ม. ใน 3 ชม." in out[0]
+
+
 def test_quiet_hours_hold_early_warning_unless_alert(tmp_path, monkeypatch):
     night = datetime(2026, 10, 1, 18, 0, tzinfo=timezone.utc)   # 01:00 Thai
     c, out, go = _run(tmp_path, monkeypatch, _station(), "quiet=1", at=night)
@@ -132,3 +149,10 @@ def test_confirmed_report_near_home_is_sent_once_and_unconfirmed_or_far_ones_are
     assert go() == (0, 0)                                           # cooldown
     c, out, go = _run(tmp_path, monkeypatch, st, reports=[("a", 15.5, 100.5), ("b", 15.501, 100.501)])
     assert go() == (0, 0)                                           # confirmed, but far from home
+
+
+def test_station_card_shows_the_three_hour_rise():
+    import cards, json
+    st = _station(distance_km=1.2, rise_3h_m=0.62)
+    assert "ระดับน้ำขึ้น +0.62 ม. ใน 3 ชม." in json.dumps(cards.station_card(None, st), ensure_ascii=False)
+    assert "ระดับน้ำขึ้น" not in json.dumps(cards.station_card(None, {**st, "rise_3h_m": 0.1}), ensure_ascii=False)
