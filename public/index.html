@@ -234,6 +234,10 @@ h2{font-size:16px;margin:0 0 8px;font-weight:600}
 .shbox{margin-top:12px;border:1px solid var(--line);border-left:6px solid #1d4ed8;border-radius:12px;padding:10px 12px}
 .shbox h3{font-size:14px;margin:0 0 4px}.shbox .nm{font-weight:600}.shbox small{display:block;color:var(--muted);font-size:13px}
 .shbox .acts{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}.shbox .acts a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:inherit;text-decoration:none;font-weight:600}
+.seg{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 8px}.seg .btn{font-size:13px;padding:6px 12px}.seg .btn[disabled]{opacity:.5}
+.oneline{font-size:15px;font-weight:600;margin:8px 0 0;line-height:1.4}
+.cmpbtn{margin:-2px 0 6px 0;font-size:13px;padding:4px 12px;min-height:36px}
+.cmp h2{margin-top:14px}.cmp .lg{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;margin:4px 0}.cmp .lg i{display:inline-block;width:14px;height:4px;border-radius:2px;vertical-align:middle;margin-right:5px}
 .fast{margin-top:12px}.fast h3{font-size:14px;margin:0 0 6px}
 .fastrow{width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin-top:6px;text-align:left;font-size:14px;min-height:44px}
 .fastrow small{display:block;color:var(--muted);font-size:13px}.fastrow b{white-space:nowrap}
@@ -465,7 +469,7 @@ svg.chart{width:100%;height:auto;display:block}
       <a id="lineLink" href="#" target="_blank" rel="noopener">เพิ่มเพื่อน</a>
     </section>
     <p class="note" id="originNote" hidden></p>
-    <section id="results" hidden><h2 id="resTitle"></h2><ul id="resList" class="rows"></ul></section>
+    <section id="results" hidden><h2 id="resTitle"></h2><div class="seg" id="resSort" role="group" aria-label="เรียงลำดับสถานี" hidden></div><ul id="resList" class="rows"></ul></section>
     <section class="card" id="shelterCard" hidden><h2>ศูนย์พักพิงใกล้คุณ</h2><ul id="shelterList" class="rows"></ul><p class="note">ข้อมูลจาก ปภ. อาจไม่เป็นปัจจุบัน โทรสอบถามก่อนเดินทาง</p></section>
     <section class="card" id="detail" aria-live="polite" hidden></section>
     <section class="card" id="emergency"><h2>เบอร์ฉุกเฉิน (โทรฟรี)</h2>
@@ -670,6 +674,22 @@ function fastRisers(list){   // water rising >= 30 cm in 3 h, even if still far 
   });
   return Object.keys(best).map(function(k){ return best[k]; }).sort(function(a,b){ return b.rise_3h_m-a.rise_3h_m; }).slice(0,3);
 }
+var lastRain = null;   // {name, past, next} from the rain card, for the one-line summary
+function oneLineText(list){
+  var c = {alert:0, watch:0}, fast = fastRisers(list).length;
+  list.forEach(function(s){ if(!s.stale && (s.status==="alert" || s.status==="watch")) c[s.status]++; });
+  var bits = [];
+  if(c.alert) bits.push("เตือนภัย "+c.alert+" สถานี");
+  if(c.watch) bits.push("เฝ้าระวัง "+c.watch+" สถานี");
+  if(!c.alert && !c.watch) bits.push("ระดับน้ำปกติ");
+  if(fast) bits.push("น้ำขึ้นเร็ว "+fast+" แห่ง");
+  if(province && !origin && lastRain && lastRain.name==="จ."+province){
+    if(lastRain.past!=null && lastRain.past>=1) bits.push("ฝนตกมาแล้ว "+Math.round(lastRain.past)+" มม. ใน 24 ชม.");
+    if(lastRain.next>=1) bits.push("พยากรณ์ฝน "+Math.round(lastRain.next)+" มม.");
+  }
+  return "วันนี้ "+(province ? "จ."+province : "ทั้งประเทศ")+": "+bits.join(" · ");
+}
+function drawOneLine(){ var el = $("oneLine"); if(el) el.textContent = oneLineText(stations.filter(inProv)); }
 function drawSummary(){
   var k = counts(), c = k.c, list = stations.filter(inProv);
   $("sumTitle").textContent = province ? "จ."+province : "ทั้งประเทศ";
@@ -690,9 +710,10 @@ function drawSummary(){
   var bits = [];
   if(rising) bits.push("▲ กำลังสูงขึ้น "+rising+" สถานี");
   if(k.stale) bits.push("ข้อมูลค้าง "+k.stale+" สถานี");
-  $("sumBody").innerHTML = '<div class="verdict" style="--vc:'+COLOR[kind]+'"><div class="vh" style="color:'+COLOR[kind]+'">'+esc(head)+'</div>'+line2+
+  $("sumBody").innerHTML = '<div class="oneline" id="oneLine"></div><div class="verdict" style="--vc:'+COLOR[kind]+'"><div class="vh" style="color:'+COLOR[kind]+'">'+esc(head)+'</div>'+line2+
     (bits.length ? '<div class="vm">'+esc(bits.join(" · "))+'</div>' : "")+
     '<div class="vn">% ของตลิ่ง = ระดับน้ำเทียบกับความสูงตลิ่ง 100% คือน้ำเสมอตลิ่ง</div></div>'+fastHtml(list);
+  drawOneLine();
 }
 function fastHtml(list){
   var f = fastRisers(list); if(!f.length) return "";
@@ -756,6 +777,7 @@ function rowHtml(s, extra){
   return '<li><button class="row" type="button" data-id="'+esc(s.id)+'"><span>'+esc(s.name)+'<small>'+esc(s.province||"")+(extra?" · "+esc(extra):"")+(s.stale?" · ข้อมูลไม่อัปเดต":"")+(s.twin_conflict?" · ⚠ สองแหล่งขัดกัน":"")+(s.trend==="rising"?" · ▲ สูงขึ้น":s.trend==="falling"?" · ▼ ลดลง":"")+'</small></span><span class="badge '+s.status+'">'+esc(statusText(s))+" "+pctText(s)+'</span></button></li>';
 }
 function showResults(title, list, extraFn){
+  $("resSort").hidden = true;   // only the province list (showProvince) offers sorting
   $("results").hidden = false; $("resTitle").textContent = title;
   $("resList").innerHTML = list.length ? list.map(function(s){return rowHtml(s, extraFn?extraFn(s):"");}).join("") : '<li class="note">ไม่พบสถานี</li>';
 }
@@ -790,7 +812,7 @@ function relHtml(rel){
     return '<h3>'+title+'</h3><ul class="rows">'+a.map(function(x){
       return '<li><button class="row" type="button" data-id="'+esc(x.id)+'"><span>'+esc(x.name)+'<small>'+esc(x.province||"")+' · '+x.distance_km+' กม.'+
         (x.trend==="rising"?' · ▲ สูงขึ้น':x.trend==="falling"?' · ▼ ลดลง':'')+'</small></span><span class="badge '+x.status+'">'+
-        (x.pct_of_bank==null?"-":Math.round(x.pct_of_bank)+"%")+'</span></button></li>';}).join("")+'</ul>';
+        (x.pct_of_bank==null?"-":Math.round(x.pct_of_bank)+"%")+'</span></button><button type="button" class="btn cmpbtn" data-cmp="'+esc(x.id)+'">เทียบกราฟกับสถานีนี้</button></li>';}).join("")+'</ul>';
   }
   return '<div class="rel"><h2 style="margin-top:14px">แม่น้ำเดียวกัน ('+esc(rel.river)+')</h2>'+
     '<p class="note" style="margin:0">ต้นน้ำ/ปลายน้ำประมาณจากระดับท้องน้ำ ไม่ใช่ข้อมูลเครือข่ายแม่น้ำจริง น้ำใช้เวลาไหลมาถึง ดูเป็นแนวทางเท่านั้น</p>'+
@@ -822,7 +844,34 @@ function loadStationShelter(s){
     var box = $("shBox"); if(sel===s.id && box) box.innerHTML = shelterBox(s);
   }).catch(function(){});
 }
+var cmpState = null, curRs = null, curRel = null;   // cmpState: {of, other, rs} while a second station is overlaid
+function compareHtml(s, rs){
+  var c = cmpState; if(!c || c.of!==s.id) return "";
+  var a = (rs||[]).filter(function(r){return r.pct_of_bank!=null;}), b = c.rs.filter(function(r){return r.pct_of_bank!=null;});
+  var head = '<div class="cmp"><h2>เทียบกับ '+esc(c.other.name)+'</h2>';
+  var close = '<button type="button" class="btn" id="cmpClose">ปิดการเปรียบเทียบ</button></div>';
+  if(a.length<2 || b.length<2) return head+'<p class="note">ข้อมูลย้อนหลังยังไม่พอจะเปรียบเทียบ</p>'+close;
+  var W=340,H=150,pl=8,pr=8,pt=8,pb=22, all = a.concat(b), maxP = Math.max(110, Math.max.apply(null, all.map(function(p){return p.pct_of_bank;}))*1.05);
+  var t0 = Math.min(Date.parse(a[0].ts), Date.parse(b[0].ts)), t1 = Math.max(Date.parse(a[a.length-1].ts), Date.parse(b[b.length-1].ts)), span = Math.max(t1-t0,1);
+  function X(t){ return pl+(Date.parse(t)-t0)/span*(W-pl-pr); }
+  function Y(v){ return pt+(maxP-v)/maxP*(H-pt-pb); }
+  function line(pts, col, dash){ return '<path d="'+pts.map(function(p,i){return (i?"L":"M")+X(p.ts).toFixed(1)+" "+Y(p.pct_of_bank).toFixed(1);}).join(" ")+'" fill="none" stroke="'+col+'" stroke-width="2.2" stroke-linejoin="round"'+(dash?' stroke-dasharray="6 3"':'')+'/>'; }
+  var svg = '<svg class="chart" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="กราฟเทียบเปอร์เซ็นต์ของตลิ่งสองสถานี">'+
+    '<line x1="'+pl+'" x2="'+(W-pr)+'" y1="'+Y(100)+'" y2="'+Y(100)+'" stroke="var(--alert)" stroke-dasharray="4 3"/><text x="'+(pl+3)+'" y="'+(Y(100)-3)+'" font-size="10" fill="var(--muted)">ตลิ่ง 100%</text>'+
+    line(a,"var(--ink)",false)+line(b,"var(--accent)",true)+
+    '<text x="'+pl+'" y="'+(H-6)+'" font-size="10" fill="var(--muted)">'+esc(fmtTs(new Date(t0).toISOString()))+'</text><text x="'+(W-pr)+'" y="'+(H-6)+'" font-size="10" fill="var(--muted)" text-anchor="end">'+esc(fmtTs(new Date(t1).toISOString()))+'</text></svg>';
+  function peak(pts){ var m = pts[0]; pts.forEach(function(p){ if(p.pct_of_bank>m.pct_of_bank) m = p; }); return m; }
+  function range(pts){ var v = pts.map(function(p){return p.pct_of_bank;}); return Math.max.apply(null,v)-Math.min.apply(null,v); }
+  var note = "";
+  if(range(a)>=5 && range(b)>=5){
+    var pa = peak(a), pb2 = peak(b), dh = (Date.parse(pb2.ts)-Date.parse(pa.ts))/3600000;
+    note = '<p class="note">จุดสูงสุดในช่วงนี้: '+esc(s.name)+' '+esc(fmtTs(pa.ts))+' · '+esc(c.other.name)+' '+esc(fmtTs(pb2.ts))+
+      (Math.abs(dh)>=1 ? ' (ห่างกันประมาณ '+Math.round(Math.abs(dh))+' ชม.)' : ' (ใกล้เคียงกัน)')+' ดูเป็นแนวทางเท่านั้น น้ำไหลเร็วช้าขึ้นกับหลายปัจจัย</p>';
+  }
+  return head+'<div class="lg"><span><i style="background:var(--ink)"></i>'+esc(s.name)+'</span><span><i style="background:var(--accent)"></i>'+esc(c.other.name)+'</span></div>'+svg+note+close;
+}
 function drawDetail(s, rs, rel){
+  curRs = rs; curRel = rel;
   var h='<div class="head"><div><h2 style="margin:0;font-size:18px">'+esc(s.name)+'</h2><div class="note" style="margin:0">'+esc(s.province||"")+(s.source?" · "+esc(s.source):"")+'</div></div><span class="badge '+s.status+'">'+esc(statusText(s))+'</span></div>';
   h+='<div class="big">'+pctText(s)+' <small>ของตลิ่ง</small></div>'+(s.pct_of_bank!=null ? '<div class="note" style="margin:2px 0 6px">'+pctHint(s.pct_of_bank)+' (100% = น้ำเสมอตลิ่ง)</div>' : '')+gaugeHtml(s);
   h+='<p class="note" style="margin:0">ระดับน้ำ '+(s.water_level==null?"-":s.water_level.toFixed(2))+' ม.รทก. · ตลิ่ง '+(s.bank_level==null?"-":s.bank_level.toFixed(2))+' · ท้องน้ำ '+(s.ground_level==null?"-":s.ground_level.toFixed(2))+'</p>';
@@ -833,12 +882,13 @@ function drawDetail(s, rs, rel){
   h+='<div id="shBox">'+shelterBox(s)+'</div>';
   if(s.status==="unknown") h+='<div class="warn">สถานีนี้ไม่มีค่าตลิ่ง/ท้องน้ำให้คำนวณ จึงไม่แสดงสถานะ</div>';
   if(s.stale && s.status!=="unknown") h+='<div class="warn" role="alert">ข้อมูลของสถานีนี้ไม่ได้อัปเดตเกิน 2 ชั่วโมง ตัวเลขอาจไม่ตรงกับสถานการณ์จริง</div>';
-  h+='<h2 style="margin-top:14px">ย้อนหลัง 7 วัน</h2>'+(rs?chartSvg(rs):'<div class="skel" style="height:120px"></div>');
+  h+='<h2 style="margin-top:14px">ย้อนหลัง 7 วัน</h2>'+(rs?chartSvg(rs):'<div class="skel" style="height:120px"></div>')+compareHtml(s, rs);
   h+=relHtml(rel)+shareBar(s);
   var d=$("detail"); d.hidden=false; d.innerHTML=h;
 }
 function select(id, fly){
   var prev = sel; sel = id; var s = byId[id]; if(!s) return;
+  cmpState = null;
   if(prev && markers[prev]){ markers[prev].setIcon(icon((byId[prev]),false)); markers[prev].setZIndexOffset(Z[(byId[prev]).status]||0); }
   if(markers[id]){ markers[id].setIcon(icon((s),true)); markers[id].setZIndexOffset(1000); }
   if(fly) flyToVisible([s.lat,s.lng], Math.max(map.getZoom(),CLUSTER_OFF_ZOOM+1));
@@ -919,9 +969,33 @@ function showProvince(fit){
   var list = stations.filter(inProv);
   if(fit && list.length) map.fitBounds(L.latLngBounds(list.map(function(s){return [s.lat,s.lng];})),Object.assign({maxZoom:11},fitPad()));
   if(!province){ if(!origin) $("results").hidden = true; return; }
-  list = list.slice().sort(function(a,b){ return (b.pct_of_bank==null?-1:b.pct_of_bank)-(a.pct_of_bank==null?-1:a.pct_of_bank); });
-  showResults("น้ำสูงสุดใน จ."+province+(list.length>10 ? " (10 จาก "+list.length+" สถานี)" : " ("+list.length+" สถานี)"), list.slice(0,10));
+  drawProvList(list);
 }
+var resSort = "pct";   // "pct" highest % of bank, "fast" rising fastest in 3 h, "near" closest to the pinned place
+var SORTS = [["pct","สูงสุด"],["fast","น้ำขึ้นเร็ว"],["near","ใกล้ฉัน"]];
+function drawProvList(list){
+  if(resSort==="near" && !origin) resSort = "pct";
+  var by = {
+    pct:  function(a,b){ return (b.pct_of_bank==null?-1:b.pct_of_bank)-(a.pct_of_bank==null?-1:a.pct_of_bank); },
+    fast: function(a,b){ return (b.rise_3h_m==null?-9:b.rise_3h_m)-(a.rise_3h_m==null?-9:a.rise_3h_m); },
+    near: function(a,b){ return kmBetween(origin,a)-kmBetween(origin,b); }
+  };
+  list = list.slice().sort(by[resSort]);
+  var name = resSort==="fast" ? "น้ำขึ้นเร็วที่สุด" : resSort==="near" ? "ใกล้คุณที่สุด" : "น้ำสูงสุด";
+  var extra = resSort==="fast" ? function(s){ return s.rise_3h_m==null ? "ไม่มีข้อมูล 3 ชม." : (s.rise_3h_m>=0 ? "+" : "")+Math.round(s.rise_3h_m*100)+" ซม. ใน 3 ชม."; }
+            : resSort==="near" ? function(s){ return kmBetween(origin,s).toFixed(1)+" กม."; } : null;
+  showResults(name+"ใน จ."+province+(list.length>10 ? " (10 จาก "+list.length+" สถานี)" : " ("+list.length+" สถานี)"), list.slice(0,10), extra);
+  var bar = $("resSort");
+  bar.innerHTML = SORTS.map(function(x){
+    var off = x[0]==="near" && !origin;
+    return '<button type="button" class="btn" data-sort="'+x[0]+'" aria-pressed="'+(resSort===x[0])+'"'+(off?' disabled title="ปักตำแหน่งบ้านหรือกดหาตำแหน่งของฉันก่อน"':'')+'>'+x[1]+'</button>';
+  }).join("");
+  bar.hidden = false;
+}
+$("resSort").addEventListener("click", function(e){
+  var b = e.target.closest ? e.target.closest("button[data-sort]") : null; if(!b || b.disabled) return;
+  resSort = b.getAttribute("data-sort"); if(province) drawProvList(stations.filter(inProv));
+});
 /* "data may be late" bar: the server tells us when ingest keeps failing or the source stopped sending new readings */
 var DELAY_READING_MIN = 180;
 function checkHealth(){
@@ -1064,6 +1138,16 @@ $("q").addEventListener("keydown",function(e){
 });
 $("clearQ").addEventListener("click",function(){ var q = $("q"); q.value = ""; $("clearQ").hidden = true; if(!origin) $("results").hidden = true; q.focus(); });
 $("detail").addEventListener("click",function(e){
+  var cb = e.target.closest ? e.target.closest(".cmpbtn") : null;
+  if(cb){
+    var oid = cb.getAttribute("data-cmp"), me = sel; cb.disabled = true;
+    getJSON("/stations/"+encodeURIComponent(oid)+"/readings?days=7").then(function(ro){
+      if(sel!==me) return; cmpState = {of:me, other:byId[oid]||{id:oid,name:oid}, rs:ro}; drawDetail(byId[me], curRs, curRel);
+      var box = document.querySelector(".cmp"); if(box && box.scrollIntoView) box.scrollIntoView({block:"nearest", behavior:"smooth"});
+    }).catch(function(){ cb.disabled = false; toast("โหลดข้อมูลเปรียบเทียบไม่ได้"); });
+    return;
+  }
+  if(e.target.id==="cmpClose"){ cmpState = null; drawDetail(byId[sel], curRs, curRel); return; }
   var r = e.target.closest(".row"); if(r){ select(r.getAttribute("data-id"),true); return; }
   if(e.target.id==="btnShare"){
     var u = new URL(location.href); u.searchParams.set("station",sel); u.searchParams.delete("api");
@@ -1151,7 +1235,26 @@ function drawRain(j, pt){
     '<div class="days">'+D.time.map(function(d,i){ return '<div class="day">'+names[i]+'<b>'+(D.precipitation_sum[i]||0).toFixed(0)+' มม.</b><span class="note">โอกาส '+(D.precipitation_probability_max[i]||0)+'%</span></div>'; }).join("")+'</div>'+
     '<p class="note">ข้อมูลพยากรณ์และฝนที่ผ่านมาจาก <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> เป็นผลจากแบบจำลอง ไม่ใช่เครื่องวัดฝนจริง ไม่ใช่ประกาศของกรมอุตุนิยมวิทยา ตำแหน่งที่ใช้ดึงพยากรณ์จะถูกส่งไปยังบริการนี้</p>';
   card.hidden = false;
+  lastRain = {name:pt.name, past:past, next:total}; drawOneLine();
 }
+
+/* ---------- low battery: switch off the heavy layers (Chrome on Android only; other browsers have no Battery API) ---------- */
+var batteryHandled = false;
+function watchBattery(){
+  if(!navigator.getBattery) return;
+  navigator.getBattery().then(function(b){
+    function check(){
+      if(b.charging || b.level>=0.3){ batteryHandled = false; return; }
+      if(b.level>=0.2 || batteryHandled) return;
+      batteryHandled = true;
+      var off = ["chkRadar","chkFlood"].filter(function(id){ return $(id).checked; });
+      off.forEach(function(id){ $(id).click(); });
+      if(off.length) toast("แบตเตอรี่เหลือ "+Math.round(b.level*100)+"% ปิดเรดาร์ฝนและภาพดาวเทียมให้เพื่อประหยัดแบต เปิดใหม่ได้ที่ปุ่มชั้นแผนที่");
+    }
+    b.addEventListener("levelchange", check); b.addEventListener("chargingchange", check); check();
+  }).catch(function(){});
+}
+watchBattery();
 
 /* ---------- shelters (DDPM open data, via our API) ---------- */
 function syncShelterSize(){ map.getContainer().classList.toggle("zsm", map.getZoom() < 12); }
