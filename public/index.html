@@ -227,6 +227,9 @@ h2{font-size:16px;margin:0 0 8px;font-weight:600}
 .verdict{margin-top:12px;border-left:6px solid var(--vc,var(--line));padding:2px 0 2px 12px}
 .verdict .vh{font-size:18px;font-weight:700;line-height:1.3}
 .verdict .vm{font-size:14px;margin-top:6px}
+.fast{margin-top:12px}.fast h3{font-size:14px;margin:0 0 6px}
+.fastrow{width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin-top:6px;text-align:left;font-size:14px;min-height:44px}
+.fastrow small{display:block;color:var(--muted);font-size:13px}.fastrow b{white-space:nowrap}
 .verdict .vn{font-size:13px;color:var(--muted);margin-top:6px}
 .near{border-width:2px;border-color:var(--accent)}
 .nearbtn{display:block;width:100%;text-align:left;background:none;border:0;padding:6px 0 0;color:var(--ink)}
@@ -652,6 +655,14 @@ function drawChips(){
   $("chips").innerHTML = html;
 }
 function pctHint(p){ return p>=100 ? "ล้นตลิ่งแล้ว" : p>=90 ? "ใกล้ล้นตลิ่ง" : p>=70 ? "น้ำสูงใกล้ตลิ่ง" : "ยังต่ำกว่าตลิ่ง"; }
+function fastRisers(list){   // water rising >= 30 cm in 3 h, even if still far below the bank; one per site
+  var best = {};
+  list.forEach(function(s){
+    if(s.stale || s.rise_3h_m==null || s.rise_3h_m<0.3) return;
+    var k = s.lat.toFixed(2)+","+s.lng.toFixed(2); if(!best[k] || s.rise_3h_m>best[k].rise_3h_m) best[k] = s;
+  });
+  return Object.keys(best).map(function(k){ return best[k]; }).sort(function(a,b){ return b.rise_3h_m-a.rise_3h_m; }).slice(0,3);
+}
 function drawSummary(){
   var k = counts(), c = k.c, list = stations.filter(inProv);
   $("sumTitle").textContent = province ? "จ."+province : "ทั้งประเทศ";
@@ -674,8 +685,15 @@ function drawSummary(){
   if(k.stale) bits.push("ข้อมูลค้าง "+k.stale+" สถานี");
   $("sumBody").innerHTML = '<div class="verdict" style="--vc:'+COLOR[kind]+'"><div class="vh" style="color:'+COLOR[kind]+'">'+esc(head)+'</div>'+line2+
     (bits.length ? '<div class="vm">'+esc(bits.join(" · "))+'</div>' : "")+
-    '<div class="vn">% ของตลิ่ง = ระดับน้ำเทียบกับความสูงตลิ่ง 100% คือน้ำเสมอตลิ่ง</div></div>';
+    '<div class="vn">% ของตลิ่ง = ระดับน้ำเทียบกับความสูงตลิ่ง 100% คือน้ำเสมอตลิ่ง</div></div>'+fastHtml(list);
 }
+function fastHtml(list){
+  var f = fastRisers(list); if(!f.length) return "";
+  return '<div class="fast"><h3>▲ น้ำขึ้นเร็วใน 3 ชม.ที่ผ่านมา</h3>'+f.map(function(s){
+    return '<button type="button" class="fastrow" data-id="'+esc(s.id)+'"><span>'+esc(s.name)+'<small>'+esc(s.province||"")+' · '+pctText(s)+(s.pct_of_bank!=null?' ของตลิ่ง':'')+'</small></span><b style="color:'+(COLOR[s.status]||COLOR.unknown)+'">+'+Math.round(s.rise_3h_m*100)+' ซม.</b></button>';
+  }).join("")+'<div class="note" style="margin:6px 0 0">นับจากระดับน้ำจริงของสถานี ไม่นับค่าที่กระโดดผิดปกติ</div></div>';
+}
+$("sumBody").addEventListener("click",function(e){ var b = e.target.closest ? e.target.closest(".fastrow") : null; if(b) select(b.getAttribute("data-id"),true); });
 function redraw(){ drawMarkers(); drawChips(); drawSummary(); drawRivers(); if(typeof updateBoundary==="function") updateBoundary(); if(typeof refreshShelters==="function") refreshShelters(); if(typeof refreshRain==="function") refreshRain(); }
 
 /* ---------- river lines ---------- */
