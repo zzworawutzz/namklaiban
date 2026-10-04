@@ -74,8 +74,10 @@ def health():
         ok_run = c.execute("SELECT MAX(ts) AS m FROM ingest_runs WHERE ok=1").fetchone()["m"]
     last = max((r["ts"] for r in rows if r["ts"]), default=None)
     ingest_age = int((at - core.parse(ok_run)).total_seconds() // 60) if ok_run else None
+    reading_age = int((at - core.parse(last)).total_seconds() // 60) if last else None
     healthy = ingest_age is not None and ingest_age <= HEALTH_MAX_INGEST_AGE_MIN
     return {"stations": len(rows), "stale": sum(r["stale"] for r in rows), "latest_reading": last,
+            "latest_reading_age_min": reading_age,
             "last_ingest_age_min": ingest_age,
             "last_ingest_error": run["error"] if run and not run["ok"] else None,
             "ingest_ok": healthy}

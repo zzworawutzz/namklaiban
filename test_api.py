@@ -47,6 +47,7 @@ def test_health_and_empty_db(client, tmp_path, monkeypatch):
     h = client.get("/health").json()
     assert (h["stations"], h["stale"], h["latest_reading"]) == (2, 1, "2026-10-01T16:00:00Z")
     assert h["ingest_ok"] is False and h["last_ingest_age_min"] is None  # no ingest_runs row yet
+    assert h["latest_reading_age_min"] == 30                             # fixture clock is 30 min after the newest reading
     monkeypatch.setenv("WATER_DB", str(tmp_path / "empty.db"))
     assert client.get("/health").json()["stations"] == 0
 
