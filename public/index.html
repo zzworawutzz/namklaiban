@@ -29,7 +29,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="app.css?v=33">
+<link rel="stylesheet" href="app.css?v=34">
 </head>
 <body>
 <h1 class="sr">น้ำใกล้บ้านฉัน</h1>
@@ -88,6 +88,7 @@
     <li><div class="mk alert" style="width:34px;height:34px"><span>105</span></div> เตือนภัย (≥90%) วงกลมใหญ่ สีแดง มีวงกระเพื่อม</li>
     <li><div class="mk unknown" style="width:26px;height:26px"><span>–</span></div> ไม่มีเกณฑ์เทียบ / ไม่มีข้อมูลในช่วงนั้น</li>
     <li><div class="mk normal stale" style="width:26px;height:26px"><span>52</span></div> เส้นประรอบจุด = ข้อมูลเก่าเกิน 2 ชม.</li>
+    <li><div class="cl normal" style="width:34px;height:34px;font-size:13px"><span>6</span></div> <span>พื้นดำขอบสี = กลุ่มสถานี ตัวเลขคือ<b>จำนวนสถานี</b> (ไม่ใช่ %) สีขอบคือสถานะที่แรงสุดในกลุ่ม แตะเพื่อซูมเข้า</span></li>
   </ul>
 </div>
 <div id="rpt" hidden role="dialog" aria-modal="true" aria-labelledby="rptTitle">
@@ -144,7 +145,7 @@
     <section class="card near" id="nearCard" hidden aria-live="polite"></section>
     <section class="card" id="summary" aria-live="polite">
       <div class="sumhead">
-        <div><div class="eyebrow">สถานการณ์น้ำ</div><h2 id="sumTitle">กำลังโหลด…</h2><div class="note" id="sumSub" style="margin:2px 0 0"></div></div>
+        <div class="sumhead-l"><div class="eyebrow">สถานการณ์น้ำ</div><h2 id="sumTitle">กำลังโหลด…</h2><div class="pills" id="sumPills"></div><div class="note" id="sumSub" style="margin:2px 0 0"></div></div>
         <span style="display:flex;gap:6px;flex:none"><a class="linkbtn" href="help.html">วิธีใช้</a><a class="linkbtn" id="repLink" href="report.html">รายงาน →</a></span>
       </div>
       <div id="sumBody"><div class="skel" style="height:22px;width:85%;margin-top:12px"></div><div class="skel" style="height:14px;width:60%;margin-top:10px"></div></div>
@@ -184,6 +185,6 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
-<script src="app.js?v=33"></script>
+<script src="app.js?v=34"></script>
 </body>
 </html>

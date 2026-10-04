@@ -72,7 +72,10 @@ var layer = L.markerClusterGroup({showCoverageOnHover:false, maxClusterRadius:36
 map.addLayer(layer);
 
 function fitPad(){   // the part of the map not covered by the top bar / sheet
-  if(isMobile()) return {paddingTopLeft:[24, $("topbar").offsetHeight+24], paddingBottomRight:[24, $("sheet").offsetHeight+16]};
+  if(isMobile()){   // the two buttons floating above the sheet cover the map too
+    var fab = $("fab"), fabH = (fab && getComputedStyle(fab).display!=="none") ? fab.offsetHeight : 0;
+    return {paddingTopLeft:[24, $("topbar").offsetHeight+24], paddingBottomRight:[24, $("sheet").offsetHeight+fabH+16]};
+  }
   return {paddingTopLeft:[440, 96], paddingBottomRight:[24, 24]};
 }
 function flyToVisible(ll, zoom){   // fly so that ll lands in the middle of the uncovered area
@@ -190,19 +193,21 @@ function fastRisers(list){   // water rising >= 30 cm in 3 h, even if still far 
   return Object.keys(best).map(function(k){ return best[k]; }).sort(function(a,b){ return b.rise_3h_m-a.rise_3h_m; }).slice(0,3);
 }
 var lastRain = null;   // {name, past, next} from the rain card, for the one-line summary
-function oneLineText(list){
-  var c = {alert:0, watch:0}, fast = fastRisers(list).length;
-  list.forEach(function(s){ if(!s.stale && (s.status==="alert" || s.status==="watch")) c[s.status]++; });
-  var bits = [];
-  if(c.alert) bits.push("เตือนภัย "+c.alert+" สถานี");
-  if(c.watch) bits.push("เฝ้าระวัง "+c.watch+" สถานี");
-  if(!c.alert && !c.watch) bits.push("ระดับน้ำปกติ");
-  if(fast) bits.push("น้ำขึ้นเร็ว "+fast+" แห่ง");
+function oneLineText(list){   // only what the status card below does not already say: fast rises and rain
+  var fast = fastRisers(list).length, bits = [];
+  bits.push(fast ? "น้ำขึ้นเร็ว "+fast+" แห่งใน 3 ชม." : "ไม่มีสถานีที่น้ำขึ้นเร็ว");
   if(province && !origin && lastRain && lastRain.name==="จ."+province){
     if(lastRain.past!=null && lastRain.past>=1) bits.push("ฝนตกมาแล้ว "+Math.round(lastRain.past)+" มม. ใน 24 ชม.");
     if(lastRain.next>=1) bits.push("พยากรณ์ฝน "+Math.round(lastRain.next)+" มม.");
   }
-  return "วันนี้ "+(province ? "จ."+province : "ทั้งประเทศ")+": "+bits.join(" · ");
+  return bits.join(" · ");
+}
+function drawPills(c){   // the status in a glance, also visible when the phone's sheet is pulled down
+  var h = "";
+  if(c.alert) h += '<span class="badge alert">'+LABEL.alert+' '+c.alert+'</span>';
+  if(c.watch) h += '<span class="badge watch">'+LABEL.watch+' '+c.watch+'</span>';
+  if(!c.alert && !c.watch && c.normal) h += '<span class="badge normal">'+LABEL.normal+'</span>';
+  $("sumPills").innerHTML = h;
 }
 function drawOneLine(){ var el = $("oneLine"); if(el) el.textContent = oneLineText(stations.filter(inProv)); }
 var bootTimer = null;   // reveal the bottom of the panel shortly after the first data has been drawn
@@ -210,6 +215,7 @@ function endBoot(){ clearTimeout(bootTimer); bootTimer = setTimeout(function(){ 
 function drawSummary(){
   var k = counts(), c = k.c, list = stations.filter(inProv);
   $("sumTitle").textContent = province ? "จ."+province : "ทั้งประเทศ";
+  drawPills(c);
   $("sumSub").textContent = k.n+" สถานี"+(k.latest ? " · อัปเดต "+fmtTs(new Date(k.latest).toISOString()) : "");
   var top = null, rising = 0;
   list.forEach(function(s){
@@ -309,10 +315,10 @@ function chartSvg(rs){
   s+='<rect x="'+pl+'" y="'+Y(maxP)+'" width="'+(W-pl-pr)+'" height="'+(Y(90)-Y(maxP))+'" fill="var(--alert-bg)" rx="4"/>';
   s+='<rect x="'+pl+'" y="'+Y(90)+'" width="'+(W-pl-pr)+'" height="'+(Y(70)-Y(90))+'" fill="var(--watch-bg)"/>';
   s+='<rect x="'+pl+'" y="'+Y(70)+'" width="'+(W-pl-pr)+'" height="'+(Y(0)-Y(70))+'" fill="var(--normal-bg)" rx="4"/>';
-  s+='<line x1="'+pl+'" x2="'+(W-pr)+'" y1="'+Y(100)+'" y2="'+Y(100)+'" stroke="var(--alert)" stroke-dasharray="4 3"/><text x="'+(pl+3)+'" y="'+(Y(100)-3)+'" font-size="10" fill="var(--muted)">ตลิ่ง 100%</text>';
+  s+='<line x1="'+pl+'" x2="'+(W-pr)+'" y1="'+Y(100)+'" y2="'+Y(100)+'" stroke="var(--alert)" stroke-dasharray="4 3"/><text x="'+(pl+3)+'" y="'+(Y(100)-3)+'" font-size="12" fill="var(--muted)">ตลิ่ง 100%</text>';
   s+='<path d="'+pts.map(function(p,i){return (i?"L":"M")+X(p.ts).toFixed(1)+" "+Y(p.pct_of_bank).toFixed(1);}).join(" ")+'" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>';
   var last=pts[pts.length-1]; s+='<circle cx="'+X(last.ts)+'" cy="'+Y(last.pct_of_bank)+'" r="4.5" fill="var(--ink)"/>';
-  s+='<text x="'+pl+'" y="'+(H-6)+'" font-size="10" fill="var(--muted)">'+esc(fmtTs(pts[0].ts))+'</text><text x="'+(W-pr)+'" y="'+(H-6)+'" font-size="10" fill="var(--muted)" text-anchor="end">'+esc(fmtTs(last.ts))+'</text>';
+  s+='<text x="'+pl+'" y="'+(H-6)+'" font-size="12" fill="var(--muted)">'+esc(fmtTs(pts[0].ts))+'</text><text x="'+(W-pr)+'" y="'+(H-6)+'" font-size="12" fill="var(--muted)" text-anchor="end">'+esc(fmtTs(last.ts))+'</text>';
   return s+'</svg>';
 }
 function twinHtml(s){
@@ -374,9 +380,9 @@ function compareHtml(s, rs){
   function Y(v){ return pt+(maxP-v)/maxP*(H-pt-pb); }
   function line(pts, col, dash){ return '<path d="'+pts.map(function(p,i){return (i?"L":"M")+X(p.ts).toFixed(1)+" "+Y(p.pct_of_bank).toFixed(1);}).join(" ")+'" fill="none" stroke="'+col+'" stroke-width="2.2" stroke-linejoin="round"'+(dash?' stroke-dasharray="6 3"':'')+'/>'; }
   var svg = '<svg class="chart" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="กราฟเทียบเปอร์เซ็นต์ของตลิ่งสองสถานี">'+
-    '<line x1="'+pl+'" x2="'+(W-pr)+'" y1="'+Y(100)+'" y2="'+Y(100)+'" stroke="var(--alert)" stroke-dasharray="4 3"/><text x="'+(pl+3)+'" y="'+(Y(100)-3)+'" font-size="10" fill="var(--muted)">ตลิ่ง 100%</text>'+
+    '<line x1="'+pl+'" x2="'+(W-pr)+'" y1="'+Y(100)+'" y2="'+Y(100)+'" stroke="var(--alert)" stroke-dasharray="4 3"/><text x="'+(pl+3)+'" y="'+(Y(100)-3)+'" font-size="12" fill="var(--muted)">ตลิ่ง 100%</text>'+
     line(a,"var(--ink)",false)+line(b,"var(--accent)",true)+
-    '<text x="'+pl+'" y="'+(H-6)+'" font-size="10" fill="var(--muted)">'+esc(fmtTs(new Date(t0).toISOString()))+'</text><text x="'+(W-pr)+'" y="'+(H-6)+'" font-size="10" fill="var(--muted)" text-anchor="end">'+esc(fmtTs(new Date(t1).toISOString()))+'</text></svg>';
+    '<text x="'+pl+'" y="'+(H-6)+'" font-size="12" fill="var(--muted)">'+esc(fmtTs(new Date(t0).toISOString()))+'</text><text x="'+(W-pr)+'" y="'+(H-6)+'" font-size="12" fill="var(--muted)" text-anchor="end">'+esc(fmtTs(new Date(t1).toISOString()))+'</text></svg>';
   function peak(pts){ var m = pts[0]; pts.forEach(function(p){ if(p.pct_of_bank>m.pct_of_bank) m = p; }); return m; }
   function range(pts){ var v = pts.map(function(p){return p.pct_of_bank;}); return Math.max.apply(null,v)-Math.min.apply(null,v); }
   function inside(pts){ var m = peak(pts); return m!==pts[0] && m!==pts[pts.length-1]; }   // a maximum at either end of the window is not a real peak
@@ -392,7 +398,7 @@ function drawDetail(s, rs, rel){
   curRs = rs; curRel = rel;
   var h='<div class="head"><div><h2 style="margin:0;font-size:18px">'+esc(s.name)+'</h2><div class="note" style="margin:0">'+esc(s.province||"")+(s.source?" · "+esc(s.source):"")+'</div></div><span class="badge '+s.status+'">'+esc(statusText(s))+'</span></div>';
   h+='<div class="big">'+pctText(s)+' <small>ของตลิ่ง</small></div>'+(s.pct_of_bank!=null ? '<div class="note" style="margin:2px 0 6px">'+pctHint(s.pct_of_bank)+' (100% = น้ำเสมอตลิ่ง)</div>' : '')+gaugeHtml(s);
-  h+='<p class="note" style="margin:0">ระดับน้ำ '+(s.water_level==null?"-":s.water_level.toFixed(2))+' ม.รทก. · ตลิ่ง '+(s.bank_level==null?"-":s.bank_level.toFixed(2))+' · ท้องน้ำ '+(s.ground_level==null?"-":s.ground_level.toFixed(2))+'</p>';
+  h+='<details class="lvl"><summary>ตัวเลขระดับน้ำ (เมตร)</summary><p class="note" style="margin:0 0 6px">ระดับน้ำ '+(s.water_level==null?"-":s.water_level.toFixed(2))+' · ตลิ่ง '+(s.bank_level==null?"-":s.bank_level.toFixed(2))+' · ท้องน้ำ '+(s.ground_level==null?"-":s.ground_level.toFixed(2))+'<br>วัดเทียบระดับน้ำทะเลปานกลาง (ม.รทก.) ตลิ่ง 100% คือน้ำเสมอระดับตลิ่งนี้</p></details>';
   if(s.trend) h+='<p style="margin:6px 0 0">'+trendHtml(s)+'</p>';
   h+='<p class="note">อัปเดตล่าสุด '+esc(fmtTs(s.ts))+' ('+esc(fmtAge(s.age_min))+')</p>';
   h+=twinHtml(s);
@@ -787,7 +793,7 @@ function drawRain(j, pt){
     var h = Math.max(v>0?2:0, (v||0)/mx*(Hh-14));
     return '<rect x="'+(i*bw+1).toFixed(1)+'" y="'+(Hh-14-h).toFixed(1)+'" width="'+(bw-2).toFixed(1)+'" height="'+h.toFixed(1)+'" rx="2" fill="var(--accent)" opacity="'+(pr[i]>=60?1:.55)+'"><title>'+H.time[i0+i].slice(11,16)+' น. '+(v||0).toFixed(1)+' มม. โอกาสฝน '+(pr[i]||0)+'%</title></rect>';
   }).join("");
-  var ticks = [0,6,12,18].filter(function(i){return i<mm.length;}).map(function(i){ return '<text x="'+(i*bw+2)+'" y="'+(Hh-2)+'" font-size="9" fill="var(--muted)">'+(i===0?"ตอนนี้":H.time[i0+i].slice(11,13)+":00")+'</text>'; }).join("");
+  var ticks = [0,6,12,18].filter(function(i){return i<mm.length;}).map(function(i){ return '<text x="'+(i*bw+2)+'" y="'+(Hh-2)+'" font-size="11" fill="var(--muted)">'+(i===0?"ตอนนี้":H.time[i0+i].slice(11,13)+":00")+'</text>'; }).join("");
   var D = j.daily, names = ["วันนี้","พรุ่งนี้","มะรืนนี้"];
   card.innerHTML = '<div class="eyebrow">พยากรณ์ฝน · '+esc(pt.name)+'</div>'+
     '<div class="big">'+total.toFixed(0)+' มม. <small>ใน 24 ชม. · '+rainClass(total)+' · โอกาสฝนสูงสุด '+pmax+'%</small></div>'+
