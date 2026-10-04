@@ -1,0 +1,25 @@
+# Runs the whole test suite on every push and pull request, so a broken upload is flagged by e-mail from GitHub
+# before anyone relies on it. Same Python as local development (3.9). The Postgres tests use an embedded server
+# (pgserver) and are skipped automatically if it cannot start.
+name: tests
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest -q
