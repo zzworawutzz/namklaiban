@@ -4,13 +4,24 @@ import re
 from conftest import open_page, stub_outside_world, until, watch
 
 
-def test_map_summary_and_one_line_load(page, site):
+def test_map_summary_pills_and_one_line_load_and_agree(page, site):
     open_page(page, site)
     assert page.inner_text("#sumTitle") == "จ.ปทุมธานี"
+    pills = page.inner_text("#sumPills")
+    verdict = page.inner_text("#sumBody .vh")
+    assert "เตือนภัย 1" in pills, pills                                            # visible in the pulled-down sheet too
+    assert re.search(r"เตือนภัย.* 1 จาก 3 สถานี", verdict), verdict               # same number as the status card
     one = page.inner_text("#oneLine")
-    assert one.startswith("วันนี้ จ.ปทุมธานี:") and "เตือนภัย 1 สถานี" in one and "น้ำขึ้นเร็ว 1 แห่ง" in one
+    assert "น้ำขึ้นเร็ว 1 แห่ง" in one and "เตือนภัย" not in one                    # the line adds news, it does not repeat the card
     until(page, "document.getElementById('oneLine').innerText.includes('ฝนตกมาแล้ว')")   # rain joins the line
     until(page, "getComputedStyle(document.getElementById('emergency')).display !== 'none'", 6)   # the emergency numbers come back after boot
+
+
+def test_legend_explains_that_a_dark_circle_is_a_group_with_a_count(page, site):
+    open_page(page, site)
+    page.evaluate("document.getElementById('btnLayers').click()")
+    legend = page.inner_text(".lg")
+    assert "กลุ่มสถานี" in legend and "จำนวนสถานี" in legend and "ไม่ใช่ %" in legend
 
 
 def test_stations_are_requested_once_and_early(context, site):
@@ -147,3 +158,49 @@ def test_first_ever_visit_with_a_dead_api_shows_the_error_bar(context, site):
     page.goto(site + "/", wait_until="domcontentloaded")
     page.wait_for_selector("#err:not([hidden])", timeout=15000)
     assert page.is_hidden("#cacheBar")
+
+
+def test_station_card_keeps_technical_numbers_in_a_closed_details_block(page, site):
+    open_page(page, site, "/?station=A")
+    page.wait_for_selector("#detail details.lvl")
+    assert page.get_attribute("#detail details.lvl", "open") is None
+    assert "รทก." not in page.inner_text("#detail .big, #detail .head")           # the headline stays plain: % of the bank
+    page.click("#detail details.lvl summary")
+    assert "ท้องน้ำ" in page.inner_text("#detail details.lvl") and "ม.รทก." in page.inner_text("#detail details.lvl")
+
+
+def test_phone_buttons_are_big_enough_and_chart_text_is_readable(browser, site):
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2, is_mobile=True, has_touch=True,
+                              locale="th-TH", service_workers="block")
+    stub_outside_world(ctx)
+    page = ctx.new_page()
+    errors = watch(page)
+    open_page(page, site, "/?station=A")
+    page.wait_for_selector("#detail details.lvl")
+    small = page.evaluate("""() => [...document.querySelectorAll('a[href],button,summary,select')].filter(e => {
+        const r = e.getBoundingClientRect(), cs = getComputedStyle(e);
+        return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && !e.closest('.leaflet-control, .leaflet-marker-icon, #ar, #rt')
+               && e.id !== 'prov' && e.id !== 'dist' && e.id !== 'tam' && (r.height < 43.5 || r.width < 43.5)
+      }).map(e => e.tagName + '#' + e.id + '.' + String(e.className).slice(0, 20) + ' ' + Math.round(e.getBoundingClientRect().width) + 'x' + Math.round(e.getBoundingClientRect().height))""")
+    assert not small, small                                                         # every control meets the 44 px touch-target size
+    texts = page.evaluate("[...document.querySelectorAll('svg text')].map(t => parseFloat(t.getAttribute('font-size')))")
+    assert texts and min(texts) >= 11, texts                                        # chart labels are no smaller than 11 px
+    assert not errors
+    ctx.close()
+
+
+def test_selected_marker_is_not_hidden_behind_the_floating_buttons(browser, site):
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, locale="th-TH", service_workers="block")
+    stub_outside_world(ctx)
+    page = ctx.new_page()
+    errors = watch(page)
+    open_page(page, site)
+    page.evaluate("document.querySelector('#resList .row').click()")               # pick the first station in the list
+    page.wait_for_selector(".mk.sel", timeout=15000)
+    page.wait_for_timeout(2500)                                                      # let the map finish flying
+    marker = page.eval_on_selector(".mk.sel", "e => { const r = e.getBoundingClientRect(); return {top: r.top, bottom: r.bottom}; }")
+    fab = page.eval_on_selector("#fab", "e => e.getBoundingClientRect().top")
+    sheet = page.eval_on_selector("#sheet", "e => e.getBoundingClientRect().top")
+    assert marker["bottom"] <= min(fab, sheet) + 2, (marker, fab, sheet)
+    assert not errors
+    ctx.close()
