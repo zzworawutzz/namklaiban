@@ -14,7 +14,8 @@ def failing(page):
 @pytest.mark.parametrize("phone", [True, False], ids=["phone", "desktop"])
 def test_every_screen_meets_wcag_aa_contrast(browser, site, scheme, phone):
     size = {"width": 390, "height": 844} if phone else {"width": 1280, "height": 800}
-    ctx = browser.new_context(viewport=size, color_scheme=scheme, locale="th-TH", is_mobile=phone, has_touch=phone, service_workers="block")
+    ctx = browser.new_context(viewport=size, color_scheme=scheme, locale="th-TH", is_mobile=phone, has_touch=phone, service_workers="block",
+                              permissions=["geolocation"], geolocation={"latitude": 14.031, "longitude": 100.731})
     stub_outside_world(ctx)
     page = ctx.new_page()
     errors = watch(page)
@@ -27,6 +28,12 @@ def test_every_screen_meets_wcag_aa_contrast(browser, site, scheme, phone):
     page.wait_for_selector("#lineCta:not([hidden])", timeout=15000)       # the "add the LINE bot" card is part of the page in production
     page.wait_for_timeout(2000)                                  # rain card, shelters etc. settle
     check("province")
+    page.evaluate("document.getElementById('btnMe').click()")             # GPS position: nearest-station card with the ground height and nearby gauges
+    page.wait_for_selector("#elevBox b", timeout=20000)
+    page.wait_for_timeout(1200)
+    check("nearest station card with elevation and gauges")
+    page.evaluate("document.getElementById('btnClear').click()")
+    page.wait_for_timeout(500)
     page.evaluate("document.querySelector('#resList .row').click()")
     page.wait_for_selector("#detail details.lvl", timeout=15000)
     page.wait_for_selector("#shBox .shbox", timeout=15000)

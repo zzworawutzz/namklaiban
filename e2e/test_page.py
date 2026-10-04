@@ -217,3 +217,31 @@ def test_a_tampered_map_library_is_refused_by_the_browser_and_the_emergency_numb
     assert page.evaluate("typeof L") == "undefined"              # the library did not run
     assert page.evaluate("window.__pwned === true") is False     # and neither did the injected code
     assert "1784" in page.inner_text("#emergency")
+
+
+def test_rain_card_shows_what_the_gauges_measured_next_to_the_forecast(page, site):
+    open_page(page, site)
+    page.wait_for_selector("#rainCard:not([hidden])", timeout=15000)
+    until(page, "document.getElementById('gaugeLine').innerText.includes('สูงสุด 62 มม.')")
+    box = page.inner_text("#gaugeLine")
+    assert "รร.วัดทดสอบ" in box and "11 สถานี" in box and "35 มม." in box and "ThaiWater" in box
+    # a CSS class shared with the bank-level bar once made this text overlap itself: the text must flow normally
+    assert page.eval_on_selector("#gaugeLine b", "e => getComputedStyle(e).position") == "static"
+    assert page.eval_on_selector("#gaugeLine", "e => getComputedStyle(e).display") == "block"
+
+
+def test_a_gps_position_shows_nearby_gauges_and_the_ground_height_against_the_stations_water_level(context, site):
+    context.grant_permissions(["geolocation"])
+    context.set_geolocation({"latitude": 14.031, "longitude": 100.731})              # next to station A (alert, water about 2.4 m)
+    page = context.new_page()
+    errors = watch(page)
+    open_page(page, site)
+    page.evaluate("document.getElementById('btnMe').click()")
+    page.wait_for_selector("#elevBox b", timeout=20000)
+    elev = page.inner_text("#elevBox")
+    assert "≈ 2.6 ม.รทก." in elev and "ท่าช้าง" in elev
+    assert any(w in elev for w in ("ใกล้เคียง", "ต่ำกว่า", "สูงกว่า")), elev
+    assert "ไม่ได้บอกว่าจะท่วมหรือไม่ท่วม" in elev                                     # never presented as a flood verdict
+    until(page, "document.getElementById('gaugeLine') && document.getElementById('gaugeLine').innerText.includes('ปตร.ทดสอบ')")
+    assert "2.4 กม." in page.inner_text("#gaugeLine")
+    assert not errors

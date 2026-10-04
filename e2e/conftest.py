@@ -110,6 +110,11 @@ def stub_outside_world(context):
     context.route("**/api.rainviewer.com/**", lambda r: r.fulfill(status=200, content_type="application/json", body='{"host":"https://tilecache.invalid","radar":{"past":[{"path":"/v2/radar/1","time":1}]}}'))
     context.route("**/tilecache.invalid/**", lambda r: r.abort())
     context.route("**/api.open-meteo.com/**", lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps(fake_forecast())))
+    context.route("**/api/rain?*", lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps(
+        {"nearby": [{"name": "ปตร.ทดสอบ", "distance_km": 2.4, "mm24": 14.0, "mm1": 1.0}, {"name": "สะพานทดสอบ", "distance_km": 6.1, "mm24": 9.0, "mm1": 0.0}]}
+        if "lat=" in r.request.url else
+        {"stations": 11, "mean_mm": 9.1, "over_35": 1, "max": {"name": "รร.วัดทดสอบ", "mm24": 62.0, "mm1": 12.0}, "top": [], "as_of": "2026-10-04T14:00:00Z"})))
+    context.route("**/api.open-meteo.com/v1/elevation*", lambda r: r.fulfill(status=200, content_type="application/json", body='{"elevation":[2.6]}'))   # registered after the forecast stub, so it wins
     context.route("**/api/line/add-friend", lambda r: r.fulfill(status=200, content_type="application/json", body='{"url":"https://line.me/R/ti/p/%40test"}'))   # production has the LINE button; the test server has no bot
     context.route("**/nominatim.openstreetmap.org/**", lambda r: r.fulfill(status=200, content_type="application/json", body="[]"))
 
