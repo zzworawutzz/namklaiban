@@ -135,3 +135,25 @@ def test_stats_endpoint_needs_the_cron_secret_and_reports_everything(tmp_path, m
     j = r.json()
     assert r.status_code == 200 and j["line_quota"] == {"limit": 200, "used": 12}
     assert j["days"][-1]["by_kind"] == {"digest": 1} and j["db_mb"] > 0 and j["silent_groups"] == []
+
+
+# ---- monthly backup reminder ----
+
+def test_backup_reminder_waits_a_month_then_repeats(tmp_path, monkeypatch):
+    c, out = make(tmp_path, monkeypatch=monkeypatch), []
+    send = lambda t, m: out.append(m)
+    c.execute("INSERT INTO subscriptions(channel,target,lat,lng) VALUES('line','U1',14,100)")
+    c.commit()
+    assert watchdog.check_backup_reminder(c, AT, send) is None and out == []                      # clock starts, no message
+    assert watchdog.check_backup_reminder(c, AT + timedelta(days=29), send) is None
+    assert watchdog.check_backup_reminder(c, AT + timedelta(days=31), send) == "remind"
+    assert "1 รายการ" in out[0] and "backup_export.py" in out[0]
+    assert watchdog.check_backup_reminder(c, AT + timedelta(days=40), send) is None              # next one in a month
+    assert watchdog.check_backup_reminder(c, AT + timedelta(days=62), send) == "remind"
+
+
+def test_backup_reminder_can_be_turned_off(tmp_path, monkeypatch):
+    c = make(tmp_path, monkeypatch=monkeypatch)
+    monkeypatch.setenv("BACKUP_REMIND", "0")
+    assert watchdog.check_backup_reminder(c, AT, lambda t, m: 1 / 0) is None
+    assert watchdog.check_backup_reminder(c, AT + timedelta(days=90), lambda t, m: 1 / 0) is None

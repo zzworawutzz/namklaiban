@@ -1,1 +1,10 @@
-
+.venv/
+.pytest_cache/
+__pycache__/
+*.db
+raw.json
+.DS_Store
+.env*
+.vercel
+thresholds.json
+backup-*.json

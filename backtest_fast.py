@@ -12,6 +12,7 @@ import json
 import sqlite3
 import sys
 import time
+import urllib.error
 import urllib.request
 from collections import Counter, defaultdict
 from datetime import timedelta
@@ -83,13 +84,20 @@ def report(res, rise_m, min_pct):
     return "\n".join(lines)
 
 
-def load_api(base, days, pause=0.15):
+def load_api(base, days, pause=0.3):   # 0.3 s keeps us under the site's per-visitor limit
     """Copy /stations and each station's readings from our own API into an in-memory SQLite database."""
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     ingest.init_db(conn)
-    get = lambda path: json.loads(urllib.request.urlopen(urllib.request.Request(
-        base.rstrip("/") + path, headers={"User-Agent": "nkb-backtest/1"}), timeout=30).read())
+    def get(path):
+        for attempt in range(5):
+            try:
+                req = urllib.request.Request(base.rstrip("/") + path, headers={"User-Agent": "nkb-backtest/1"})
+                return json.loads(urllib.request.urlopen(req, timeout=30).read())
+            except urllib.error.HTTPError as e:
+                if e.code != 429 or attempt == 4:    # the site limits each visitor per minute: wait it out
+                    raise
+                time.sleep(int(e.headers.get("Retry-After", "30")) + 1)
     stations = [s for s in get("/stations") if s.get("pct_of_bank") is not None]
     for n, s in enumerate(stations, 1):
         conn.execute("INSERT INTO stations(id,name,province,lat,lng) VALUES(?,?,?,?,?)", (s["id"], s["name"], s["province"], s["lat"], s["lng"]))

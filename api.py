@@ -17,7 +17,7 @@ from typing import Optional
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -30,6 +30,7 @@ import floodreports
 import ingest
 import line_webhook
 import notify
+import ratelimit
 import report
 import security
 import sendlog
@@ -45,12 +46,26 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "P
 
 @app.middleware("http")
 async def short_cache(request: Request, call_next):
+    if ratelimit.applies(request.url.path):
+        ok, retry = ratelimit.limiter.check(request_ip(request), ratelimit.per_minute())
+        if not ok:
+            resp = JSONResponse({"detail": "เรียกถี่เกินไป โปรดรอสักครู่แล้วลองใหม่"}, status_code=429,
+                                headers={"Retry-After": str(retry)})
+            for k, v in security.HEADERS.items():
+                resp.headers.setdefault(k, v)
+            return resp
     resp = await call_next(request)
     for k, v in security.HEADERS.items():
         resp.headers.setdefault(k, v)
     if request.url.path.startswith(("/stations", "/reports")):
         resp.headers["Cache-Control"] = "public, max-age=60"  # data refreshes every ~20 min
     return resp
+
+
+def request_ip(request):
+    """The visitor's address. Behind Vercel the first x-forwarded-for entry is the real client."""
+    fwd = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    return fwd or (request.client.host if request.client else "?")
 
 
 def now():
@@ -309,6 +324,7 @@ def cron_ingest(authorization: Optional[str] = Header(None)):
         watchdog.check_storage(c, now())
         watchdog.check_line_quota(c, now())
         watchdog.check_silent(c, now())
+        watchdog.check_backup_reminder(c, now())
     return {"stations": n_st, "new_readings": n_rd, "skipped": skipped, "pruned": pruned,
             "notifications_sent": sent, "notifications_failed": failed,
             "digests_sent": digests, "digests_failed": digest_failed}

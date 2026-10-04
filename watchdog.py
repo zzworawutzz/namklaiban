@@ -247,3 +247,39 @@ def check_silent(conn, at, send=None):
             pass
         print(f"silence check failed: {type(e).__name__}: {e}", file=sys.stderr)
     return None
+
+
+# ---- monthly backup reminder -----------------------------------------------------------------
+# The follower list lives only in the database. backup_export.py (run on the owner's own computer) saves a copy; this
+# is the nudge to do it. First reminder 30 days after the first run, then every 30 days. BACKUP_REMIND=0 turns it off.
+BACKUP_KEY, BACKUP_EVERY_DAYS = "backup_reminder", 30
+
+
+def check_backup_reminder(conn, at, send=None):
+    """Returns 'remind' when the message was sent. Never raises."""
+    try:
+        target = os.environ.get("ADMIN_LINE_ID", "").strip()
+        if not target or os.environ.get("BACKUP_REMIND", "1") == "0":
+            return None
+        row = conn.execute("SELECT ts FROM alert_state WHERE name=?", (BACKUP_KEY,)).fetchone()
+        if row is None:   # first run: start the clock instead of nagging straight after a deploy
+            conn.execute("INSERT INTO alert_state(name, ts) VALUES(?,?)", (BACKUP_KEY, _iso(at)))
+            conn.commit()
+            return None
+        if at - core.parse(row["ts"]) < timedelta(days=BACKUP_EVERY_DAYS):
+            return None
+        n = conn.execute("SELECT COUNT(*) AS n FROM subscriptions").fetchone()["n"]
+        (send or notify.send_line)(target, f"🗂 น้ำใกล้บ้านฉัน: ถึงเวลาสำรองข้อมูลประจำเดือน ตอนนี้มีผู้ติดตาม {n} รายการ\n"
+                                           "ที่เครื่องของคุณรัน: DATABASE_URL=\"...\" python backup_export.py\n"
+                                           "(ไฟล์มี LINE ID เก็บเป็นความลับ ปิดการเตือนนี้ด้วย env BACKUP_REMIND=0)")
+        conn.execute("DELETE FROM alert_state WHERE name=?", (BACKUP_KEY,))
+        conn.execute("INSERT INTO alert_state(name, ts) VALUES(?,?)", (BACKUP_KEY, _iso(at)))
+        conn.commit()
+        return "remind"
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        print(f"backup reminder failed: {type(e).__name__}: {e}", file=sys.stderr)
+    return None

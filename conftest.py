@@ -30,6 +30,13 @@ def _no_ambient_database(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _fresh_rate_limiter(monkeypatch):
+    import ratelimit
+    monkeypatch.delenv("RATE_LIMIT_PER_MIN", raising=False)
+    ratelimit.limiter.reset()
+
+
+@pytest.fixture(autouse=True)
 def _no_real_rain_forecast(monkeypatch):
     """Tests never call Open-Meteo: dry forecast by default, and a fresh cache per test."""
     import rainalert
