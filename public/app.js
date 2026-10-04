@@ -485,8 +485,9 @@ function loadElevation(o, s, d){
   function show(e){
     var b = $("elevBox"); if(!b || origin!==o) return;
     var h = '<b>ความสูงของพื้นที่ตรงนี้ ≈ '+e.toFixed(1)+' ม.รทก.</b> <small>(ประมาณจากแผนที่ความสูง ละเอียดราว 90 ม.)</small>';
-    if(s.status==="watch" || s.status==="alert"){   // near a station that is already high: never set the ground height beside the water level
-      h += '<div class="note" style="margin:4px 0 0">สถานีใกล้บ้านอยู่ระดับ'+esc(LABEL[s.status])+' จึงแสดงเฉพาะความสูงของพื้นที่ ไม่นำมาเทียบกับระดับน้ำ ให้ดูสถานการณ์จากสถานีและประกาศของ ปภ. (1784)</div>';
+    var high = s.status==="watch" || s.status==="alert" || (s.pct_of_bank!=null && s.pct_of_bank>=50);   // already high, or at least halfway up the bank
+    if(high){   // never set the ground height beside the water level when the river is already well up
+      h += '<div class="note" style="margin:4px 0 0">สถานีใกล้บ้านน้ำ'+(s.status==="watch" || s.status==="alert" ? 'อยู่ระดับ'+esc(LABEL[s.status]) : 'อยู่ที่ราว '+Math.round(s.pct_of_bank)+'% ของตลิ่ง')+' จึงแสดงเฉพาะความสูงของพื้นที่ ไม่นำมาเทียบกับระดับน้ำ ให้ดูสถานการณ์จากสถานีและประกาศของ ปภ. (1784)</div>';
     } else if(s.water_level!=null && !s.stale && d<=15){
       var diff = e - s.water_level, a = Math.abs(diff).toFixed(1), cls = diff<0.5 ? " warnv" : "";
       h += '<div class="'+cls.trim()+'">ระดับน้ำที่สถานี '+esc(s.name)+' (ห่าง '+(d<10 ? d.toFixed(1) : Math.round(d))+' กม.) ตอนนี้ '+s.water_level.toFixed(2)+' ม.รทก. → พื้นที่ตรงนี้ '+
