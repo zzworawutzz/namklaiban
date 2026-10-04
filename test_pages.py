@@ -61,3 +61,10 @@ def test_page_starts_the_stations_request_in_the_head_and_getjson_reuses_it():
     assert 'rel="preconnect" href="https://tile.openstreetmap.org"' in head
     assert html.count('fetch("/stations")') == 1                                  # nothing else asks for it a second time
     assert 'path==="/stations" && window.__stations' in html                      # getJSON picks the early answer up
+
+
+def test_emergency_numbers_are_hidden_while_booting_but_always_come_back():
+    html = (Path(__file__).parent / "public" / "index.html").read_text(encoding="utf-8")
+    head = html[:html.index("</head>")]
+    assert 'classList.add("booting")' in head and "setTimeout(window.__unboot, 3000)" in head   # fallback does not depend on the map libraries
+    assert "html.booting #emergency, html.booting #foot{display:none}" in html
