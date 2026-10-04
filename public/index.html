@@ -1531,7 +1531,8 @@ $("rtGo").addEventListener("click",function(){
       rtFail(m.indexOf("nf:")===0 ? "ไม่พบสถานที่ \""+m.slice(3)+"\" ลองพิมพ์ให้ละเอียดขึ้น เช่นเพิ่มชื่ออำเภอหรือจังหวัด" : m==="noroute" ? "หาเส้นทางระหว่างสองจุดนี้ไม่ได้" : "คำนวณเส้นทางไม่ได้ในขณะนี้ ลองใหม่อีกครั้ง"); });
 });
 
-/* ---------- red outline of the chosen province / district / subdistrict (UN OCHA boundaries, via our API) ---------- */
+var BOUND_COLOR = "#7c3aed";   // violet: red is the "alert" colour of the water stations, so the area outline must not look like a warning
+/* ---------- outline of the chosen province / district / subdistrict (UN OCHA boundaries, via our API) ---------- */
 var boundLayer = null, boundKey = "", boundSeq = 0;
 var BOUND_ATTR = 'ขอบเขต: UN OCHA / กรมแผนที่ทหาร (CC BY-IGO) แบบย่อรูป';
 function updateBoundary(){
@@ -1547,7 +1548,7 @@ function updateBoundary(){
   getJSON("/api/boundary"+q).then(function(f){
     if(my!==boundSeq) return;
     boundLayer = L.geoJSON(f,{interactive:false, attribution:BOUND_ATTR,
-      style:{color:"#d2372f", weight:t?3.5:d?3:2.5, opacity:.95, fillColor:"#d2372f", fillOpacity:t?.10:.05, lineJoin:"round"}}).addTo(map);
+      style:{color:BOUND_COLOR, weight:t?3.5:d?3:2.5, opacity:.95, fillColor:BOUND_COLOR, fillOpacity:t?.10:.05, lineJoin:"round"}}).addTo(map);
     boundLayer.bringToBack();
   }).catch(function(){});                            // no outline for this area: draw nothing rather than something wrong
 }
