@@ -1,0 +1,40 @@
+# Opens the live site in a real browser after every upload (and a few times a day) and fails, so GitHub
+# e-mails the owner, when the map does not load, the page throws an error, a security policy blocks something,
+# or /health says ingest is broken. See smoke_check.py.
+name: smoke
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 1,7,13,19 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+  statuses: read
+concurrency:
+  group: smoke
+  cancel-in-progress: true
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for the Vercel deployment of this commit
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in $(seq 1 45); do
+            state=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/status" --jq '.state')
+            echo "vercel status: $state"
+            [ "$state" = success ] && exit 0
+            if [ "$state" = failure ] || [ "$state" = error ]; then echo "deployment failed"; exit 1; fi
+            sleep 10
+          done
+          echo "timed out waiting for the deployment"; exit 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install playwright && playwright install --with-deps chromium
+      - run: python smoke_check.py
