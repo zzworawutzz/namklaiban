@@ -862,8 +862,9 @@ function compareHtml(s, rs){
     '<text x="'+pl+'" y="'+(H-6)+'" font-size="10" fill="var(--muted)">'+esc(fmtTs(new Date(t0).toISOString()))+'</text><text x="'+(W-pr)+'" y="'+(H-6)+'" font-size="10" fill="var(--muted)" text-anchor="end">'+esc(fmtTs(new Date(t1).toISOString()))+'</text></svg>';
   function peak(pts){ var m = pts[0]; pts.forEach(function(p){ if(p.pct_of_bank>m.pct_of_bank) m = p; }); return m; }
   function range(pts){ var v = pts.map(function(p){return p.pct_of_bank;}); return Math.max.apply(null,v)-Math.min.apply(null,v); }
+  function inside(pts){ var m = peak(pts); return m!==pts[0] && m!==pts[pts.length-1]; }   // a maximum at either end of the window is not a real peak
   var note = "";
-  if(range(a)>=5 && range(b)>=5){
+  if(range(a)>=5 && range(b)>=5 && inside(a) && inside(b)){
     var pa = peak(a), pb2 = peak(b), dh = (Date.parse(pb2.ts)-Date.parse(pa.ts))/3600000;
     note = '<p class="note">จุดสูงสุดในช่วงนี้: '+esc(s.name)+' '+esc(fmtTs(pa.ts))+' · '+esc(c.other.name)+' '+esc(fmtTs(pb2.ts))+
       (Math.abs(dh)>=1 ? ' (ห่างกันประมาณ '+Math.round(Math.abs(dh))+' ชม.)' : ' (ใกล้เคียงกัน)')+' ดูเป็นแนวทางเท่านั้น น้ำไหลเร็วช้าขึ้นกับหลายปัจจัย</p>';
