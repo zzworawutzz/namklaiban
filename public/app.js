@@ -473,8 +473,31 @@ function drawNear(o, s0){
     '<button type="button" class="nearbtn" data-id="'+esc(s.id)+'"><div class="nh"><span>'+esc(s.name)+'</span><span class="badge '+s.status+'">'+esc(statusText(s))+'</span></div>'+
     '<div class="nn">ห่างประมาณ '+(d<10 ? d.toFixed(1) : Math.round(d))+' กม.'+(s.province ? ' · จ.'+esc(s.province) : '')+'</div>'+line+
     (s.stale ? '<div class="nn" style="color:var(--watch-ink)">⚠ สถานีนี้ข้อมูลไม่อัปเดต ใช้ประกอบอย่างระวัง</div>' : '')+
-    '<div class="nn">แตะเพื่อดูรายละเอียดและกราฟ →</div></button>';
+    '<div class="nn">แตะเพื่อดูรายละเอียดและกราฟ →</div></button>'+(o.kind==="area" ? "" : '<div class="elev" id="elevBox"></div>');
   el.hidden = false;
+  if(o.kind!=="area") loadElevation(o, s, d);
+}
+/* How high the place is (Open-Meteo elevation, a ~90 m terrain model) next to the nearest station's current water level.
+   A rough comparison of two numbers: it ignores the slope of the river, levees and rain that pools locally. */
+var elevCache = {};
+function loadElevation(o, s, d){
+  var key = o.lat.toFixed(3)+","+o.lng.toFixed(3), box = $("elevBox"); if(!box) return;
+  function show(e){
+    var b = $("elevBox"); if(!b || origin!==o) return;
+    var h = '<b>ความสูงของพื้นที่ตรงนี้ ≈ '+e.toFixed(1)+' ม.รทก.</b> <small>(ประมาณจากแผนที่ความสูง ละเอียดราว 90 ม.)</small>';
+    if(s.water_level!=null && !s.stale && d<=15){
+      var diff = e - s.water_level, a = Math.abs(diff).toFixed(1), cls = diff<0.5 ? " warnv" : "";
+      h += '<div class="'+cls.trim()+'">ระดับน้ำที่สถานี '+esc(s.name)+' (ห่าง '+(d<10 ? d.toFixed(1) : Math.round(d))+' กม.) ตอนนี้ '+s.water_level.toFixed(2)+' ม.รทก. → พื้นที่ตรงนี้ '+
+           (diff>=0.5 ? 'สูงกว่าระดับน้ำที่สถานีประมาณ '+a+' ม.' : diff>-0.5 ? 'ใกล้เคียงระดับน้ำที่สถานี (ต่างกันไม่ถึง 0.5 ม.)' : 'ต่ำกว่าระดับน้ำที่สถานีประมาณ '+a+' ม.')+'</div>';
+    }
+    h += '<div class="note" style="margin:4px 0 0">เป็นการเทียบตัวเลขอย่างหยาบ ไม่รวมความลาดของแม่น้ำ คันกั้นน้ำ หรือน้ำฝนที่ขังในพื้นที่ จึงไม่ได้บอกว่าจะท่วมหรือไม่ท่วม</div>';
+    b.innerHTML = h;
+  }
+  if(elevCache[key]!=null){ show(elevCache[key]); return; }
+  fetch("https://api.open-meteo.com/v1/elevation?latitude="+o.lat.toFixed(5)+"&longitude="+o.lng.toFixed(5))
+    .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+    .then(function(j){ var e = j && j.elevation && j.elevation[0]; if(typeof e==="number"){ elevCache[key] = e; show(e); } })
+    .catch(function(){});   // no elevation: the card simply stays without this block
 }
 $("nearCard").addEventListener("click",function(e){
   var b = e.target.closest ? e.target.closest(".nearbtn") : null; if(b) select(b.getAttribute("data-id"), true);
@@ -765,10 +788,10 @@ $("btnMe").addEventListener("click",function(){
 var HOUSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 3 2 12h3v8h5v-5h4v5h5v-8h3z"/></svg>';
 var rainCache = {}, rainTimer = null, rainSeq = 0;
 function rainPoint(){
-  if(origin) return {lat:origin.lat, lng:origin.lng, name: origin.label || (origin.kind==="home" ? "บ้านของฉัน" : "ตำแหน่งของคุณ")};
+  if(origin) return {lat:origin.lat, lng:origin.lng, place:true, name: origin.label || (origin.kind==="home" ? "บ้านของฉัน" : "ตำแหน่งของคุณ")};
   if(!province) return null;
   var l = stations.filter(function(s){ return s.province===province; }); if(!l.length) return null;
-  return {lat:l.reduce(function(a,s){return a+s.lat;},0)/l.length, lng:l.reduce(function(a,s){return a+s.lng;},0)/l.length, name:"จ."+province};
+  return {lat:l.reduce(function(a,s){return a+s.lat;},0)/l.length, lng:l.reduce(function(a,s){return a+s.lng;},0)/l.length, province:province, name:"จ."+province};
 }
 function rainClass(mm){ return mm<0.1 ? "ไม่มีฝน" : mm<=10 ? "ฝนเล็กน้อย" : mm<=35 ? "ฝนปานกลาง" : mm<=90 ? "ฝนหนัก" : "ฝนหนักมาก"; }
 function refreshRain(){ clearTimeout(rainTimer); rainTimer = setTimeout(loadRain, 400); }
@@ -799,12 +822,35 @@ function drawRain(j, pt){
   card.innerHTML = '<div class="eyebrow">พยากรณ์ฝน · '+esc(pt.name)+'</div>'+
     '<div class="big">'+total.toFixed(0)+' มม. <small>ใน 24 ชม. · '+rainClass(total)+' · โอกาสฝนสูงสุด '+pmax+'%</small></div>'+
     (past!==null ? '<div class="note" style="margin:2px 0">ที่ผ่านมา 24 ชม. ตกไปแล้ว ~'+past.toFixed(0)+' มม. ('+rainClass(past)+')</div>' : "")+
+    '<div class="raingauge" id="gaugeLine" aria-live="polite"><span class="note">กำลังโหลดค่าจากเครื่องวัดฝน…</span></div>'+
     (total>=0.5 ? '<div class="note" style="margin:2px 0">ช่วงที่ฝนแรงสุด ~'+H.time[i0+peak].slice(11,16)+' น. ('+mm[peak].toFixed(1)+' มม./ชม.)</div>' : '<div class="note" style="margin:2px 0">ช่วง 24 ชม. ข้างหน้าแทบไม่มีฝน</div>')+
     '<svg viewBox="0 0 '+W+' '+Hh+'" role="img" aria-label="ปริมาณฝนรายชั่วโมงใน 24 ชั่วโมงข้างหน้า">'+bars+ticks+'</svg>'+
     '<div class="days">'+D.time.map(function(d,i){ return '<div class="day">'+names[i]+'<b>'+(D.precipitation_sum[i]||0).toFixed(0)+' มม.</b><span class="note">โอกาส '+(D.precipitation_probability_max[i]||0)+'%</span></div>'; }).join("")+'</div>'+
     '<p class="note">ข้อมูลพยากรณ์และฝนที่ผ่านมาจาก <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> เป็นผลจากแบบจำลอง ไม่ใช่เครื่องวัดฝนจริง ไม่ใช่ประกาศของกรมอุตุนิยมวิทยา ตำแหน่งที่ใช้ดึงพยากรณ์จะถูกส่งไปยังบริการนี้</p>';
   card.hidden = false;
   lastRain = {name:pt.name, past:past, next:total}; drawOneLine();
+  loadGauges(pt);
+}
+/* Rain actually caught by gauges (ThaiWater, via our server): a province summary, or the gauges nearest to a place. */
+var gaugeCache = {}, gaugeSeq = 0;
+function gaugeHtml2(g, pt){
+  if(pt.place){
+    var l = (g && g.nearby) || [];
+    if(!l.length) return '<span class="note">ไม่มีเครื่องวัดฝนในรัศมี 25 กม. ที่รายงานเมื่อไม่นานมานี้</span>';
+    return '<b>เครื่องวัดฝนใกล้คุณ (ฝน 24 ชม. ที่วัดได้จริง)</b>'+l.map(function(r){
+      return '<div class="gl"><span>'+esc(r.name)+' <small>'+r.distance_km+' กม.</small></span><b>'+Math.round(r.mm24)+' มม.</b></div>'; }).join("");
+  }
+  if(!g || !g.stations) return '<span class="note">ยังไม่มีเครื่องวัดฝนในจังหวัดนี้ที่รายงานเมื่อไม่นานมานี้</span>';
+  return '<b>เครื่องวัดฝนจริง 24 ชม.: สูงสุด '+Math.round(g.max.mm24)+' มม.</b> ที่ '+esc(g.max.name)+
+    '<div class="note" style="margin:2px 0 0">เฉลี่ย '+Math.round(g.mean_mm)+' มม. จาก '+g.stations+' สถานี'+(g.over_35 ? ' · ตั้งแต่ 35 มม. ขึ้นไป '+g.over_35+' สถานี' : '')+'</div>';
+}
+function loadGauges(pt){
+  var my = ++gaugeSeq, box = $("gaugeLine"); if(!box) return;
+  var q = pt.place ? "lat="+pt.lat.toFixed(4)+"&lng="+pt.lng.toFixed(4) : "province="+encodeURIComponent(pt.province||""), hit = gaugeCache[q];
+  function show(g){ var b = $("gaugeLine"); if(my===gaugeSeq && b) b.innerHTML = gaugeHtml2(g, pt)+'<div class="note" style="margin:4px 0 0">วัดจริงจากสถานีวัดฝนของ ThaiWater ต่างจากพยากรณ์ด้านล่างที่มาจากแบบจำลอง</div>'; }
+  if(hit && Date.now()-hit.t < 5*60000){ show(hit.g); return; }
+  getJSON("/api/rain?"+q).then(function(g){ gaugeCache[q] = {t:Date.now(), g:g}; show(g); })
+    .catch(function(){ var b = $("gaugeLine"); if(my===gaugeSeq && b) b.innerHTML = '<span class="note">ยังไม่มีข้อมูลจากเครื่องวัดฝนตอนนี้</span>'; });
 }
 
 /* ---------- low battery: switch off the heavy layers (Chrome on Android only; other browsers have no Battery API) ---------- */

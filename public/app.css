@@ -26,6 +26,10 @@ a{color:var(--accent)}
 h2{font-size:16px;margin:0 0 8px;font-weight:600}
 .note{color:var(--muted);font-size:13px;margin:6px 0}
 .note a{display:inline-block;padding:11px 3px;margin:-11px -3px}   /* links inside small print: 44 px tall to tap, layout unchanged */
+.raingauge{margin:8px 0;padding:8px 10px;border-radius:10px;background:var(--bg);font-size:14px;min-height:64px}
+.raingauge .gl{display:flex;justify-content:space-between;gap:10px;margin-top:2px}.raingauge .gl small{color:var(--muted)}
+.elev{margin-top:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;font-size:14px}
+.elev small{color:var(--muted);font-size:13px}.elev .warnv{margin-top:4px;color:var(--watch-ink);font-weight:600}
 .pills{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;min-height:28px}
 .lvl summary{min-height:44px;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--muted);list-style:none}
 .lvl summary::-webkit-details-marker{display:none}
