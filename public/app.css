@@ -252,7 +252,7 @@ html.booting #emergency, html.booting #foot{display:none}
 .btn[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
 .cta{display:flex;gap:12px;align-items:center;background:linear-gradient(135deg,rgba(6,199,85,.12),rgba(6,199,85,.04));border-color:rgba(6,199,85,.35)}
 .cta p{margin:0;font-size:13px;flex:1;color:var(--ink)}
-.cta a{flex:none;display:inline-flex;align-items:center;min-height:44px;background:#06c755;color:#fff;font-weight:700;text-decoration:none;padding:0 16px;border-radius:12px;font-size:14px;white-space:nowrap}
+.cta a{flex:none;display:inline-flex;align-items:center;min-height:44px;background:#06c755;color:#04201a;font-weight:700;text-decoration:none;padding:0 16px;border-radius:12px;font-size:14px;white-space:nowrap}
 .rows li+li{margin-top:8px}
 .row{width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px;text-align:left;transition:border-color .15s,transform .15s}
 .row:hover{border-color:var(--accent)}
