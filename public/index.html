@@ -217,6 +217,8 @@ h2{font-size:16px;margin:0 0 8px;font-weight:600}
 
 /* ---- cards & lists ---- */
 .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 16px;margin:0 0 12px}
+.delay{background:var(--watch-bg);border:1px solid var(--watch);border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.45;margin-bottom:12px}
+.delay b{display:block;font-size:14px}
 .err{background:var(--alert-bg);border:1px solid var(--alert);border-radius:12px;padding:8px 12px;font-size:14px;margin-bottom:12px}
 .eyebrow{font-size:12px;color:var(--muted);font-weight:500}
 #sumTitle{font-size:22px;line-height:1.25;margin:0;font-weight:700}
@@ -406,6 +408,7 @@ svg.chart{width:100%;height:auto;display:block}
   <div class="fab" id="fab"></div>
   <button id="grab" type="button" aria-label="ขยายหรือย่อแผงข้อมูล"><span></span></button>
   <div id="sheetBody">
+    <div id="delayBar" class="delay" role="status" hidden></div>
     <div id="err" class="err" role="alert" hidden></div>
     <section class="card near" id="nearCard" hidden aria-live="polite"></section>
     <section class="card" id="summary" aria-live="polite">
@@ -856,7 +859,24 @@ function showProvince(fit){
   list = list.slice().sort(function(a,b){ return (b.pct_of_bank==null?-1:b.pct_of_bank)-(a.pct_of_bank==null?-1:a.pct_of_bank); });
   showResults("น้ำสูงสุดใน จ."+province+" (10 จาก "+list.length+" สถานี)", list.slice(0,10));
 }
+/* "data may be late" bar: the server tells us when ingest keeps failing or the source stopped sending new readings */
+var DELAY_READING_MIN = 180;
+function checkHealth(){
+  getJSON("/health").then(function(h){
+    var bar = $("delayBar"), msg = "";
+    if(h.ingest_ok===false){
+      msg = h.last_ingest_age_min==null ? "ระบบยังดึงข้อมูลจาก ThaiWater ไม่สำเร็จ"
+          : "ระบบดึงข้อมูลจาก ThaiWater ไม่ได้มาแล้ว "+fmtAge(h.last_ingest_age_min).replace(/\s?ที่แล้ว$/,"");
+    } else if(h.latest_reading_age_min!=null && h.latest_reading_age_min>DELAY_READING_MIN){
+      msg = "ต้นทาง (ThaiWater) ยังไม่ส่งค่าใหม่มา "+fmtAge(h.latest_reading_age_min).replace(/\s?ที่แล้ว$/,"");
+    }
+    if(!msg){ bar.hidden = true; bar.innerHTML = ""; return; }
+    bar.innerHTML = "<b>ข้อมูลอาจล่าช้า</b>"+esc(msg)+" ตัวเลขที่เห็นอาจไม่ใช่ค่าปัจจุบัน ถ้าต้องตัดสินใจ โปรดตรวจกับ ปภ. โทร 1784";
+    bar.hidden = false;
+  }).catch(function(){});   // no health answer: the normal error bar below already covers a dead API
+}
 function load(){
+  checkHealth();
   return getJSON("/stations").then(function(list){
     stations = list; byId = {}; list.forEach(function(s){byId[s.id]=s;});
     showErr(""); drawProvinceSelect(); redraw();
