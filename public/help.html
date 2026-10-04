@@ -9,11 +9,11 @@
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#f3f6f8;--surface:#fff;--ink:#0f2530;--muted:#5b7482;--line:#e1e9ee;--accent:#0b6e8f;--accent-ink:#fff;--accent-soft:rgba(11,110,143,.1);
---normal:#1b8f61;--watch:#c98a00;--alert:#d2372f;--unknown:#6b7f8a;
+:root{--bg:#f3f6f8;--surface:#fff;--ink:#0f2530;--muted:#4f6a77;--line:#e1e9ee;--accent:#0b6e8f;--accent-ink:#fff;--accent-soft:rgba(11,110,143,.1);
+--normal:#17835a;--watch:#c98a00;--alert:#d2372f;--unknown:#6b7f8a;--normal-ink:#12724b;--watch-ink:#845900;--alert-ink:#b02a22;--unknown-ink:#566a75;
 --normal-bg:rgba(27,143,97,.13);--watch-bg:rgba(201,138,0,.15);--alert-bg:rgba(210,55,47,.12);--unknown-bg:rgba(107,127,138,.15);
 --glass:rgba(255,255,255,.92);--shadow:0 8px 28px rgba(15,37,48,.14),0 1px 3px rgba(15,37,48,.08);--blue:#2f6fd6}
-@media (prefers-color-scheme:dark){:root{--bg:#0a171d;--surface:#122630;--ink:#e8f1f5;--muted:#93acb8;--line:#223e4a;--accent:#5bc0e6;--accent-ink:#04202b;--accent-soft:rgba(91,192,230,.14);--normal:#3dc08a;--watch:#e8b43a;--alert:#ff6b61;--unknown:#98adb7;--glass:rgba(18,38,48,.9);--shadow:0 8px 28px rgba(0,0,0,.5),0 1px 3px rgba(0,0,0,.4)}}
+@media (prefers-color-scheme:dark){:root{--bg:#0a171d;--surface:#122630;--ink:#e8f1f5;--muted:#93acb8;--line:#223e4a;--accent:#5bc0e6;--accent-ink:#04202b;--accent-soft:rgba(91,192,230,.14);--normal-ink:#3dc08a;--watch-ink:#e8b43a;--alert-ink:#ff6b61;--unknown-ink:#98adb7;--normal:#3dc08a;--watch:#e8b43a;--alert:#ff6b61;--unknown:#98adb7;--glass:rgba(18,38,48,.9);--shadow:0 8px 28px rgba(0,0,0,.5),0 1px 3px rgba(0,0,0,.4)}}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth;scroll-padding-top:74px}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:"IBM Plex Sans Thai",system-ui,sans-serif;font-size:16px;line-height:1.65;-webkit-text-size-adjust:100%}
@@ -41,7 +41,7 @@ ul,ol{margin:6px 0;padding-left:22px}li{margin:3px 0}
 .dot{display:inline-block;width:12px;height:12px;border-radius:50%;vertical-align:-1px}
 .d-normal{background:var(--normal)}.d-watch{background:var(--watch);border-radius:3px}.d-alert{background:var(--alert)}.d-unknown{background:var(--unknown)}
 .mk{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;color:#fff;font-weight:700;font-size:12px;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35);vertical-align:middle}
-.mk.normal{background:var(--normal)}.mk.watch{background:var(--watch);border-radius:8px}.mk.alert{background:var(--alert);width:36px;height:36px}.mk.unknown{background:var(--unknown)}
+.mk.normal{background:#17835a;color:#fff}.mk.watch{background:#c98a00;color:#1a1200;border-radius:8px}.mk.alert{background:#d2372f;color:#fff;width:36px;height:36px}.mk.unknown{background:#fff;color:#566a75;box-shadow:0 0 0 2px #6b7f8a}   /* the same fixed colours as the map markers */
 table{width:100%;border-collapse:collapse;font-size:15px;margin:8px 0}
 th,td{text-align:left;padding:8px 6px;border-top:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-weight:500;border-top:0}
 code{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:1px 8px;font-size:14px;font-family:inherit;font-weight:600;white-space:nowrap}

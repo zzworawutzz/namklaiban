@@ -4,7 +4,8 @@ var QS = new URLSearchParams(location.search);
 // ?api=... wins; opened from a file -> local dev API; otherwise the API serves this page, so same origin.
 var API = (QS.get("api") || (location.protocol==="file:" ? "http://127.0.0.1:8000" : location.origin)).replace(/\/$/,"");
 var LABEL = {normal:"ปกติ", watch:"เฝ้าระวัง", alert:"เตือนภัย", unknown:"ไม่มีเกณฑ์เทียบ"};
-var COLOR = {normal:"#1b8f61", watch:"#c98a00", alert:"#d2372f", unknown:"#6b7f8a"};
+var COLOR = {normal:"#17835a", watch:"#c98a00", alert:"#d2372f", unknown:"#6b7f8a"};
+var INK = {normal:"var(--normal-ink)", watch:"var(--watch-ink)", alert:"var(--alert-ink)", unknown:"var(--unknown-ink)"};   // for text: darker in light mode
 var REFRESH_MS = 5*60*1000;
 var Z = {alert:600, watch:400, unknown:200, normal:0};
 var CLUSTER_OFF_ZOOM = 11;
@@ -233,7 +234,7 @@ function drawSummary(){
   var bits = [];
   if(rising) bits.push("▲ กำลังสูงขึ้น "+rising+" สถานี");
   if(k.stale) bits.push("ข้อมูลค้าง "+k.stale+" สถานี");
-  $("sumBody").innerHTML = '<div class="oneline" id="oneLine"></div><div class="verdict" style="--vc:'+COLOR[kind]+'"><div class="vh" style="color:'+COLOR[kind]+'">'+esc(head)+'</div>'+line2+
+  $("sumBody").innerHTML = '<div class="oneline" id="oneLine"></div><div class="verdict" style="--vc:'+COLOR[kind]+'"><div class="vh" style="color:'+INK[kind]+'">'+esc(head)+'</div>'+line2+
     (bits.length ? '<div class="vm">'+esc(bits.join(" · "))+'</div>' : "")+
     '<div class="vn">% ของตลิ่ง = ระดับน้ำเทียบกับความสูงตลิ่ง 100% คือน้ำเสมอตลิ่ง</div></div>'+fastHtml(list);
   drawOneLine(); endBoot();
@@ -241,7 +242,7 @@ function drawSummary(){
 function fastHtml(list){
   var f = fastRisers(list); if(!f.length) return "";
   return '<div class="fast"><h3>▲ น้ำขึ้นเร็วใน 3 ชม.ที่ผ่านมา</h3>'+f.map(function(s){
-    return '<button type="button" class="fastrow" data-id="'+esc(s.id)+'"><span>'+esc(s.name)+'<small>'+esc(s.province||"")+' · '+pctText(s)+(s.pct_of_bank!=null?' ของตลิ่ง':'')+'</small></span><b style="color:'+(COLOR[s.status]||COLOR.unknown)+'">+'+Math.round(s.rise_3h_m*100)+' ซม.</b></button>';
+    return '<button type="button" class="fastrow" data-id="'+esc(s.id)+'"><span>'+esc(s.name)+'<small>'+esc(s.province||"")+' · '+pctText(s)+(s.pct_of_bank!=null?' ของตลิ่ง':'')+'</small></span><b style="color:'+(INK[s.status]||INK.unknown)+'">+'+Math.round(s.rise_3h_m*100)+' ซม.</b></button>';
   }).join("")+'<div class="note" style="margin:6px 0 0">นับจากระดับน้ำจริงของสถานี ไม่นับค่าที่กระโดดผิดปกติ</div></div>';
 }
 $("sumBody").addEventListener("click",function(e){ var b = e.target.closest ? e.target.closest(".fastrow") : null; if(b) select(b.getAttribute("data-id"),true); });
@@ -471,7 +472,7 @@ function drawNear(o, s0){
   el.innerHTML = '<div class="eyebrow">สถานีที่ใกล้'+(o.kind==="area" ? ' ' : '')+esc(who)+(o.kind==="area" ? ' ' : '')+'ที่สุด</div>'+
     '<button type="button" class="nearbtn" data-id="'+esc(s.id)+'"><div class="nh"><span>'+esc(s.name)+'</span><span class="badge '+s.status+'">'+esc(statusText(s))+'</span></div>'+
     '<div class="nn">ห่างประมาณ '+(d<10 ? d.toFixed(1) : Math.round(d))+' กม.'+(s.province ? ' · จ.'+esc(s.province) : '')+'</div>'+line+
-    (s.stale ? '<div class="nn" style="color:var(--watch)">⚠ สถานีนี้ข้อมูลไม่อัปเดต ใช้ประกอบอย่างระวัง</div>' : '')+
+    (s.stale ? '<div class="nn" style="color:var(--watch-ink)">⚠ สถานีนี้ข้อมูลไม่อัปเดต ใช้ประกอบอย่างระวัง</div>' : '')+
     '<div class="nn">แตะเพื่อดูรายละเอียดและกราฟ →</div></button>';
   el.hidden = false;
 }
@@ -1034,7 +1035,7 @@ function rtVerdict(ev){
   if(rep) return {cls:"bad", color:"#d2372f", text:"มีรายงานน้ำท่วมบนเส้นทาง "+rep+" จุด"+(al?" และผ่านใกล้สถานีเตือนภัย "+al+" แห่ง":"")+" ควรเลี่ยงหรือตรวจสอบก่อนเดินทาง"};
   if(al) return {cls:"bad", color:"#d2372f", text:"ผ่านใกล้สถานีเตือนภัย "+al+" แห่ง ระดับน้ำใกล้ล้นตลิ่ง ถนนช่วงนั้นอาจมีน้ำท่วม"};
   if(wa) return {cls:"warn", color:"#c98a00", text:"ผ่านใกล้สถานีเฝ้าระวัง "+wa+" แห่ง ควรติดตามสถานการณ์ระหว่างเดินทาง"};
-  return {cls:"ok", color:"#1b8f61", text:"ไม่พบจุดเสี่ยงจากข้อมูลที่มี (ไม่ได้หมายความว่าปลอดภัย ข้อมูลอาจไม่ครบหรือไม่ทัน)"};
+  return {cls:"ok", color:"#17835a", text:"ไม่พบจุดเสี่ยงจากข้อมูลที่มี (ไม่ได้หมายความว่าปลอดภัย ข้อมูลอาจไม่ครบหรือไม่ทัน)"};
 }
 function rtDraw(){
   rtLayer.clearLayers();

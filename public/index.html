@@ -6,7 +6,7 @@
 <title>น้ำใกล้บ้านฉัน</title>
 <meta name="theme-color" content="#f3f6f8" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0a171d" media="(prefers-color-scheme: dark)">
-<link rel="preconnect" href="https://cdnjs.cloudflare.com">
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://tile.openstreetmap.org">
@@ -26,10 +26,10 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon.svg">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" integrity="sha384-c6Rcwz4e4CITMbu/NBmnNS8yN2sC3cUElMEMfP3vqqKFp7GOYaaBBCqmaWBjmkjb" crossorigin="anonymous">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css" integrity="sha384-uIZNAcoEHVWMk8LrCSX95DJk6FQzH6zG00LQC9BykRY1UKKpkDzDhbDLYQ1Ho3mI" crossorigin="anonymous">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="app.css?v=34">
+<link rel="stylesheet" href="app.css?v=35">
 </head>
 <body>
 <h1 class="sr">น้ำใกล้บ้านฉัน</h1>
@@ -107,7 +107,7 @@
       <label><input type="radio" name="rptLv" value="4">เกินเอว</label>
     </div>
     <input type="text" id="rptNote" maxlength="140" placeholder="หมายเหตุสั้นๆ (ไม่บังคับ) เช่น ถนนหน้าตลาด รถเล็กผ่านไม่ได้" aria-label="หมายเหตุ">
-    <p class="note" id="rptErr" role="alert" hidden style="color:var(--alert)"></p>
+    <p class="note" id="rptErr" role="alert" hidden style="color:var(--alert-ink)"></p>
     <div class="acts"><button class="btn" id="rptCancel" type="button">ยกเลิก</button><button class="btn primary" id="rptSend" type="button" disabled>ส่งรายงาน</button></div>
     <p class="note">ไม่ใช่ประกาศทางการ ถ้าอยู่ในอันตรายโทร 1784 (ปภ.) หรือ 191</p>
   </div>
@@ -120,7 +120,7 @@
     <div class="frow"><input type="text" id="rtFrom" placeholder="ชื่อสถานที่ เช่น ตลาดบางปะอิน" autocomplete="off"><button class="btn" id="rtGps" type="button">ตำแหน่งฉัน</button></div>
     <label class="f" for="rtTo">ปลายทาง</label>
     <div class="frow"><input type="text" id="rtTo" placeholder="ชื่อสถานที่ เช่น สยามพารากอน" autocomplete="off"></div>
-    <p class="note" id="rtErr" role="alert" hidden style="color:var(--alert)"></p>
+    <p class="note" id="rtErr" role="alert" hidden style="color:var(--alert-ink)"></p>
     <div class="acts"><button class="btn" id="rtCancel" type="button">ยกเลิก</button><button class="btn" id="rtReset" type="button">ล้างค่า</button><button class="btn primary" id="rtGo" type="button">ตรวจเส้นทาง</button></div>
     <p class="note">คำนวณเส้นทางด้วย OSRM และค้นหาสถานที่ด้วย OpenStreetMap (ต้นทางและปลายทางที่พิมพ์จะถูกส่งไปยังบริการเหล่านั้น) ผลเป็นการประเมินคร่าวๆ ไม่ได้รับประกันว่าผ่านได้ ถ้าไม่แน่ใจโทร 1784 หรือ 191</p>
   </div>
@@ -183,8 +183,8 @@
   </div>
 </aside>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
-<script src="app.js?v=34"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" integrity="sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js" integrity="sha384-eXVCORTRlv4FUUgS/xmOyr66XBVraen8ATNLMESp92FKXLAMiKkerixTiBvXriZr" crossorigin="anonymous"></script>
+<script src="app.js?v=35"></script>
 </body>
 </html>
