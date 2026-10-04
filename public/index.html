@@ -74,7 +74,11 @@ h2{font-size:16px;margin:0 0 8px;font-weight:600}
 
 
 /* ---- shelters, rain radar, emergency numbers ---- */
-.shl{width:14px;height:14px;border-radius:4px;background:#1b8f61;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.4)}
+.shl{width:32px;height:32px;border-radius:10px;background:#1d4ed8;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center}
+.shl svg{width:20px;height:20px;display:block}
+.shw{width:32px;height:32px;display:flex;align-items:center;justify-content:center}
+.zsm .shl{width:22px;height:22px;border-radius:7px}.zsm .shl svg{width:14px;height:14px}   /* zoomed out: smaller so they do not pile up */
+.shl.sm{width:20px;height:20px;border-radius:6px;vertical-align:-5px;margin-right:4px;display:inline-flex}.shl.sm svg{width:13px;height:13px}
 .shp b{font-size:15px}.shp .note{margin:3px 0}.shp a{font-weight:600}
 .srow{display:flex;justify-content:space-between;gap:10px;align-items:center;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
 .srow:hover{border-color:var(--accent)}.srow small{display:block;color:var(--muted);font-size:13px}
@@ -366,7 +370,7 @@ svg.chart{width:100%;height:auto;display:block}
       <option value="1day">ย้อนหลัง 1 วัน</option><option value="3days">3 วัน</option><option value="7days" selected>7 วัน</option><option value="30days">30 วัน</option>
     </select>
   </div>
-  <label class="chk"><input type="checkbox" id="chkShl"><span>ศูนย์พักพิงชั่วคราว (ปภ.)<br><span class="note">แสดงตามพื้นที่ที่เลือก (จังหวัด / อำเภอ / ตำบล) ข้อมูลอาจไม่เป็นปัจจุบัน โทรสอบถามก่อนเดินทาง</span></span></label>
+  <label class="chk"><input type="checkbox" id="chkShl"><span><span class="shl sm"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 3 2 12h3v8h5v-5h4v5h5v-8h3z"/></svg></span>ศูนย์พักพิงชั่วคราว (ปภ.)<br><span class="note">แสดงตามพื้นที่ที่เลือก (จังหวัด / อำเภอ / ตำบล) ข้อมูลอาจไม่เป็นปัจจุบัน โทรสอบถามก่อนเดินทาง</span></span></label>
   <label class="chk"><input type="checkbox" id="chkRadar"><span>เรดาร์ฝน (ย้อนหลัง 2 ชม.)<br><span class="note">ภาพจาก RainViewer ความละเอียดต่ำ ใช้ดูทิศทางฝนคร่าวๆ</span></span></label>
   <div id="radarCtl" hidden><button class="btn" id="radarPlay" type="button">▶ เล่น</button><span id="radarTime" aria-live="polite"></span></div>
   <label class="chk"><input type="checkbox" id="chkRpt" checked><span>จุดน้ำท่วมที่ผู้ใช้รายงาน<br><span class="note">ข้อมูลจากผู้ใช้ ยังไม่ผ่านการตรวจสอบ แสดง 12 ชม. ล่าสุด</span></span></label>
@@ -1083,6 +1087,7 @@ $("btnMe").addEventListener("click",function(){
 
 
 /* ---------- rain forecast (Open-Meteo, next 24 h + 3 days) ---------- */
+var HOUSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 3 2 12h3v8h5v-5h4v5h5v-8h3z"/></svg>';
 var rainCache = {}, rainTimer = null, rainSeq = 0;
 function rainPoint(){
   if(origin) return {lat:origin.lat, lng:origin.lng, name: origin.label || (origin.kind==="home" ? "บ้านของฉัน" : "ตำแหน่งของคุณ")};
@@ -1127,6 +1132,8 @@ function drawRain(j, pt){
 }
 
 /* ---------- shelters (DDPM open data, via our API) ---------- */
+function syncShelterSize(){ map.getContainer().classList.toggle("zsm", map.getZoom() < 12); }
+map.on("zoomend", syncShelterSize); syncShelterSize();
 var shelterLayer = L.layerGroup().addTo(map), shelterProv = null, shelterData = [];
 function shelterPopup(s){
   return '<div class="shp"><b>'+esc(s.name)+'</b><div class="note">ต.'+esc(s.subdistrict)+' อ.'+esc(s.district)+' จ.'+esc(s.province)+'</div>'+
@@ -1139,7 +1146,7 @@ function drawShelters(){
   shelterLayer.clearLayers();
   if(!$("chkShl").checked) return;
   shelterData.forEach(function(s){
-    L.marker([s.lat,s.lng],{icon:L.divIcon({className:"",html:'<div class="shl"></div>',iconSize:[14,14],iconAnchor:[7,7]}),title:"ศูนย์พักพิง: "+s.name,keyboard:true})
+    L.marker([s.lat,s.lng],{icon:L.divIcon({className:"",html:'<div class="shw"><div class="shl">'+HOUSE+'</div></div>',iconSize:[32,32],iconAnchor:[16,16]}),title:"ศูนย์พักพิง: "+s.name,keyboard:true})
       .bindPopup(shelterPopup(s)).addTo(shelterLayer);
   });
 }
