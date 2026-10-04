@@ -30,11 +30,12 @@ import ingest as ig  # noqa: E402
 STATIONS = [("A", "ท่าช้าง", "ปทุมธานี", 14.03, 100.73, 3.0, 0.5, 0),
             ("B", "บางบาล", "ปทุมธานี", 14.10, 100.60, 3.0, 1.0, 8),
             ("C", "คลองหลวง", "ปทุมธานี", 14.20, 100.50, 3.0, 2.0, 16),
-            ("D", "เมืองนนท์", "นนทบุรี", 13.86, 100.51, 3.0, 0.2, 0)]
+            ("D", "เมืองนนท์", "นนทบุรี", 13.86, 100.51, 3.0, 0.2, 0),
+            ("E", "ท่าเรือ", "พระนครศรีอยุธยา", 14.60, 100.90, 3.0, 1.0, 0)]   # E sits at 60 % of the bank all week: normal, but well up
 
 
 def build_database(path):
-    """Four stations on one river, a week of hourly readings. A is at alert level and has just risen 45 cm."""
+    """Five stations on one river, a week of hourly readings. A is at alert level and has just risen 45 cm."""
     c = db.connect(str(path))
     ig.init_db(c)
     now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
@@ -47,6 +48,8 @@ def build_database(path):
             level = 1.2 + 1.0 * math.sin((7 * 24 - h - lag) / 30.0)
             if sid == "A":
                 level = 2.4 + (3 - h) * 0.2 if h <= 3 else 1.2 + 1.0 * math.sin((7 * 24 - h) / 30.0) * 0.5
+            if sid == "E":
+                level = 1.8
             pct = level / bank * 100
             c.execute("INSERT INTO readings VALUES(?,?,?,?,?)", (sid, ts, level, pct, ig.status_of(pct)))
     c.execute("INSERT INTO ingest_runs(ts,ok,stations,readings,skipped) VALUES(?,1,4,4,0)", (core.iso(now),))

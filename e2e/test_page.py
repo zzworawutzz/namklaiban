@@ -260,3 +260,17 @@ def test_gps_near_a_normal_station_compares_the_ground_height_with_its_water_lev
     assert "คลองหลวง" in elev and "สูงกว่าระดับน้ำที่สถานี" in elev, elev
     assert "ไม่ได้บอกว่าจะท่วมหรือไม่ท่วม" in elev
     assert not errors
+
+
+def test_gps_near_a_normal_station_that_is_over_halfway_up_the_bank_shows_only_the_ground_height(context, site):
+    context.grant_permissions(["geolocation"])
+    context.set_geolocation({"latitude": 14.601, "longitude": 100.901})              # next to station E: normal, but 60 % of the bank
+    page = context.new_page()
+    errors = watch(page)
+    open_page(page, site)
+    page.evaluate("document.getElementById('btnMe').click()")
+    page.wait_for_selector("#elevBox b", timeout=20000)
+    elev = page.inner_text("#elevBox")
+    assert "≈ 2.6 ม.รทก." in elev and "60% ของตลิ่ง" in elev and "ไม่นำมาเทียบกับระดับน้ำ" in elev, elev
+    assert not any(w in elev for w in ("สูงกว่า", "ต่ำกว่า", "ใกล้เคียง", "ระดับน้ำที่สถานี")), elev
+    assert not errors
