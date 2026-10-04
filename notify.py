@@ -28,6 +28,7 @@ import core
 import floodreports
 import db
 import rainalert
+import sendlog
 import report
 from ingest import TZ_TH, init_db, utc_now
 
@@ -91,6 +92,19 @@ def _post_with_fallback(url, base, text, flex, quick, timeout):
 
 def send_line(target, text, flex=None):
     _post_with_fallback(LINE_PUSH, {"to": target}, text, flex, None, 15)
+
+
+def _line_get(url, timeout=10):
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {_line_token()}"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.load(r)
+
+
+def line_quota():
+    """(limit, used) of this month's push messages from LINE itself. limit is None when the plan has no cap."""
+    q = _line_get("https://api.line.me/v2/bot/message/quota")
+    used = _line_get("https://api.line.me/v2/bot/message/quota/consumption").get("totalUsage", 0)
+    return (q.get("value") if q.get("type") == "limited" else None), used
 
 
 def reply_line(reply_token, text, flex=None, quick=None):
@@ -236,13 +250,16 @@ def run(conn, at=None, senders=SENDERS):
                         and st["status"] in ("watch", "alert"))
             if ((eta_soon or fast_rise(st)) and (sub["notify_level"] != "alert" or urgent)
                     and not (quiet_now and not urgent) and _since(sub["last_early"], at, EARLY_COOLDOWN_H)):
+                kind = "early" if eta_soon else "fast"
                 try:
                     _invoke(senders[sub["channel"]], sub["target"], (early_message if eta_soon else fast_message)(sub, st),
                             flex=cards.station_card(sub["label"], st, report_link(st["province"])))
                     conn.execute("UPDATE subscriptions SET last_early=? WHERE id=?", (_iso(at), sub["id"]))
+                    sendlog.record(conn, at, kind, st["province"])
                     sent += 1
                 except Exception as e:
                     print(f"early warning failed for subscription {sub['id']}: {e}", file=sys.stderr)
+                    sendlog.record(conn, at, kind, st["province"], ok=False)
                     failed += 1
                 continue
             # 2) people near home report flooding and others confirm it
@@ -253,9 +270,11 @@ def run(conn, at=None, senders=SENDERS):
                     try:
                         _invoke(senders[sub["channel"]], sub["target"], report_alert_message(sub, close[0][1], close[0][0]))
                         conn.execute("UPDATE subscriptions SET last_report_alert=? WHERE id=?", (_iso(at), sub["id"]))
+                        sendlog.record(conn, at, "report", st["province"])
                         sent += 1
                     except Exception as e:
                         print(f"report alert failed for subscription {sub['id']}: {e}", file=sys.stderr)
+                        sendlog.record(conn, at, "report", st["province"], ok=False)
                         failed += 1
                     continue
         if not changed or (prev is None and st["status"] not in ("watch", "alert")):
@@ -272,10 +291,12 @@ def run(conn, at=None, senders=SENDERS):
                     flex=cards.station_card(sub["label"], st, report_link(st["province"])))
         except Exception as e:
             print(f"send failed for subscription {sub['id']}: {e}", file=sys.stderr)
+            sendlog.record(conn, at, "status", st["province"], ok=False)
             failed += 1
             continue
         conn.execute("UPDATE subscriptions SET last_status=?, last_notified=? WHERE id=?",
                      (st["status"], utc_now(), sub["id"]))
+        sendlog.record(conn, at, "status", st["province"])
         sent += 1
     conn.commit()
     return sent, failed
@@ -355,9 +376,11 @@ def run_digest(conn, at=None, senders=SENDERS):
                     flex=cards.digest_card(rep, report.thai_date(at), report_link(prov)))
         except Exception as e:
             print(f"digest failed for subscription {sub['id']}: {e}", file=sys.stderr)
+            sendlog.record(conn, at, "digest", prov, ok=False)
             failed += 1
             continue
         conn.execute("UPDATE subscriptions SET last_digest=? WHERE id=?", (slot[0], sub["id"]))
+        sendlog.record(conn, at, "digest", prov)
         conn.commit()
         done.add((sub["channel"], sub["target"], prov))
         sent += 1

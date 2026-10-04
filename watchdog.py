@@ -133,3 +133,117 @@ def check_storage(conn, at, send=None, size_mb=None):
             pass
         print(f"storage check failed: {type(e).__name__}: {e}", file=sys.stderr)
     return None
+
+
+# ---- LINE message quota ---------------------------------------------------------------------
+# The free LINE plan allows a fixed number of pushed messages a month; past it, pushes fail until the month turns.
+QUOTA_KEY, QUOTA_CHECKED_KEY = "line_quota_alert", "line_quota_checked"
+QUOTA_WARN = 0.8
+QUOTA_CHECK_EVERY_H = 6
+QUOTA_REMIND_H = 24
+
+
+def check_line_quota(conn, at, send=None, fetch=None):
+    """Ask LINE how much of this month's quota is used (at most every QUOTA_CHECK_EVERY_H hours) and warn the owner
+    from QUOTA_WARN on, repeating daily. Returns 'warn' when a message was sent. Never raises."""
+    try:
+        target = os.environ.get("ADMIN_LINE_ID", "").strip()
+        if not target:
+            return None
+        row = conn.execute("SELECT ts FROM alert_state WHERE name=?", (QUOTA_CHECKED_KEY,)).fetchone()
+        if row and at - core.parse(row["ts"]) < timedelta(hours=QUOTA_CHECK_EVERY_H):
+            return None
+        conn.execute("DELETE FROM alert_state WHERE name=?", (QUOTA_CHECKED_KEY,))
+        conn.execute("INSERT INTO alert_state(name, ts) VALUES(?,?)", (QUOTA_CHECKED_KEY, _iso(at)))
+        conn.commit()
+        limit, used = (fetch or notify.line_quota)()
+        since = conn.execute("SELECT ts FROM alert_state WHERE name=?", (QUOTA_KEY,)).fetchone()
+        since = since["ts"] if since else None
+        if limit is None or used < limit * QUOTA_WARN:
+            if since is not None:
+                conn.execute("DELETE FROM alert_state WHERE name=?", (QUOTA_KEY,))
+                conn.commit()
+            return None
+        if since is not None and at - core.parse(since) < timedelta(hours=QUOTA_REMIND_H):
+            return None
+        left = max(limit - used, 0)
+        (send or notify.send_line)(target, f"⚠️ น้ำใกล้บ้านฉัน: โควตาข้อความ LINE เดือนนี้ใช้ไป {used} จาก {limit} ({used / limit * 100:.0f}%) "
+                                           f"เหลือ {left}\nถ้าเต็ม ข้อความเตือนผู้ใช้จะส่งไม่ได้จนกว่าจะขึ้นเดือนใหม่ ลดความถี่สรุป (DIGEST_EVERY_H) หรืออัปเกรดแพ็กเกจ")
+        conn.execute("DELETE FROM alert_state WHERE name=?", (QUOTA_KEY,))
+        conn.execute("INSERT INTO alert_state(name, ts) VALUES(?,?)", (QUOTA_KEY, _iso(at)))
+        conn.commit()
+        return "warn"
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        print(f"line quota check failed: {type(e).__name__}: {e}", file=sys.stderr)
+    return None
+
+
+# ---- agencies / provinces that go quiet together -----------------------------------------------
+# watchdog.check already notices when NOTHING reports. This catches one agency (or one province's stations from
+# one agency) going silent while the rest keep reporting.
+SILENT_H = 6
+SILENT_MIN_STATIONS = 3          # a province needs this many stations from one agency to count as a group
+AGENCY_MIN_STATIONS, AGENCY_SILENT_SHARE = 10, 0.25
+SILENT_PREFIX = "silent:"
+SILENT_LIST_MAX = 6
+
+
+def silent_groups(conn, at):
+    """Labels of groups that stopped reporting: every station of one agency in one province, or at least a quarter of an agency."""
+    cut = core.iso(at - timedelta(hours=SILENT_H))
+    rows = conn.execute("SELECT s.source, s.province, MAX(r.ts) AS ts FROM stations s "
+                        "LEFT JOIN readings r ON r.station_id = s.id GROUP BY s.id, s.source, s.province").fetchall()
+    by_agency, by_prov = {}, {}
+    for r in rows:
+        quiet = r["ts"] is None or r["ts"] < cut
+        for table, key in ((by_agency, r["source"]), (by_prov, (r["source"], r["province"]))):
+            if key and (key[0] if isinstance(key, tuple) else key):
+                table.setdefault(key, []).append(quiet)
+    out = []
+    for src, v in by_agency.items():
+        if len(v) >= AGENCY_MIN_STATIONS and sum(v) / len(v) >= AGENCY_SILENT_SHARE:
+            out.append(f"หน่วยงาน {src} ({sum(v)} จาก {len(v)} สถานี)")
+    for (src, prov), v in by_prov.items():
+        if prov and len(v) >= SILENT_MIN_STATIONS and all(v):
+            out.append(f"{src} จ.{prov} ({len(v)} สถานี)")
+    return sorted(out)
+
+
+def check_silent(conn, at, send=None):
+    """Tell the owner when a group of stations goes quiet, and when it is back. One message per change, no repeats.
+    Skipped while the whole feed is broken (check() already reports that). Returns 'silent', 'back' or None."""
+    try:
+        target = os.environ.get("ADMIN_LINE_ID", "").strip()
+        if not target or problem(conn, at):
+            return None
+        now = set(silent_groups(conn, at))
+        before = {r["name"][len(SILENT_PREFIX):] for r in conn.execute(
+            "SELECT name FROM alert_state WHERE name LIKE ?", (SILENT_PREFIX + "%",)).fetchall()}
+        new, back = sorted(now - before), sorted(before - now)
+        send = send or notify.send_line
+        kind = None
+        if new:
+            more = f"\n…และอีก {len(new) - SILENT_LIST_MAX} กลุ่ม" if len(new) > SILENT_LIST_MAX else ""
+            send(target, f"⚠️ น้ำใกล้บ้านฉัน: สถานีกลุ่มนี้ไม่มีข้อมูลใหม่เกิน {SILENT_H} ชั่วโมง ขณะที่สถานีอื่นยังอัปเดตปกติ\n"
+                         + "\n".join("• " + g for g in new[:SILENT_LIST_MAX]) + more)
+            kind = "silent"
+        if back:
+            send(target, "✅ น้ำใกล้บ้านฉัน: กลับมามีข้อมูลแล้ว\n" + "\n".join("• " + g for g in back[:SILENT_LIST_MAX]))
+            kind = kind or "back"
+        for g in new:
+            conn.execute("INSERT INTO alert_state(name, ts) VALUES(?,?)", (SILENT_PREFIX + g, _iso(at)))
+        for g in back:
+            conn.execute("DELETE FROM alert_state WHERE name=?", (SILENT_PREFIX + g,))
+        conn.commit()
+        return kind
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        print(f"silence check failed: {type(e).__name__}: {e}", file=sys.stderr)
+    return None

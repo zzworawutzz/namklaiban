@@ -13,3 +13,4 @@ run.sh
 .DS_Store
 richmenu
 smoke_check.py
+backtest_fast.py

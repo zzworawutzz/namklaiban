@@ -55,6 +55,9 @@ CREATE TABLE IF NOT EXISTS flood_reports(
   note TEXT, src TEXT, who TEXT NOT NULL, created_at TEXT NOT NULL, flags INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS idx_flood_reports_ts ON flood_reports(created_at);
 CREATE TABLE IF NOT EXISTS flood_flags(report_id INTEGER NOT NULL, who TEXT NOT NULL, PRIMARY KEY(report_id, who));
+CREATE TABLE IF NOT EXISTS send_log(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, kind TEXT NOT NULL, province TEXT, ok INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_send_log_ts ON send_log(ts);
 CREATE TABLE IF NOT EXISTS line_pending(target TEXT PRIMARY KEY, level INTEGER NOT NULL, ts TEXT NOT NULL);
 """
 # Same tables for Postgres: REAL there is 4-byte float, which would blur coordinates.
@@ -226,6 +229,9 @@ def prune(conn, keep_days=KEEP_DAYS):
     conn.commit()
     import floodreports  # local import: floodreports needs core, which imports this module
     floodreports.prune(conn, datetime.now(timezone.utc))
+    import sendlog
+    sendlog.prune(conn, datetime.now(timezone.utc))
+    conn.commit()
     return cur.rowcount
 
 

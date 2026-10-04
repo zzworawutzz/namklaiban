@@ -32,6 +32,7 @@ import line_webhook
 import notify
 import report
 import security
+import sendlog
 import shelters
 import suggest
 import watchdog
@@ -306,9 +307,32 @@ def cron_ingest(authorization: Optional[str] = Header(None)):
             ingest.release_lock(c, "cron")
         watchdog.check(c, now())
         watchdog.check_storage(c, now())
+        watchdog.check_line_quota(c, now())
+        watchdog.check_silent(c, now())
     return {"stations": n_st, "new_readings": n_rd, "skipped": skipped, "pruned": pruned,
             "notifications_sent": sent, "notifications_failed": failed,
             "digests_sent": digests, "digests_failed": digest_failed}
+
+
+@app.get("/api/cron/stats", include_in_schema=False)
+def cron_stats(days: int = Query(7, ge=1, le=60), authorization: Optional[str] = Header(None)):
+    """Owner's view: messages pushed per day / kind / province (send_log), subscribers, database size and LINE quota.
+    Same auth as /api/cron/ingest; read-only."""
+    if not _cron_authorized(authorization):
+        raise HTTPException(401, "unauthorized")
+    at = now()
+    with conn() as c:
+        out = sendlog.summary(c, at, days)
+        out["subscriptions"] = c.execute("SELECT COUNT(*) AS n FROM subscriptions").fetchone()["n"]
+        out["db_mb"] = round(watchdog.db_size_mb(c), 1)
+        out["db_limit_mb"] = watchdog.db_limit_mb()
+        out["silent_groups"] = watchdog.silent_groups(c, at)
+    try:
+        limit, used = notify.line_quota()
+        out["line_quota"] = {"limit": limit, "used": used}
+    except Exception as e:
+        out["line_quota"] = {"error": f"{type(e).__name__}: {e}"[:200]}
+    return out
 
 
 @app.get("/api/cron/test-alert", include_in_schema=False)
