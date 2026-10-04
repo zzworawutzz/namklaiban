@@ -52,7 +52,9 @@ def test_cards_are_valid_flex(conn):
     c3 = cards.digest_card(report.build(conn, PROV, AT, rows=rows), "2 ต.ค. 2569 07:30 น.", "https://x.example/r")
     for c in (c1, c2, c3):
         check_flex(c)
-    assert "footer" in c1 and "footer" not in c2          # a link only when it is https
+    kinds = lambda c: [n["action"]["type"] for n in nodes(c.get("footer") or {}) if n.get("type") == "button"]
+    assert kinds(c1) == ["uri", "postback"] and kinds(c2) == ["postback"]   # a link only when it is https; the pause button is always there
+    assert "footer" not in cards.digest_card(report.build(conn, PROV, AT, rows=rows), "x", None)
     assert cards.quick(["a"] * 20)[:1][0]["action"]["text"] == "a" and len(cards.quick(["a"] * 20)) == 13
 
 

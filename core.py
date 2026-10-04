@@ -17,6 +17,10 @@ FAST_MIN_RISE_M = 0.30
 FAST_MIN_POINTS, FAST_MIN_SPAN_H = 3, 1.5
 SPIKE_STEP_M = 2.0     # a jump this big between two readings is a sensor glitch, not a flood wave
 SPIKE_TOTAL_M = 3.0
+TIDE_HOURS = 72        # a tide-affected gauge swings up and down again and again; look this far back to see it
+TIDE_SWING_M = 0.4     # a swing smaller than this is noise
+TIDE_HALF_CYCLE_H = (4, 14)   # time between one turning point and the next on a tidal river (a rain pulse is slower or irregular)
+TIDE_MIN_HALF_CYCLES = 3
 RANK = {"unknown": 0, "normal": 1, "watch": 2, "alert": 3}
 
 LATEST = """
@@ -96,6 +100,30 @@ def rise_of(levels):
     return round(total, 2), False
 
 
+def _turning_points(levels, amp):
+    """[(datetime, metres)] -> the highs and lows of the zigzag whose swings are at least `amp`."""
+    out, ext, direction = [], levels[0], 0
+    for t, v in levels[1:]:
+        if direction >= 0 and v <= ext[1] - amp:
+            out.append(ext); direction, ext = -1, (t, v)
+        elif direction <= 0 and v >= ext[1] + amp:
+            out.append(ext); direction, ext = 1, (t, v)
+        elif (direction == 1 and v > ext[1]) or (direction == -1 and v < ext[1]):
+            ext = (t, v)
+    return out
+
+
+def is_tidal(levels):
+    """True when the gauge keeps rising and falling about every 6 hours, which is the sea moving the water
+    and not a flood wave arriving. levels: [(datetime, metres)] oldest first, about TIDE_HOURS long.
+    Tested on 10 days of the coastal gauges (Samut Prakan / Songkhram / Sakhon): they swing 1.6-2.4 m a day."""
+    if len(levels) < 12:
+        return False
+    tp = _turning_points(levels, TIDE_SWING_M)[1:]   # the first one is only where the window starts
+    lo, hi = TIDE_HALF_CYCLE_H
+    return sum(lo <= (b[0] - a[0]).total_seconds() / 3600 <= hi for a, b in zip(tp, tp[1:])) >= TIDE_MIN_HALF_CYCLES
+
+
 def shape(r, at, points=None, levels=None):
     d = dict(r)
     d["watch_pct"] = d["watch_pct"] if d.get("watch_pct") is not None else WATCH_PCT
@@ -157,7 +185,29 @@ def latest(conn, at, province=None, status=None):
     if where:
         sql += " WHERE " + " AND ".join(where)
     pts, lv = recent_points(conn, at), recent_levels(conn, at)
-    return attach_twins([shape(r, at, pts.get(r["id"]), lv.get(r["id"])) for r in conn.execute(sql, args)])
+    rows = [shape(r, at, pts.get(r["id"]), lv.get(r["id"])) for r in conn.execute(sql, args)]
+    mark_tidal(conn, rows, at)
+    return attach_twins(rows)
+
+
+def mark_tidal(conn, rows, at):
+    """A rise that is only the tide is not a flood wave: drop rise_3h_m and set rise_tidal. Only the few stations
+    that look like they are rising fast are checked, so this costs one small query."""
+    cand = [r for r in rows if r.get("rise_3h_m") is not None and r["rise_3h_m"] >= FAST_MIN_RISE_M]
+    for r in rows:
+        r["rise_tidal"] = False
+    if not cand:
+        return
+    ids = [r["id"] for r in cand]
+    since = iso(at - timedelta(hours=TIDE_HOURS))
+    series = {}
+    for x in conn.execute(
+            f"SELECT station_id, ts, water_level FROM readings WHERE station_id IN ({','.join('?' * len(ids))}) "
+            "AND ts >= ? AND water_level IS NOT NULL ORDER BY station_id, ts", (*ids, since)):
+        series.setdefault(x["station_id"], []).append((parse(x["ts"]), x["water_level"]))
+    for r in cand:
+        if is_tidal(series.get(r["id"], [])):
+            r["rise_3h_m"], r["rise_tidal"] = None, True
 
 
 def attach_twins(rows):

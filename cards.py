@@ -19,12 +19,18 @@ def _gauge(pct, color):
                           "backgroundColor": color, "cornerRadius": "4px", "contents": []}]}
 
 
-def _footer(url, label="ดูรายงานจังหวัด"):
-    if not url or not url.startswith("https://"):
+def _footer(url, label="ดูรายงานจังหวัด", snooze=False):
+    buttons = []
+    if url and url.startswith("https://"):
+        buttons.append({"type": "button", "style": "primary", "color": BRAND, "height": "sm",
+                        "action": {"type": "uri", "label": label, "uri": url}})
+    if snooze:   # one tap pauses further alerts for a few hours instead of blocking the bot
+        buttons.append({"type": "button", "style": "link", "height": "sm", "color": BRAND,
+                        "action": {"type": "postback", "label": "พักแจ้งเตือน 6 ชม.", "data": "act=snooze",
+                                   "displayText": "พักแจ้งเตือน 6 ชม."}})
+    if not buttons:
         return None
-    return {"type": "box", "layout": "vertical", "contents": [
-        {"type": "button", "style": "primary", "color": BRAND, "height": "sm",
-         "action": {"type": "uri", "label": label, "uri": url}}]}
+    return {"type": "box", "layout": "vertical", "spacing": "sm", "contents": buttons}
 
 
 def _bubble(header, body, footer=None):
@@ -56,7 +62,7 @@ def station_card(label, st, url=None):
     if st.get("twin_conflict"):
         body.append(_text("⚠ อีกหน่วยงานรายงานสถานะต่างกัน ควรตรวจกับหน่วยงานในพื้นที่", size="xs", color=COLORS["watch"]))
     body.append(_text(st.get("advice", ""), size="sm", color="#333333", margin="md"))
-    return _bubble(header, {"type": "box", "layout": "vertical", "spacing": "sm", "contents": body}, _footer(url))
+    return _bubble(header, {"type": "box", "layout": "vertical", "spacing": "sm", "contents": body}, _footer(url, snooze=True))
 
 
 def digest_card(rep, when_text, url=None):

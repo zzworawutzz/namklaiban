@@ -23,13 +23,15 @@ import hashlib
 import hmac
 import os
 import urllib.parse
+from datetime import datetime, timedelta, timezone
 
 import cards
 import core
 import floodreports
 import report
 import shelters
-from ingest import utc_now
+import suggest
+from ingest import TZ_TH, utc_now
 from notify import _invoke, message, province_of, public_url, report_link
 
 MAX_SUBSCRIBERS = int(os.environ.get("MAX_SUBSCRIBERS", "50"))   # people, not places
@@ -46,6 +48,9 @@ SETTINGS = {"ตั้งค่า", "settings"}
 MY_ID_CMD = {"ไอดีของฉัน", "my id"}
 GROUP_HELP_WORDS = {"ช่วยเหลือ", "help"}
 MENU = ["สถานะ", "รายงาน", "แจ้งน้ำท่วม", "ศูนย์พักพิง", "ตำแหน่งของฉัน", "ตั้งค่า", "วิธีใช้"]
+SNOOZE_CMD = {"พักแจ้งเตือน", "พักแจ้งเตือน 6 ชม.", "พัก"}
+SNOOZE_OFF = {"เลิกพัก", "เลิกพักแจ้งเตือน"}
+SNOOZE_H = 6
 SHELTER_CMD = {"ศูนย์พักพิง", "ที่พักพิง", "shelter"}
 MANUAL_CMD = {"วิธีใช้", "คู่มือ", "help", "ช่วยเหลือ"}
 FLOOD_CMD = "แจ้งน้ำท่วม"
@@ -60,7 +65,7 @@ CHANGES = {
 HELP = ("น้ำใกล้บ้านฉัน: ส่งตำแหน่งบ้านของคุณมาที่นี่ (กด + แล้วเลือก \"ตำแหน่งที่ตั้ง\") "
         "เพื่อรับแจ้งเตือนเมื่อสถานีวัดน้ำที่ใกล้ที่สุดเปลี่ยนสถานะ\n"
         "พิมพ์ \"สถานะ\" ดูค่าล่าสุด · \"รายงาน\" ดูสรุปทั้งจังหวัด · \"ตั้งค่า\" เลือกระดับแจ้งเตือน/ช่วงไม่รบกวน · "
-        "\"แจ้งน้ำท่วม\" รายงานจุดที่ท่วมแถวคุณ · \"ตำแหน่งของฉัน\" ดู/ลบจุดที่ติดตาม (ได้สูงสุด 3 จุด) · \"ศูนย์พักพิง\" ดู 3 แห่งที่ใกล้ที่สุด · \"ปิดสรุป\" หยุดสรุปสถานการณ์อัตโนมัติ · \"ยกเลิก\" หยุดทุกอย่างและลบตำแหน่งที่เก็บไว้\n"
+        "พิมพ์ชื่อตำบล/อำเภอ/จังหวัด/สถานี เช่น \"บางบัวทอง\" เพื่อดูสถานการณ์ที่นั่น · \"พักแจ้งเตือน\" หยุดแจ้ง 6 ชม. · \"แจ้งน้ำท่วม\" รายงานจุดที่ท่วมแถวคุณ · \"ตำแหน่งของฉัน\" ดู/ลบจุดที่ติดตาม (ได้สูงสุด 3 จุด) · \"ศูนย์พักพิง\" ดู 3 แห่งที่ใกล้ที่สุด · \"ปิดสรุป\" หยุดสรุปสถานการณ์อัตโนมัติ · \"ยกเลิก\" หยุดทุกอย่างและลบตำแหน่งที่เก็บไว้\n"
         "ข้อมูลจาก ThaiWater ใช้ประกอบการตัดสินใจเท่านั้น ให้ยึดประกาศ ปภ. เป็นหลัก")
 GROUP_HELP = ("น้ำใกล้บ้านฉัน: พิมพ์ \"ติดตาม <ชื่อจังหวัด>\" เช่น ติดตาม อยุธยา "
               "เพื่อให้บอตส่งสรุปสถานการณ์น้ำของจังหวัดนั้นเข้ากลุ่มนี้ทุกเช้า 07:00\n"
@@ -167,6 +172,8 @@ def handle_event(conn, ev, at, reply):
         near = shelters.nearest(sub["lat"], sub["lng"], 3, 50)
         return _reply(reply, token, shelters.line_text(near) if near else
                       "ไม่พบศูนย์พักพิงในรัศมี 50 กม. จากตำแหน่งที่บันทึกไว้ ฉุกเฉินโทร 1784 (ปภ.)", quick=cards.quick(MENU))
+    if text in SNOOZE_CMD | SNOOZE_OFF:
+        return _snooze(conn, user, token, text in SNOOZE_CMD, at, reply)
     if text in STATUS | REPORT | SETTINGS | set(CHANGES) | DIGEST_OFF | DIGEST_ON:
         sub = _sub(conn, user)
         if not sub:
@@ -186,19 +193,63 @@ def handle_event(conn, ev, at, reply):
             prov = province_of(core.latest(conn, at), sub["lat"], sub["lng"])
             return _send_report(conn, reply, token, prov, at)
         if text in SETTINGS:
-            return _settings(reply, token, sub)
+            return _settings(reply, token, sub, at=at)
         if text in CHANGES:
             col, val, confirm = CHANGES[text]
             conn.execute(f"UPDATE subscriptions SET {col}=? WHERE channel='line' AND target=?", (val, user))
             conn.commit()
-            return _settings(reply, token, _sub(conn, user), confirm)
+            return _settings(reply, token, _sub(conn, user), confirm, at)
         on = 1 if text in DIGEST_ON else 0
         conn.execute("UPDATE subscriptions SET digest=? WHERE channel='line' AND target=?", (on, user))
         conn.commit()
         return _reply(reply, token, f"จะส่งสรุปสถานการณ์ให้{report.digest_label()} (พิมพ์ \"ปิดสรุป\" เพื่อหยุด)" if on
                       else "หยุดส่งสรุปแล้ว ยังแจ้งเตือนเมื่อสถานะเปลี่ยนตามเดิม (พิมพ์ \"เปิดสรุป\" เพื่อเปิดใหม่)",
                       quick=cards.quick(MENU))
+    if text and _lookup(conn, user, token, text, at, reply):
+        return
     _reply(reply, token, _with_manual(HELP), quick=cards.quick(MENU))
+
+
+LOOKUP_CHOICES = 5
+LOOKUP_MIN_CHARS = 3
+
+
+def _lookup(conn, user, token, text, at, reply):
+    """A place name typed in the chat ("บางบัวทอง", "อยุธยา", a station's name): answer for that place.
+    Returns False when the text matches nothing, so the caller can fall back to the instructions."""
+    if len(suggest.norm(text)) < LOOKUP_MIN_CHARS:   # "น้ำ" or "ok" is chatter, not a place
+        return False
+    rows = core.latest(conn, at)
+    found = [m for m in suggest.search(text, stations=rows, limit=LOOKUP_CHOICES * 2) if m["type"] != "ศูนย์พักพิง"][:LOOKUP_CHOICES]
+    if not found:
+        return False
+    if len(found) == 1 or suggest.norm(found[0]["name"]) == suggest.norm(text):
+        return _show_place(conn, user, token, found[0], at, reply)
+    items = [(m["label"], _look_data(m)) for m in found]
+    _reply(reply, token, f"พบหลายที่ชื่อ \"{text[:30]}\" เลือกที่ต้องการดู", quick=cards.quick_postback(items))
+    return True
+
+
+def _look_data(m):
+    if m["type"] == "จังหวัด":
+        return "act=prov&" + urllib.parse.urlencode({"p": m["province"]})
+    return f"act=look&lat={m['lat']}&lng={m['lng']}&" + urllib.parse.urlencode({"n": m["name"][:40]})
+
+
+def _show_place(conn, user, token, m, at, reply):
+    if m["type"] == "จังหวัด":
+        _send_report(conn, reply, token, m["province"], at)
+        return True
+    st = _nearest(conn, m["lat"], m["lng"], at)
+    label = m["name"]
+    if not st:
+        _reply(reply, token, f"{label}: ตอนนี้ไม่มีสถานีใกล้ที่ข้อมูลล่าสุด ฉุกเฉินโทร 1784 (ปภ.)", quick=cards.quick(MENU))
+        return True
+    text = message({"label": label}, st)
+    if not _sub(conn, user):
+        text += "\n\nอยากให้บอตแจ้งเตือนเอง ส่งตำแหน่งบ้านของคุณมา (กด + แล้วเลือก \"ตำแหน่งที่ตั้ง\")"
+    _reply(reply, token, text, cards.station_card(label, st, report_link(st["province"])), cards.quick(MENU))
+    return True
 
 
 def _flood_report(conn, user, token, m, level, at, reply):
@@ -223,7 +274,28 @@ def _send_report(conn, reply, token, prov, at):
            cards.quick(MENU))
 
 
-def _settings(reply, token, sub, confirm=None):
+def _snooze_text(sub, at):
+    """"พักถึง 18:30 น." while a pause is running, otherwise None."""
+    until = sub["snooze_until"]
+    if not until or until <= at.strftime("%Y-%m-%dT%H:%M:%SZ"):
+        return None
+    return "พักถึง " + datetime.strptime(until, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).astimezone(TZ_TH).strftime("%H:%M") + " น."
+
+
+def _snooze(conn, user, token, on, at, reply):
+    if not _sub(conn, user):
+        return _reply(reply, token, "ยังไม่มีตำแหน่งของคุณ ส่งตำแหน่งบ้านมาก่อนได้เลย")
+    until = (at + timedelta(hours=SNOOZE_H)).strftime("%Y-%m-%dT%H:%M:%SZ") if on else None
+    conn.execute("UPDATE subscriptions SET snooze_until=? WHERE channel='line' AND target=?", (until, user))
+    conn.commit()
+    if on:
+        when = _snooze_text(_sub(conn, user), at)
+        return _reply(reply, token, f"{when} จะไม่ส่งแจ้งเตือนสถานะที่เปลี่ยน (ระดับเตือนภัยและสรุปประจำวันยังส่งตามปกติ)\n"
+                      "ถ้าสถานะยังต่างจากตอนนี้เมื่อพักครบ จะแจ้งให้ทราบ พิมพ์ \"เลิกพัก\" เพื่อกลับมาแจ้งทันที", quick=cards.quick(MENU))
+    _reply(reply, token, "กลับมาแจ้งเตือนตามปกติแล้ว", quick=cards.quick(MENU))
+
+
+def _settings(reply, token, sub, confirm=None, at=None):
     alert_only = sub["notify_level"] == "alert"
     quiet = bool(sub["quiet"])
     digest = bool(sub["digest"])
@@ -231,11 +303,14 @@ def _settings(reply, token, sub, confirm=None):
         "การตั้งค่าของคุณ",
         "• แจ้งเตือน: " + ("เฉพาะตอนถึง/พ้นระดับเตือนภัย" if alert_only else "ทุกครั้งที่สถานะเปลี่ยน"),
         "• กลางคืน 22:00–06:00: " + ("ไม่ส่ง ยกเว้นเตือนภัย" if quiet else "ส่งตามปกติ"),
-        f"• สรุป{report.digest_label()}: " + ("เปิด" if digest else "ปิด"),
-        "แตะปุ่มด้านล่างเพื่อเปลี่ยน"]
+        f"• สรุป{report.digest_label()}: " + ("เปิด" if digest else "ปิด")]
+    paused = _snooze_text(sub, at or datetime.now(timezone.utc))
+    if paused:
+        lines.append("• พักแจ้งเตือน: " + paused)
+    lines.append("แตะปุ่มด้านล่างเพื่อเปลี่ยน")
     buttons = ["แจ้งทุกระดับ" if alert_only else "แจ้งเฉพาะเตือนภัย",
                "แจ้งกลางคืน" if quiet else "ไม่รบกวนกลางคืน",
-               "ปิดสรุป" if digest else "เปิดสรุป", "สถานะ", "ยกเลิก"]
+               "ปิดสรุป" if digest else "เปิดสรุป", "เลิกพัก" if paused else "พักแจ้งเตือน 6 ชม.", "สถานะ", "ยกเลิก"]
     _reply(reply, token, "\n".join(lines), quick=cards.quick(buttons))
 
 
@@ -285,6 +360,18 @@ def _insert_place(conn, user, lat, lng, label, st, keep):
 
 def _postback(conn, user, token, data, at, reply):
     q = {k: v[0] for k, v in urllib.parse.parse_qs(data).items()}
+    if q.get("act") in ("snooze", "unsnooze"):
+        return _snooze(conn, user, token, q["act"] == "snooze", at, reply)
+    if q.get("act") == "prov" and q.get("p"):
+        return _send_report(conn, reply, token, q["p"][:60], at)
+    if q.get("act") == "look":
+        try:
+            lat, lng = float(q["lat"]), float(q["lng"])
+        except (KeyError, ValueError):
+            return
+        if _in_thailand(lat, lng):
+            _show_place(conn, user, token, {"type": "สถานที่", "name": (q.get("n") or "จุดที่เลือก")[:40], "lat": lat, "lng": lng}, at, reply)
+        return
     try:
         lat, lng = float(q["lat"]), float(q["lng"])
     except (KeyError, ValueError):

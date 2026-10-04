@@ -144,3 +144,40 @@ def test_fast_risers_ranks_by_metres_and_skips_duplicates():
     mk = lambda i, rise, lat=14.0: {"id": i, "lat": lat, "lng": 100.0 + len(i), "rise_3h_m": rise}
     rows = [mk("a", 0.5), mk("bb", 0.9), mk("ccc", 0.2), mk("dddd", None), {**mk("ee", 0.4), "lng": 100.0 + 2}]  # "ee" shares bb's site
     assert [r["id"] for r in core.fast_risers(rows)] == ["bb", "a"]
+
+
+def _series(fn, hours=72, step_min=30):
+    t0 = AT - timedelta(hours=hours)
+    return [(t0 + timedelta(minutes=step_min * i), fn(step_min * i / 60)) for i in range(int(hours * 60 / step_min) + 1)]
+
+
+def test_tide_is_told_apart_from_a_flood_wave():
+    import math
+    tide = _series(lambda h: 1.0 * math.sin(2 * math.pi * h / 12.4))           # +-1 m twice a day
+    assert core.is_tidal(tide)
+    flood = _series(lambda h: min(h, 40) * 0.05 + max(0, h - 40) * -0.02)       # one slow rise, one slow fall
+    assert not core.is_tidal(flood)
+    two_storms = _series(lambda h: 2.0 * math.exp(-((h - 20) / 8) ** 2) + 2.5 * math.exp(-((h - 55) / 8) ** 2))
+    assert not core.is_tidal(two_storms)                                       # rain pulses are days apart, not hours
+    assert not core.is_tidal(tide[:6])                                         # too little history to say
+
+
+def _store(c, levels):
+    for t, v in levels:
+        c.execute("INSERT OR REPLACE INTO readings VALUES('505018',?,?,?,?)", (core.iso(t), v, 60.0, "normal"))
+    c.commit()
+
+
+def test_latest_drops_the_rise_of_a_tidal_gauge_but_keeps_a_real_one(tmp_path):
+    import math
+    c = make_db(tmp_path / "t.db", real_rows())
+    tide = _series(lambda h: 1.0 * math.sin(2 * math.pi * h / 12.4 - 4.57))   # ends in the middle of a climb of over a metre in 3 h
+    _store(c, tide)
+    row = {r["id"]: r for r in core.latest(c, AT)}["505018"]
+    assert row["rise_3h_m"] is None and row["rise_tidal"] is True
+
+    c.execute("DELETE FROM readings WHERE station_id='505018'")
+    wave = _series(lambda h: 1.0 if h < 68.5 else 1.0 + (h - 68.5) * 0.5)    # flat for days, then climbs 0.5 m/h
+    _store(c, wave)
+    row = {r["id"]: r for r in core.latest(c, AT)}["505018"]
+    assert row["rise_3h_m"] and row["rise_3h_m"] >= 0.5 and row["rise_tidal"] is False

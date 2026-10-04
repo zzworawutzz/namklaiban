@@ -162,3 +162,54 @@ def test_my_id_command_shows_the_senders_id():
                                      "message": {"type": "text", "text": "ไอดีของฉัน"}}, None,
                               lambda tok, text, flex=None, quick=None: out.append(text))
     assert "U123" in out[0] and "ADMIN_LINE_ID" in out[0]
+
+
+def run_full(conn, ev):
+    out = []
+    lw.handle_event(conn, ev, AT, lambda tok, t, flex=None, quick=None: out.append({"text": t, "flex": flex, "quick": quick}))
+    return out
+
+
+def test_typing_a_station_name_answers_for_that_place(conn):
+    (r,) = run_full(conn, text("บ้านปากแซง"))
+    assert "บ้านปากแซง" in r["text"] and "เตือนภัย" in r["text"] and r["flex"]["type"] == "bubble"
+    assert "ส่งตำแหน่งบ้านของคุณมา" in r["text"]                      # nobody saved yet: tell them how to get alerts
+    assert not subs(conn)                                              # looking a place up saves nothing
+
+
+def test_typing_a_province_sends_the_province_report(conn):
+    (r,) = run_full(conn, text("กาญจนบุรี"))
+    assert "กาญจนบุรี" in r["text"] and r["flex"]["type"] == "bubble"
+
+
+def test_several_matches_become_buttons_and_tapping_one_shows_the_place(conn):
+    (r,) = run_full(conn, text("บาง"))
+    assert r["quick"] and len(r["quick"]) <= 5 and "เลือกที่ต้องการดู" in r["text"]
+    data = r["quick"][0]["action"]["data"]
+    assert data.startswith("act=look&") and len(data) < 300
+    (r2,) = run_full(conn, {"type": "postback", "replyToken": "r", "source": {"userId": "U1"}, "postback": {"data": data}})
+    assert r2["flex"] or "ไม่มีสถานีใกล้" in r2["text"]
+
+
+def test_chatter_and_unknown_text_still_get_the_instructions(conn):
+    for t in ("สวัสดี", "ok", "xyzzy"):
+        (r,) = run_full(conn, text(t))
+        assert "ส่งตำแหน่งบ้านของคุณมา" in r["text"] and r["flex"] is None
+
+
+def test_lookup_ignores_bad_postbacks(conn):
+    for d in ("act=look&lat=abc&lng=1", "act=look&lat=40&lng=10", "act=prov"):
+        assert run_full(conn, {"type": "postback", "replyToken": "r", "source": {"userId": "U1"}, "postback": {"data": d}}) == []
+
+
+def test_snooze_command_button_and_cancel(conn):
+    assert "ยังไม่มีตำแหน่ง" in run(conn, text("พักแจ้งเตือน"))[0]
+    run(conn, loc())
+    (r,) = run_full(conn, text("พักแจ้งเตือน 6 ชม."))
+    assert "พักถึง 05:30 น." in r["text"] and "เตือนภัย" in r["text"]            # 16:30Z + 6 h = 22:30Z = 05:30 Thai time
+    assert subs(conn)[0]["snooze_until"] == "2026-10-01T22:30:00Z"
+    (s,) = run_full(conn, text("ตั้งค่า"))
+    assert "พักแจ้งเตือน: พักถึง" in s["text"] and any(q["action"]["text"] == "เลิกพัก" for q in s["quick"])
+    run(conn, {"type": "postback", "replyToken": "r", "source": {"userId": "U1"}, "postback": {"data": "act=snooze"}})
+    assert subs(conn)[0]["snooze_until"] == "2026-10-01T22:30:00Z"
+    assert "กลับมาแจ้งเตือน" in run(conn, text("เลิกพัก"))[0] and subs(conn)[0]["snooze_until"] is None

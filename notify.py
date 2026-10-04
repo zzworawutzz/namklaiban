@@ -221,6 +221,11 @@ def is_group(sub):
     return sub["channel"] == "line" and sub["target"][:1] in ("C", "R")
 
 
+def snoozed(sub, at):
+    """True while the person has paused alerts ("พักแจ้งเตือน 6 ชม." in LINE). Alert level still goes out, as in quiet hours."""
+    return bool(sub["snooze_until"]) and sub["snooze_until"] > _iso(at)
+
+
 def in_quiet_hours(at):
     h = at.astimezone(TZ_TH).hour
     return h >= QUIET_FROM_H or h < QUIET_TO_H
@@ -243,7 +248,7 @@ def run(conn, at=None, senders=SENDERS):
         st = near[0]
         prev = sub["last_status"]
         changed = st["status"] != prev
-        quiet_now = bool(sub["quiet"]) and in_quiet_hours(at)
+        quiet_now = (bool(sub["quiet"]) and in_quiet_hours(at)) or snoozed(sub, at)   # alert level still gets through
         if not changed:
             # 1) rising water that should reach the bank soon (the status itself has not changed yet)
             urgent = st["status"] == "alert"
@@ -285,7 +290,7 @@ def run(conn, at=None, senders=SENDERS):
         if sub["notify_level"] == "alert" and "alert" not in (st["status"], prev):
             conn.execute("UPDATE subscriptions SET last_status=? WHERE id=?", (st["status"], sub["id"]))
             continue  # this user only wants alert-level news; remember the state without a message
-        if sub["quiet"] and in_quiet_hours(at) and st["status"] != "alert":
+        if quiet_now and st["status"] != "alert":
             continue  # keep last_status unchanged so it is sent after the quiet hours if still different
         try:
             _invoke(senders[sub["channel"]], sub["target"], message(sub, st),

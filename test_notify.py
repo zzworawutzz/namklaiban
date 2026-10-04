@@ -156,3 +156,17 @@ def test_station_card_shows_the_three_hour_rise():
     st = _station(distance_km=1.2, rise_3h_m=0.62)
     assert "ระดับน้ำขึ้น +0.62 ม. ใน 3 ชม." in json.dumps(cards.station_card(None, st), ensure_ascii=False)
     assert "ระดับน้ำขึ้น" not in json.dumps(cards.station_card(None, {**st, "rise_3h_m": 0.1}), ensure_ascii=False)
+
+
+def test_snooze_holds_early_warnings_and_status_changes_but_not_alert_and_ends_on_time(tmp_path, monkeypatch):
+    until = "2026-10-01T22:30:00Z"                                   # six hours after AT
+    c, out, go = _run(tmp_path, monkeypatch, _station(), f"snooze_until='{until}'")
+    assert go() == (0, 0)                                            # early warning held while paused
+    c, out, go = _run(tmp_path, monkeypatch, _station(status="alert", pct_of_bank=93.0), f"snooze_until='{until}'")
+    assert go() == (1, 0)                                            # alert level is never held
+    c, out, go = _run(tmp_path, monkeypatch, _station(status="watch", pct_of_bank=75.0, trend="steady", eta_to_bank_h=None),
+                      f"snooze_until='{until}', last_status='normal'")
+    c.execute("UPDATE subscriptions SET last_status='normal'")
+    assert go() == (0, 0) and c.execute("SELECT last_status FROM subscriptions").fetchone()[0] == "normal"   # change is kept for later
+    c.execute("UPDATE subscriptions SET snooze_until='2026-10-01T16:00:00Z'")                                  # pause has run out
+    assert go() == (1, 0) and "เฝ้าระวัง" in out[0]                  # the change is sent now
