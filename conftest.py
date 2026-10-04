@@ -1,3 +1,4 @@
+import os
 import copy
 
 import pytest
@@ -42,3 +43,9 @@ def _no_real_rain_forecast(monkeypatch):
     import rainalert
     rainalert._cache.clear()
     monkeypatch.setattr(rainalert, "fetch", lambda lat, lng: {"hourly": {"precipitation": [0.0] * 24}})
+
+
+def pytest_ignore_collect(collection_path, config):
+    """The browser tests need Playwright; they only run when asked for (E2E=1), e.g. by the e2e workflow."""
+    if collection_path.name == "e2e" and not os.environ.get("E2E"):
+        return True            # (return None otherwise: False would also switch off pytest's own ignoring of .venv)

@@ -15,3 +15,4 @@ richmenu
 smoke_check.py
 backtest_fast.py
 backup_export.py
+e2e/

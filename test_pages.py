@@ -54,17 +54,32 @@ def test_stations_are_cacheable_with_stale_while_revalidate(tmp_path, monkeypatc
     assert "max-age=60" in cc and "stale-while-revalidate=300" in cc
 
 
+def _public(name):
+    return (Path(__file__).parent / "public" / name).read_text(encoding="utf-8")
+
+
 def test_page_starts_the_stations_request_in_the_head_and_getjson_reuses_it():
-    html = (Path(__file__).parent / "public" / "index.html").read_text(encoding="utf-8")
+    html, js = _public("index.html"), _public("app.js")
     head = html[:html.index("</head>")]
     assert 'window.__stations = fetch("/stations")' in head                      # early, before the map libraries
     assert 'rel="preconnect" href="https://tile.openstreetmap.org"' in head
-    assert html.count('fetch("/stations")') == 1                                  # nothing else asks for it a second time
-    assert 'path==="/stations" && window.__stations' in html                      # getJSON picks the early answer up
+    assert (html + js).count('fetch("/stations")') == 1                           # nothing else asks for it a second time
+    assert 'path==="/stations" && window.__stations' in js                        # getJSON picks the early answer up
 
 
 def test_emergency_numbers_are_hidden_while_booting_but_always_come_back():
-    html = (Path(__file__).parent / "public" / "index.html").read_text(encoding="utf-8")
+    html = _public("index.html")
     head = html[:html.index("</head>")]
     assert 'classList.add("booting")' in head and "setTimeout(window.__unboot, 3000)" in head   # fallback does not depend on the map libraries
-    assert "html.booting #emergency, html.booting #foot{display:none}" in html
+    assert "html.booting #emergency, html.booting #foot{display:none}" in _public("app.css")
+
+
+def test_app_files_are_versioned_and_match_the_service_worker():
+    html, sw = _public("index.html"), _public("sw.js")
+    m = re.search(r'href="app\.css\?v=(\d+)"', html), re.search(r'src="app\.js\?v=(\d+)"', html)
+    assert m[0] and m[1] and m[0].group(1) == m[1].group(1)                       # both files carry the same version
+    version = m[0].group(1)
+    assert f'const SHELL = "nkb-shell-v{version}"' in sw                          # bump it in all three places together
+    for f in (f"app.css?v={version}", f"app.js?v={version}"):
+        assert f in sw, f                                                         # precached, so the page opens offline
+    assert "<style>" not in html and html.count("<script>") == 1                  # only the small head script is inline
