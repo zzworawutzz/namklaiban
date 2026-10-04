@@ -31,6 +31,7 @@ import ingest
 import line_webhook
 import notify
 import report
+import security
 import shelters
 import suggest
 import watchdog
@@ -44,6 +45,8 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "P
 @app.middleware("http")
 async def short_cache(request: Request, call_next):
     resp = await call_next(request)
+    for k, v in security.HEADERS.items():
+        resp.headers.setdefault(k, v)
     if request.url.path.startswith(("/stations", "/reports")):
         resp.headers["Cache-Control"] = "public, max-age=60"  # data refreshes every ~20 min
     return resp
@@ -302,6 +305,7 @@ def cron_ingest(authorization: Optional[str] = Header(None)):
         finally:
             ingest.release_lock(c, "cron")
         watchdog.check(c, now())
+        watchdog.check_storage(c, now())
     return {"stations": n_st, "new_readings": n_rd, "skipped": skipped, "pruned": pruned,
             "notifications_sent": sent, "notifications_failed": failed,
             "digests_sent": digests, "digests_failed": digest_failed}

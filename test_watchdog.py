@@ -94,3 +94,21 @@ def test_test_alert_endpoint(monkeypatch):
     monkeypatch.setenv("ADMIN_LINE_ID", "UADMIN")
     r = c.get("/api/cron/test-alert", headers={"Authorization": "Bearer s"})
     assert r.status_code == 200 and sent[0][0] == "UADMIN" and "ทดสอบ" in sent[0][1]
+
+
+def test_storage_warns_once_a_day_and_rearms(tmp_path, monkeypatch):
+    c, out = setup(tmp_path, monkeypatch), []
+    send = lambda t, m: out.append(m)
+    assert watchdog.check_storage(c, AT, send, size_mb=300) is None and out == []   # 59%: quiet
+    assert watchdog.check_storage(c, AT, send, size_mb=420) == "warn" and "82%" in out[0]
+    assert watchdog.check_storage(c, AT + timedelta(hours=3), send, size_mb=430) is None  # same day
+    assert watchdog.check_storage(c, AT + timedelta(hours=25), send, size_mb=440) == "warn"
+    assert watchdog.check_storage(c, AT + timedelta(hours=26), send, size_mb=100) is None  # re-arm
+    assert watchdog.check_storage(c, AT + timedelta(hours=27), send, size_mb=420) == "warn"
+    assert len(out) == 3
+
+
+def test_storage_needs_admin_and_reads_real_size(tmp_path, monkeypatch):
+    c = setup(tmp_path, monkeypatch, admin=None)
+    assert watchdog.check_storage(c, AT, lambda t, m: 1 / 0, size_mb=500) is None
+    assert watchdog.db_size_mb(c) > 0

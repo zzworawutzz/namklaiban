@@ -13,5 +13,32 @@
       "source": "/:slug(angthong|ayutthaya|bangkok|buengkan|buriram|chachoengsao|chainat|chaiyaphum|chanthaburi|chiangmai|chiangrai|chonburi|chumphon|kalasin|kamphaengphet|kanchanaburi|khonkaen|krabi|lampang|lamphun|loei|lopburi|maehongson|mahasarakham|mukdahan|nakhonnayok|nakhonpathom|nakhonphanom|nakhonratchasima|nakhonsawan|nakhonsithammarat|nan|narathiwat|nongbualamphu|nongkhai|nonthaburi|pathumthani|pattani|phangnga|phatthalung|phayao|phetchabun|phetchaburi|phichit|phitsanulok|phrae|phuket|prachinburi|prachuapkhirikhan|rangsit|ranong|ratchaburi|rayong|roiet|sakaeo|sakonnakhon|samutprakan|samutsakhon|samutsongkhram|saraburi|satun|singburi|sisaket|songkhla|sukhothai|suphanburi|suratthani|surin|tak|trang|trat|ubonratchathani|udonthani|uthaithani|uttaradit|yala|yasothon)",
       "destination": "/index.html"
     }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://api.open-meteo.com https://api.rainviewer.com https://nominatim.openstreetmap.org https://router.project-osrm.org; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "geolocation=(self), camera=(), microphone=(), payment=()"
+        }
+      ]
+    }
   ]
 }

@@ -76,3 +76,60 @@ def check(conn, at, send=None):
             pass
         print(f"watchdog failed: {type(e).__name__}: {e}", file=sys.stderr)
     return None
+
+
+# ---- database size -------------------------------------------------------------------------
+# Neon's free plan stops accepting writes when the database is full, and nothing warns you first.
+STORAGE_KEY = "storage_alert"
+STORAGE_WARN = 0.8
+STORAGE_REMIND_H = 24
+
+
+def db_limit_mb():
+    """Size of the plan in MB (env DB_LIMIT_MB, default 512 = Neon free)."""
+    try:
+        return max(1.0, float(os.environ.get("DB_LIMIT_MB", "512")))
+    except ValueError:
+        return 512.0
+
+
+def db_size_mb(conn):
+    if getattr(conn, "pg", False):
+        row = conn.execute("SELECT pg_database_size(current_database()) AS n").fetchone()
+        return row["n"] / 1048576
+    pages = conn.execute("PRAGMA page_count").fetchone()[0]
+    size = conn.execute("PRAGMA page_size").fetchone()[0]
+    return pages * size / 1048576
+
+
+def check_storage(conn, at, send=None, size_mb=None):
+    """Warn the owner when the database passes STORAGE_WARN of its plan; repeat once a day while
+    it stays above. Returns 'warn' when a message was sent, else None. Never raises."""
+    try:
+        target = os.environ.get("ADMIN_LINE_ID", "").strip()
+        if not target:
+            return None
+        used, limit = (db_size_mb(conn) if size_mb is None else size_mb), db_limit_mb()
+        since = conn.execute("SELECT ts FROM alert_state WHERE name=?", (STORAGE_KEY,)).fetchone()
+        since = since["ts"] if since else None
+        if used < limit * STORAGE_WARN:
+            if since is not None:  # back under the line: re-arm
+                conn.execute("DELETE FROM alert_state WHERE name=?", (STORAGE_KEY,))
+                conn.commit()
+            return None
+        if since is not None and at - core.parse(since) < timedelta(hours=STORAGE_REMIND_H):
+            return None
+        send = send or notify.send_line
+        send(target, f"⚠️ น้ำใกล้บ้านฉัน: ฐานข้อมูลใช้ไป {used:.0f} จาก {limit:.0f} MB ({used / limit * 100:.0f}%)\n"
+                     "ถ้าเต็ม ระบบจะเขียนข้อมูลใหม่ไม่ได้ ให้เข้า Neon ตรวจพื้นที่ หรืออัปเกรดแพ็กเกจ")
+        conn.execute("DELETE FROM alert_state WHERE name=?", (STORAGE_KEY,))
+        conn.execute("INSERT INTO alert_state(name, ts) VALUES(?,?)", (STORAGE_KEY, _iso(at)))
+        conn.commit()
+        return "warn"
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        print(f"storage check failed: {type(e).__name__}: {e}", file=sys.stderr)
+    return None
