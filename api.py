@@ -58,7 +58,8 @@ async def short_cache(request: Request, call_next):
     for k, v in security.HEADERS.items():
         resp.headers.setdefault(k, v)
     if request.url.path.startswith(("/stations", "/reports")):
-        resp.headers["Cache-Control"] = "public, max-age=60"  # data refreshes every ~20 min
+        # data refreshes every ~20 min; stale-while-revalidate lets the CDN and browsers answer at once and refresh in the background
+        resp.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=300"
     return resp
 
 

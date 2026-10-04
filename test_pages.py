@@ -44,3 +44,20 @@ def test_static_files_still_reachable_next_to_the_pretty_paths():
     c = TestClient(api.app)
     assert c.get("/places.json").status_code == 200
     assert c.get("/help.html").status_code == 200
+
+
+def test_stations_are_cacheable_with_stale_while_revalidate(tmp_path, monkeypatch):
+    monkeypatch.setenv("WATER_DB", str(tmp_path / "p.db"))
+    api._ready.clear()
+    r = TestClient(api.app).get("/stations")
+    cc = r.headers["cache-control"]
+    assert "max-age=60" in cc and "stale-while-revalidate=300" in cc
+
+
+def test_page_starts_the_stations_request_in_the_head_and_getjson_reuses_it():
+    html = (Path(__file__).parent / "public" / "index.html").read_text(encoding="utf-8")
+    head = html[:html.index("</head>")]
+    assert 'window.__stations = fetch("/stations")' in head                      # early, before the map libraries
+    assert 'rel="preconnect" href="https://tile.openstreetmap.org"' in head
+    assert html.count('fetch("/stations")') == 1                                  # nothing else asks for it a second time
+    assert 'path==="/stations" && window.__stations' in html                      # getJSON picks the early answer up
