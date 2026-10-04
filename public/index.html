@@ -6,6 +6,18 @@
 <title>น้ำใกล้บ้านฉัน</title>
 <meta name="theme-color" content="#f3f6f8" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0a171d" media="(prefers-color-scheme: dark)">
+<link rel="preconnect" href="https://cdnjs.cloudflare.com">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://tile.openstreetmap.org">
+<script>
+/* Start fetching the stations right now, while the map libraries download; the app picks this request up (getJSON). */
+(function(){ try{
+  if(location.protocol==="file:" || new URLSearchParams(location.search).get("api")) return;
+  window.__stations = fetch("/stations").then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); });
+  window.__stations.catch(function(){});
+}catch(e){} })();
+</script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon.svg">
@@ -208,13 +220,15 @@ h2{font-size:16px;margin:0 0 8px;font-weight:600}
 #sheet{position:fixed;z-index:900;background:var(--bg);box-shadow:var(--shadow);border:1px solid var(--line);display:flex;flex-direction:column}
 #grab{flex:none;height:28px;display:grid;place-items:center;touch-action:none;cursor:grab;border:0;background:transparent;width:100%}
 #grab span{width:42px;height:5px;border-radius:3px;background:var(--line)}
+#sumBody{min-height:210px}   /* the card is about this tall once filled: reserve it so nothing below jumps */
+.oneline{min-height:2.8em}
 #sheetBody{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:4px 14px 24px;position:relative;scroll-behavior:smooth}
 @media (min-width:900px){
   #sheet{top:calc(80px + env(safe-area-inset-top,0px));left:16px;bottom:16px;width:408px;border-radius:20px}
   #grab{display:none}#sheetBody{padding-top:14px}
 }
 @media (max-width:899px){
-  #sheet{left:0;right:0;bottom:0;height:var(--sheet-h,46vh);border-radius:22px 22px 0 0;padding-bottom:env(safe-area-inset-bottom,0px);transition:height .28s cubic-bezier(.2,.8,.2,1)}
+  #sheet{left:0;right:0;bottom:0;height:var(--sheet-h,min(196px,30vh));border-radius:22px 22px 0 0;padding-bottom:env(safe-area-inset-bottom,0px);transition:height .28s cubic-bezier(.2,.8,.2,1)}
   #sheet.drag{transition:none}
   .leaflet-control-zoom{display:none}
 }
@@ -596,6 +610,10 @@ map.on("popupopen",function(e){
 });
 function showErr(msg){ var e=$("err"); e.hidden=!msg; e.textContent=msg||""; if(msg) toast(msg); }
 function getJSON(path){
+  if(path==="/stations" && window.__stations){   // the head script already asked for it: use that answer once, then fetch afresh as usual
+    var early = window.__stations; window.__stations = null;
+    return early.catch(function(){ return fetch(API+path).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); }); });
+  }
   return fetch(API+path).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); });
 }
 
@@ -1669,7 +1687,11 @@ var placeP = /^[a-z]+$/.test(SLUG)
   ? fetch("/places.json").then(function(r){ return r.ok ? r.json() : {}; }).then(function(d){ return d[SLUG] || null; }).catch(function(){ return null; })
   : Promise.resolve(null);
 syncQuick();
-setSheet(isMobile() && !QS.get("station") ? "peek" : "half");   // phones: map first, drag the sheet up for details
+(function(){   // first placement without the slide animation, so the sheet does not visibly move while the page loads
+  var sh = $("sheet"); sh.classList.add("drag");
+  setSheet(isMobile() && !QS.get("station") ? "peek" : "half");
+  void sh.offsetHeight; requestAnimationFrame(function(){ sh.classList.remove("drag"); });
+})();   // phones: map first, drag the sheet up for details
 load().then(function(){
   var want = QS.get("station");
   if(want && byId[want]){   // a shared station link wins; show that station's province too so the page agrees with itself
