@@ -231,6 +231,9 @@ h2{font-size:16px;margin:0 0 8px;font-weight:600}
 .verdict{margin-top:12px;border-left:6px solid var(--vc,var(--line));padding:2px 0 2px 12px}
 .verdict .vh{font-size:18px;font-weight:700;line-height:1.3}
 .verdict .vm{font-size:14px;margin-top:6px}
+.shbox{margin-top:12px;border:1px solid var(--line);border-left:6px solid #1d4ed8;border-radius:12px;padding:10px 12px}
+.shbox h3{font-size:14px;margin:0 0 4px}.shbox .nm{font-weight:600}.shbox small{display:block;color:var(--muted);font-size:13px}
+.shbox .acts{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}.shbox .acts a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:inherit;text-decoration:none;font-weight:600}
 .fast{margin-top:12px}.fast h3{font-size:14px;margin:0 0 6px}
 .fastrow{width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin-top:6px;text-align:left;font-size:14px;min-height:44px}
 .fastrow small{display:block;color:var(--muted);font-size:13px}.fastrow b{white-space:nowrap}
@@ -801,6 +804,24 @@ function gaugeHtml(s){
   var w = Math.max(2, Math.min(100, s.pct_of_bank)), col = COLOR[s.status]||COLOR.unknown;
   return '<div class="gauge" role="img" aria-label="'+Math.round(s.pct_of_bank)+'% ของตลิ่ง"><i style="width:'+w+'%;background:'+col+'"></i><b style="left:'+(s.watch_pct||70)+'%"></b><b style="left:'+(s.alert_pct||90)+'%"></b></div>';
 }
+function firstPhone(p){ return String(p||"").split(/[,;\/]/)[0].trim(); }   // "0 2577 1964, 081..." -> "0 2577 1964"
+function telHref(p){ return "tel:"+firstPhone(p).replace(/[^\d+]/g,""); }
+var nearShl = {};   // station id -> nearest shelter list (fetched once, only for stations at watch / alert)
+function shelterBox(s){
+  var l = nearShl[s.id]; if(!(s.status==="watch" || s.status==="alert") || !l || !l.length) return "";
+  var x = l[0], tel = firstPhone(x.phone);
+  return '<div class="shbox"><h3>ศูนย์พักพิงที่ใกล้สถานีนี้ที่สุด</h3><div class="nm">'+esc(x.name)+'</div><small>ห่าง '+x.distance_km+' กม. · ต.'+esc(x.subdistrict)+' อ.'+esc(x.district)+(x.capacity?' · รองรับ ~'+x.capacity+' คน':'')+'</small>'+
+    '<div class="acts">'+(tel?'<a href="'+esc(telHref(tel))+'">โทร '+esc(tel)+'</a>':'')+'<a target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination='+x.lat+','+x.lng+'">นำทาง</a></div>'+
+    '<div class="note" style="margin:6px 0 0">ข้อมูลจาก ปภ. อาจไม่เป็นปัจจุบัน โทรสอบถามก่อนเดินทาง (สายด่วน 1784)</div></div>';
+}
+function loadStationShelter(s){
+  if(!(s.status==="watch" || s.status==="alert") || nearShl[s.id]!==undefined) return;
+  nearShl[s.id] = null;   // asked once; an error just leaves the box out
+  getJSON("/api/shelters?lat="+s.lat+"&lng="+s.lng+"&limit=1").then(function(l){
+    nearShl[s.id] = l;
+    var box = $("shBox"); if(sel===s.id && box) box.innerHTML = shelterBox(s);
+  }).catch(function(){});
+}
 function drawDetail(s, rs, rel){
   var h='<div class="head"><div><h2 style="margin:0;font-size:18px">'+esc(s.name)+'</h2><div class="note" style="margin:0">'+esc(s.province||"")+(s.source?" · "+esc(s.source):"")+'</div></div><span class="badge '+s.status+'">'+esc(statusText(s))+'</span></div>';
   h+='<div class="big">'+pctText(s)+' <small>ของตลิ่ง</small></div>'+(s.pct_of_bank!=null ? '<div class="note" style="margin:2px 0 6px">'+pctHint(s.pct_of_bank)+' (100% = น้ำเสมอตลิ่ง)</div>' : '')+gaugeHtml(s);
@@ -809,6 +830,7 @@ function drawDetail(s, rs, rel){
   h+='<p class="note">อัปเดตล่าสุด '+esc(fmtTs(s.ts))+' ('+esc(fmtAge(s.age_min))+')</p>';
   h+=twinHtml(s);
   if(s.advice) h+='<div class="advice">'+esc(s.advice)+'</div>';
+  h+='<div id="shBox">'+shelterBox(s)+'</div>';
   if(s.status==="unknown") h+='<div class="warn">สถานีนี้ไม่มีค่าตลิ่ง/ท้องน้ำให้คำนวณ จึงไม่แสดงสถานะ</div>';
   if(s.stale && s.status!=="unknown") h+='<div class="warn" role="alert">ข้อมูลของสถานีนี้ไม่ได้อัปเดตเกิน 2 ชั่วโมง ตัวเลขอาจไม่ตรงกับสถานการณ์จริง</div>';
   h+='<h2 style="margin-top:14px">ย้อนหลัง 7 วัน</h2>'+(rs?chartSvg(rs):'<div class="skel" style="height:120px"></div>');
@@ -821,7 +843,7 @@ function select(id, fly){
   if(markers[id]){ markers[id].setIcon(icon((s),true)); markers[id].setZIndexOffset(1000); }
   if(fly) flyToVisible([s.lat,s.lng], Math.max(map.getZoom(),CLUSTER_OFF_ZOOM+1));
   else if(markers[id] && layer.getVisibleParent(markers[id])!==markers[id]) layer.zoomToShowLayer(markers[id]);
-  drawDetail(s,null);
+  drawDetail(s,null); loadStationShelter(s);
   revealInSheet($("detail"));
   try{ var u = new URL(location.href); u.searchParams.set("station",id); history.replaceState(null,"",u); }catch(e){}
   var rel = null;
@@ -1138,7 +1160,7 @@ var shelterLayer = L.layerGroup().addTo(map), shelterProv = null, shelterData = 
 function shelterPopup(s){
   return '<div class="shp"><b>'+esc(s.name)+'</b><div class="note">ต.'+esc(s.subdistrict)+' อ.'+esc(s.district)+' จ.'+esc(s.province)+'</div>'+
     (s.capacity?'<div class="note">รองรับประมาณ '+s.capacity+' คน</div>':'')+
-    (s.phone?'<div><a href="tel:'+esc(String(s.phone).split(/[,;\/ ]/)[0])+'">โทร '+esc(s.phone)+'</a></div>':'')+
+    (s.phone?'<div><a href="'+esc(telHref(s.phone))+'">โทร '+esc(firstPhone(s.phone))+'</a></div>':'')+
     '<div><a target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination='+s.lat+','+s.lng+'">นำทาง</a></div>'+
     '<div class="note">ข้อมูลจาก ปภ. อาจไม่เป็นปัจจุบัน</div></div>';
 }
