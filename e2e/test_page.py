@@ -204,3 +204,16 @@ def test_selected_marker_is_not_hidden_behind_the_floating_buttons(browser, site
     assert marker["bottom"] <= min(fab, sheet) + 2, (marker, fab, sheet)
     assert not errors
     ctx.close()
+
+
+def test_a_tampered_map_library_is_refused_by_the_browser_and_the_emergency_numbers_still_show(context, site):
+    def tamper(route):                                           # what a compromised CDN would do: same URL, different bytes
+        r = route.fetch()
+        route.fulfill(response=r, body=r.body() + b"\nwindow.__pwned = true;")
+    context.route("**/cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js", tamper)
+    page = context.new_page()
+    page.goto(site + "/", wait_until="domcontentloaded")
+    until(page, "getComputedStyle(document.getElementById('emergency')).display !== 'none'", 6)
+    assert page.evaluate("typeof L") == "undefined"              # the library did not run
+    assert page.evaluate("window.__pwned === true") is False     # and neither did the injected code
+    assert "1784" in page.inner_text("#emergency")
