@@ -13,6 +13,7 @@ from datetime import timedelta
 
 import core
 import notify
+import sendlog
 
 DOWN_AFTER_MIN = 60
 STALE_AFTER_H = 6
@@ -43,6 +44,25 @@ def problem(conn, at):
     return None
 
 
+def _sender(conn, at, send=None):
+    """The function that messages the owner, counting every message in send_log (kind "admin") so the LINE quota
+    can be accounted for: these used to be invisible there."""
+    send = send or notify.send_line
+
+    def go(target, text, **kw):
+        try:
+            send(target, text, **kw)
+        except Exception:
+            sendlog.record(conn, at, "admin", "", ok=False)
+            try:
+                conn.commit()
+            except Exception:
+                pass
+            raise
+        sendlog.record(conn, at, "admin", "")
+    return go
+
+
 def _state(conn):
     row = conn.execute("SELECT ts FROM alert_state WHERE name=?", (KEY,)).fetchone()
     return row["ts"] if row else None
@@ -55,7 +75,7 @@ def check(conn, at, send=None):
         target = os.environ.get("ADMIN_LINE_ID", "").strip()
         if not target:
             return None
-        send = send or notify.send_line
+        send = _sender(conn, at, send)
         bad, since = problem(conn, at), _state(conn)
         if bad and (since is None or at - core.parse(since) >= timedelta(hours=REMIND_H)):
             kind = "down" if since is None else "remind"
@@ -119,7 +139,7 @@ def check_storage(conn, at, send=None, size_mb=None):
             return None
         if since is not None and at - core.parse(since) < timedelta(hours=STORAGE_REMIND_H):
             return None
-        send = send or notify.send_line
+        send = _sender(conn, at, send)
         send(target, f"⚠️ น้ำใกล้บ้านฉัน: ฐานข้อมูลใช้ไป {used:.0f} จาก {limit:.0f} MB ({used / limit * 100:.0f}%)\n"
                      "ถ้าเต็ม ระบบจะเขียนข้อมูลใหม่ไม่ได้ ให้เข้า Neon ตรวจพื้นที่ หรืออัปเกรดแพ็กเกจ")
         conn.execute("DELETE FROM alert_state WHERE name=?", (STORAGE_KEY,))
@@ -167,7 +187,7 @@ def check_line_quota(conn, at, send=None, fetch=None):
         if since is not None and at - core.parse(since) < timedelta(hours=QUOTA_REMIND_H):
             return None
         left = max(limit - used, 0)
-        (send or notify.send_line)(target, f"⚠️ น้ำใกล้บ้านฉัน: โควตาข้อความ LINE เดือนนี้ใช้ไป {used} จาก {limit} ({used / limit * 100:.0f}%) "
+        _sender(conn, at, send)(target, f"⚠️ น้ำใกล้บ้านฉัน: โควตาข้อความ LINE เดือนนี้ใช้ไป {used} จาก {limit} ({used / limit * 100:.0f}%) "
                                            f"เหลือ {left}\nถ้าเต็ม ข้อความเตือนผู้ใช้จะส่งไม่ได้จนกว่าจะขึ้นเดือนใหม่ ลดความถี่สรุป (DIGEST_EVERY_H) หรืออัปเกรดแพ็กเกจ")
         conn.execute("DELETE FROM alert_state WHERE name=?", (QUOTA_KEY,))
         conn.execute("INSERT INTO alert_state(name, ts) VALUES(?,?)", (QUOTA_KEY, _iso(at)))
@@ -238,7 +258,7 @@ def check_silent(conn, at, send=None):
                 conn.execute("DELETE FROM alert_state WHERE name=?", (SILENT_PREFIX + g,))
             before -= gone
         new, back = sorted(now - before), sorted(before - now)
-        send = send or notify.send_line
+        send = _sender(conn, at, send)
         kind = None
         if new:
             more = f"\n…และอีก {len(new) - SILENT_LIST_MAX} กลุ่ม" if len(new) > SILENT_LIST_MAX else ""
@@ -283,7 +303,7 @@ def check_backup_reminder(conn, at, send=None):
         if at - core.parse(row["ts"]) < timedelta(days=BACKUP_EVERY_DAYS):
             return None
         n = conn.execute("SELECT COUNT(*) AS n FROM subscriptions").fetchone()["n"]
-        (send or notify.send_line)(target, f"🗂 น้ำใกล้บ้านฉัน: ถึงเวลาสำรองข้อมูลประจำเดือน ตอนนี้มีผู้ติดตาม {n} รายการ\n"
+        _sender(conn, at, send)(target, f"🗂 น้ำใกล้บ้านฉัน: ถึงเวลาสำรองข้อมูลประจำเดือน ตอนนี้มีผู้ติดตาม {n} รายการ\n"
                                            "ที่เครื่องของคุณรัน: DATABASE_URL=\"...\" python backup_export.py\n"
                                            "(ไฟล์มี LINE ID เก็บเป็นความลับ ปิดการเตือนนี้ด้วย env BACKUP_REMIND=0)")
         conn.execute("DELETE FROM alert_state WHERE name=?", (BACKUP_KEY,))

@@ -179,3 +179,20 @@ def test_watch_provinces_limits_silent_alerts_to_the_owners_own_provinces(tmp_pa
     assert watchdog.check_silent(c, AT + timedelta(hours=1), send) is None and out == []   # Surat Thani was dropped quietly, no "back" message
     monkeypatch.setenv("WATCH_PROVINCES", "ปทุมธานี")
     assert watchdog.silent_groups(c, AT) == []
+
+
+def test_the_owners_own_alerts_are_counted_in_the_send_log(tmp_path, monkeypatch):
+    c = make(tmp_path, monkeypatch=monkeypatch)
+    for i in range(12):
+        add_station(c, f"h{i}", "HII", f"P{i % 4}", 0.5)
+    for i in range(3):
+        add_station(c, f"r{i}", "RID", "สุราษฎร์ธานี", 9)
+    ingest_ok(c)
+    assert watchdog.check_silent(c, AT, lambda t, m: None) == "silent"
+    rows = c.execute("SELECT kind, ok FROM send_log").fetchall()
+    assert [(r["kind"], r["ok"]) for r in rows] == [("admin", 1)]
+
+    def refuse(t, m):
+        raise RuntimeError("HTTP 429")
+    assert watchdog.check_storage(c, AT, refuse, size_mb=500) is None             # a refused message breaks nothing...
+    assert [(r["kind"], r["ok"]) for r in c.execute("SELECT kind, ok FROM send_log ORDER BY id")] == [("admin", 1), ("admin", 0)]   # ...and is counted as failed
