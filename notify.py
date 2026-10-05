@@ -29,6 +29,7 @@ import floodreports
 import db
 import gauges
 import rainalert
+import budget
 import sendlog
 import report
 from ingest import TZ_TH, init_db, utc_now
@@ -239,6 +240,8 @@ def run(conn, at=None, senders=SENDERS):
     rows = core.latest(conn, at)
     sent = failed = 0
     reports = [r for r in floodreports.active(conn, at) if r["confirmed"] >= REPORT_MIN_CONFIRMED]
+    bud = budget.Budget(conn, at)
+    ok = lambda sub, urgent: sub["channel"] != "line" or bud.allow(urgent)   # quota nearly used up: only alert-level news goes out
     for sub in conn.execute("SELECT * FROM subscriptions").fetchall():
         if is_group(sub):
             continue
@@ -255,13 +258,15 @@ def run(conn, at=None, senders=SENDERS):
             eta_soon = (st["trend"] == "rising" and st["eta_to_bank_h"] and st["eta_to_bank_h"] <= EARLY_WITHIN_H
                         and st["status"] in ("watch", "alert"))
             if ((eta_soon or fast_rise(st)) and (sub["notify_level"] != "alert" or urgent)
-                    and not (quiet_now and not urgent) and _since(sub["last_early"], at, EARLY_COOLDOWN_H)):
+                    and not (quiet_now and not urgent) and _since(sub["last_early"], at, EARLY_COOLDOWN_H)
+                    and ok(sub, urgent)):
                 kind = "early" if eta_soon else "fast"
                 try:
                     _invoke(senders[sub["channel"]], sub["target"], (early_message if eta_soon else fast_message)(sub, st),
                             flex=cards.station_card(sub["label"], st, report_link(st["province"])))
                     conn.execute("UPDATE subscriptions SET last_early=? WHERE id=?", (_iso(at), sub["id"]))
                     sendlog.record(conn, at, kind, st["province"])
+                    bud.spent()
                     sent += 1
                 except Exception as e:
                     print(f"early warning failed for subscription {sub['id']}: {e}", file=sys.stderr)
@@ -269,7 +274,8 @@ def run(conn, at=None, senders=SENDERS):
                     failed += 1
                 continue
             # 2) people near home report flooding and others confirm it
-            if sub["notify_level"] != "alert" and not quiet_now and _since(sub["last_report_alert"], at, REPORT_COOLDOWN_H):
+            if (sub["notify_level"] != "alert" and not quiet_now and _since(sub["last_report_alert"], at, REPORT_COOLDOWN_H)
+                    and ok(sub, False)):
                 close = sorted(((core.km(sub["lat"], sub["lng"], r["lat"], r["lng"]), r) for r in reports),
                                key=lambda t: t[0])
                 if close and close[0][0] <= REPORT_RADIUS_KM and close[0][1]["age_min"] <= 180:
@@ -277,6 +283,7 @@ def run(conn, at=None, senders=SENDERS):
                         _invoke(senders[sub["channel"]], sub["target"], report_alert_message(sub, close[0][1], close[0][0]))
                         conn.execute("UPDATE subscriptions SET last_report_alert=? WHERE id=?", (_iso(at), sub["id"]))
                         sendlog.record(conn, at, "report", st["province"])
+                        bud.spent()
                         sent += 1
                     except Exception as e:
                         print(f"report alert failed for subscription {sub['id']}: {e}", file=sys.stderr)
@@ -292,6 +299,8 @@ def run(conn, at=None, senders=SENDERS):
             continue  # this user only wants alert-level news; remember the state without a message
         if quiet_now and st["status"] != "alert":
             continue  # keep last_status unchanged so it is sent after the quiet hours if still different
+        if not ok(sub, st["status"] == "alert"):
+            continue  # same while the message quota is nearly used up: held, sent later if still different
         try:
             _invoke(senders[sub["channel"]], sub["target"], message(sub, st),
                     flex=cards.station_card(sub["label"], st, report_link(st["province"])))
@@ -303,6 +312,7 @@ def run(conn, at=None, senders=SENDERS):
         conn.execute("UPDATE subscriptions SET last_status=?, last_notified=? WHERE id=?",
                      (st["status"], utc_now(), sub["id"]))
         sendlog.record(conn, at, "status", st["province"])
+        bud.spent()
         sent += 1
     conn.commit()
     return sent, failed
@@ -362,6 +372,7 @@ def run_digest(conn, at=None, senders=SENDERS):
         return 0, 0
     rows = core.latest(conn, at)
     cache, sent, failed, done = {}, 0, 0, set()
+    bud = budget.Budget(conn, at)
     for sub in subs:
         prov = (sub["label"] or "")[2:] if is_group(sub) else province_of(rows, sub["lat"], sub["lng"])
         if not prov:
@@ -370,6 +381,8 @@ def run_digest(conn, at=None, senders=SENDERS):
             conn.execute("UPDATE subscriptions SET last_digest=? WHERE id=?", (slot[0], sub["id"]))
             conn.commit()
             continue
+        if sub["channel"] == "line" and not bud.allow(False):
+            continue   # quota nearly used up: the summary waits for the next slot (retried while the slot lasts)
         if prov not in cache:
             cache[prov] = report.build(conn, prov, at, rows=rows)
             if cache[prov] is not None:
@@ -388,6 +401,7 @@ def run_digest(conn, at=None, senders=SENDERS):
             continue
         conn.execute("UPDATE subscriptions SET last_digest=? WHERE id=?", (slot[0], sub["id"]))
         sendlog.record(conn, at, "digest", prov)
+        bud.spent()
         conn.commit()
         done.add((sub["channel"], sub["target"], prov))
         sent += 1
