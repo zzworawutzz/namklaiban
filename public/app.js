@@ -475,6 +475,7 @@ function setOrigin(o){
       province = ""; $("prov").value = ""; redraw(); updateRepLink();
     }
     showResults("สถานีใกล้ที่สุด 3 แห่ง", list, function(s){return s.distance_km+" กม.";});
+    if(pendingNear){ pendingNear = false; if(province){ resSort = "near"; drawProvList(stations.filter(inProv)); } }   // asked for from the "ใกล้ฉัน" tab
     var pick = list[0];
     if(o.kind==="area" && province){   // a picked subdistrict: open the nearest station of the chosen province, not one across the border
       var best = null, bd = 1e9;
@@ -585,6 +586,7 @@ function showProvince(fit){
   if(!province){ if(!origin) $("results").hidden = true; return; }
   drawProvList(list);
 }
+var pendingNear = false;
 var resSort = "pct";   // "pct" highest % of bank, "fast" rising fastest in 3 h, "near" closest to the pinned place
 var SORTS = [["pct","สูงสุด"],["fast","น้ำขึ้นเร็ว"],["near","ใกล้ฉัน"]];
 function drawProvList(list){
@@ -601,13 +603,14 @@ function drawProvList(list){
   showResults(name+"ใน จ."+province+(list.length>10 ? " (10 จาก "+list.length+" สถานี)" : " ("+list.length+" สถานี)"), list.slice(0,10), extra);
   var bar = $("resSort");
   bar.innerHTML = SORTS.map(function(x){
-    var off = x[0]==="near" && !origin;
-    return '<button type="button" class="btn" data-sort="'+x[0]+'" aria-pressed="'+(resSort===x[0])+'"'+(off?' disabled title="ปักตำแหน่งบ้านหรือกดหาตำแหน่งของฉันก่อน"':'')+'>'+x[1]+'</button>';
+    var ask = x[0]==="near" && !origin;   // no place yet: tapping asks for the position instead of being dead
+    return '<button type="button" class="btn" data-sort="'+x[0]+'" aria-pressed="'+(resSort===x[0])+'"'+(ask?' title="แตะเพื่อใช้ตำแหน่งปัจจุบันของคุณ"':'')+'>'+x[1]+'</button>';
   }).join("");
   bar.hidden = false;
 }
 $("resSort").addEventListener("click", function(e){
   var b = e.target.closest ? e.target.closest("button[data-sort]") : null; if(!b || b.disabled) return;
+  if(b.getAttribute("data-sort")==="near" && !origin){ pendingNear = true; $("btnMe").click(); return; }   // asks for the position, then comes back as the "near" list
   resSort = b.getAttribute("data-sort"); if(province) drawProvList(stations.filter(inProv));
 });
 /* "data may be late" bar: the server tells us when ingest keeps failing or the source stopped sending new readings */
@@ -847,7 +850,7 @@ $("btnMe").addEventListener("click",function(){
   if(!navigator.geolocation){ say("เบราว์เซอร์นี้ไม่รองรับการระบุตำแหน่ง ลองปักหมุดบ้านแทน"); return; }
   say("กำลังหาตำแหน่งของคุณ…", true);
   navigator.geolocation.getCurrentPosition(function(p){ setOrigin({lat:p.coords.latitude,lng:p.coords.longitude,kind:"me"}); },
-    function(){ say("ใช้ตำแหน่งไม่ได้ กรุณาอนุญาตการเข้าถึงตำแหน่ง หรือปักหมุดบ้านบนแผนที่แทน"); },
+    function(){ pendingNear = false; say("ใช้ตำแหน่งไม่ได้ กรุณาอนุญาตการเข้าถึงตำแหน่ง หรือปักหมุดบ้านบนแผนที่แทน"); },
     {timeout:10000,maximumAge:300000});
 });
 
