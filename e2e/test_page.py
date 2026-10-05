@@ -79,8 +79,7 @@ def test_area_outline_is_navy_in_light_mode_and_lighter_blue_in_dark_mode(browse
         page = ctx.new_page()
         errors = watch(page)
         open_page(page, site)
-        page.wait_for_selector(".leaflet-overlay-pane path", state="attached", timeout=15000)
-        assert page.get_attribute(".leaflet-overlay-pane path", "stroke") == colour, scheme
+        until(page, "Array.from(document.querySelectorAll('.leaflet-overlay-pane path')).some(p => p.getAttribute('stroke') === '%s')" % colour, 15)   # the district shapes are in the same pane, so look for the outline by its colour
         assert not errors
         ctx.close()
 
@@ -421,3 +420,16 @@ def test_near_me_tab_asks_for_the_position_and_then_sorts_by_distance(context, s
     assert page.evaluate("document.querySelector('#resList .row').innerText.split('\\n')[0]") == "คลองหลวง"
     assert page.get_attribute("#resSort button[data-sort=near]", "aria-pressed") == "true"
     assert not errors
+
+
+def test_district_summary_colours_the_districts_and_lists_them_in_the_sheet(page, site):
+    open_page(page, site)                                                                  # /pathumthani
+    until(page, "document.querySelectorAll('#distCard .dbtn').length > 0", 20)
+    text = page.inner_text("#distCard")
+    assert "สรุปรายอำเภอ" in text and "ไม่ใช่ขอบเขตน้ำท่วมจริง" in text and "ไม่ได้แปลว่าปลอดภัย" in text
+    assert "เตือนภัย" in text                                                              # station A (alert) sits in one of the districts
+    assert page.locator(".leaflet-interactive").count() > 0                               # the district shapes are on the map
+    page.evaluate("var c=document.getElementById('chkDist'); c.checked=false; c.dispatchEvent(new Event('change'))")
+    until(page, "document.getElementById('distCard').hidden === true", 5)
+    page.evaluate("var c=document.getElementById('chkDist'); c.checked=true; c.dispatchEvent(new Event('change'))")
+    until(page, "document.getElementById('distCard').hidden === false", 20)
