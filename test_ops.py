@@ -157,3 +157,25 @@ def test_backup_reminder_can_be_turned_off(tmp_path, monkeypatch):
     monkeypatch.setenv("BACKUP_REMIND", "0")
     assert watchdog.check_backup_reminder(c, AT, lambda t, m: 1 / 0) is None
     assert watchdog.check_backup_reminder(c, AT + timedelta(days=90), lambda t, m: 1 / 0) is None
+
+
+def test_watch_provinces_limits_silent_alerts_to_the_owners_own_provinces(tmp_path, monkeypatch):
+    c, out = make(tmp_path, monkeypatch=monkeypatch), []
+    send = lambda t, m: out.append(m)
+    for i in range(12):
+        add_station(c, f"h{i}", "HII", f"P{i % 4}", 0.5)
+    for i in range(3):
+        add_station(c, f"r{i}", "RID", "สุราษฎร์ธานี", 9)
+    for i in range(3):
+        add_station(c, f"s{i}", "RID", "นครปฐม", 9)
+    for i in range(30):
+        add_station(c, f"e{i}", "RID", "นครสวรรค์", 0.5)
+    ingest_ok(c)
+    assert watchdog.silent_groups(c, AT) == ["RID จ.นครปฐม (3 สถานี)", "RID จ.สุราษฎร์ธานี (3 สถานี)"]   # nothing set: everywhere
+    assert watchdog.check_silent(c, AT, send) == "silent"
+    monkeypatch.setenv("WATCH_PROVINCES", "นครปฐม, ปทุมธานี")
+    assert watchdog.silent_groups(c, AT) == ["RID จ.นครปฐม (3 สถานี)"]
+    out.clear()
+    assert watchdog.check_silent(c, AT + timedelta(hours=1), send) is None and out == []   # Surat Thani was dropped quietly, no "back" message
+    monkeypatch.setenv("WATCH_PROVINCES", "ปทุมธานี")
+    assert watchdog.silent_groups(c, AT) == []

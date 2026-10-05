@@ -192,11 +192,19 @@ SILENT_PREFIX = "silent:"
 SILENT_LIST_MAX = 6
 
 
+def watched_provinces():
+    """WATCH_PROVINCES="พระนครศรีอยุธยา,ปทุมธานี": the owner only hears about silent stations in these provinces. Empty = everywhere."""
+    return [p.strip() for p in os.environ.get("WATCH_PROVINCES", "").split(",") if p.strip()]
+
+
 def silent_groups(conn, at):
     """Labels of groups that stopped reporting: every station of one agency in one province, or at least a quarter of an agency."""
     cut = core.iso(at - timedelta(hours=SILENT_H))
     rows = conn.execute("SELECT s.source, s.province, MAX(r.ts) AS ts FROM stations s "
                         "LEFT JOIN readings r ON r.station_id = s.id GROUP BY s.id, s.source, s.province").fetchall()
+    mine = watched_provinces()
+    if mine:   # only the owner's own provinces; the agency-wide share is then measured inside them too
+        rows = [r for r in rows if r["province"] and any(p in r["province"] for p in mine)]
     by_agency, by_prov = {}, {}
     for r in rows:
         quiet = r["ts"] is None or r["ts"] < cut
@@ -223,6 +231,12 @@ def check_silent(conn, at, send=None):
         now = set(silent_groups(conn, at))
         before = {r["name"][len(SILENT_PREFIX):] for r in conn.execute(
             "SELECT name FROM alert_state WHERE name LIKE ?", (SILENT_PREFIX + "%",)).fetchall()}
+        mine = watched_provinces()
+        if mine:   # groups remembered from before the filter was set must not produce a "back" message for other provinces
+            gone = {g for g in before if "จ." in g and not any(f"จ.{p} " in g for p in mine)}
+            for g in gone:
+                conn.execute("DELETE FROM alert_state WHERE name=?", (SILENT_PREFIX + g,))
+            before -= gone
         new, back = sorted(now - before), sorted(before - now)
         send = send or notify.send_line
         kind = None
