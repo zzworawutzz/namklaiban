@@ -343,7 +343,7 @@ function relHtml(rel){
     list("ต้นน้ำ (ถ้าสูงขึ้น ปลายน้ำมักตามมา)", rel.upstream)+list("ปลายน้ำ", rel.downstream)+'</div>';
 }
 function shareBar(s){
-  return '<div class="sharebar"><button class="btn" type="button" id="btnShare">แชร์ลิงก์สถานีนี้</button><span class="note" id="shareMsg" style="margin:0" aria-live="polite"></span></div>';
+  return '<div class="sharebar"><button class="btn" type="button" id="btnShare">แชร์ลิงก์สถานีนี้</button><button class="btn" type="button" id="btnShareImg">แชร์เป็นภาพ</button><span class="note" id="shareMsg" style="margin:0" aria-live="polite"></span></div>';
 }
 function gaugeHtml(s){
   if(s.pct_of_bank==null) return "";
@@ -488,13 +488,14 @@ function drawNear(o, s0){
 /* Large dams in the basin of the chosen place's province, or above it (ThaiWater, via our server). Context only: how full
    each reservoir is (share of its normal storage, can pass 100) and what it lets out. */
 var damCache = {}, damSeq = 0;
+function damTrend(c){ return (c==null || Math.abs(c)<1) ? "" : (c>0 ? "▲ +" : "▼ ")+c.toFixed(1)+" จุดใน 7 วัน"; }   // percentage points of normal storage over a week
 function damsHtml(g, prov){
   var list = (g && g.dams) || []; if(!list.length) return "";
   var d = (g.as_of||"").split("-"), when = d.length===3 ? +d[2]+"/"+(+d[1]) : "";
   return '<div class="eyebrow">เขื่อนใหญ่ในลุ่มน้ำนี้และต้นน้ำ · จ.'+esc(prov)+'</div>'+
     list.map(function(x){
       var hot = x.pct>=90;
-      return '<div class="dr"><span>'+esc(x.name)+'<small>'+esc(x.province ? "จ."+x.province : "")+((x.released||0)>=0.5 ? " · ระบายออก "+Math.round(x.released)+" ล้าน ลบ.ม./วัน" : "")+'</small></span>'+
+      return '<div class="dr"><span>'+esc(x.name)+'<small>'+esc(x.province ? "จ."+x.province : "")+((x.released||0)>=0.5 ? " · ระบายออก "+Math.round(x.released)+" ล้าน ลบ.ม./วัน" : "")+(damTrend(x.change_7d) ? " · "+damTrend(x.change_7d) : "")+'</small></span>'+
              '<b style="color:'+(hot ? "var(--watch-ink)" : "inherit")+'">'+Math.round(x.pct)+'%</b></div>';
     }).join("")+
     (g.total>list.length ? '<div class="note" style="margin:4px 0 0">และอีก '+(g.total-list.length)+' แห่งในลุ่มน้ำนี้และต้นน้ำ</div>' : "")+
@@ -785,6 +786,7 @@ $("detail").addEventListener("click",function(e){
   }
   if(e.target.id==="cmpClose"){ cmpState = null; drawDetail(byId[sel], curRs, curRel); return; }
   var r = e.target.closest(".row"); if(r){ select(r.getAttribute("data-id"),true); return; }
+  if(e.target.id==="btnShareImg"){ shareImage(byId[sel], e.target); return; }
   if(e.target.id==="btnShare"){
     var u = new URL(location.href); u.searchParams.set("station",sel); u.searchParams.delete("api");
     var url = u.toString();
@@ -883,16 +885,24 @@ function drawRain(j, pt){
 }
 /* Rain actually caught by gauges (ThaiWater, via our server): a province summary, or the gauges nearest to a place. */
 var gaugeCache = {}, gaugeSeq = 0;
+function thDays(a, b){   // "2026-10-02", "2026-10-04" -> "2–4 ต.ค."
+  var M = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."], x = (a||"").split("-"), y = (b||"").split("-");
+  if(x.length!==3 || y.length!==3) return "";
+  return x[1]===y[1] ? (+x[2])+"–"+(+y[2])+" "+M[+y[1]-1] : (+x[2])+" "+M[+x[1]-1]+" – "+(+y[2])+" "+M[+y[1]-1];
+}
 function gaugeHtml2(g, pt){
   if(pt.place){
     var l = (g && g.nearby) || [];
     if(!l.length) return '<span class="note">ไม่มีเครื่องวัดฝนในรัศมี 25 กม. ที่รายงานเมื่อไม่นานมานี้</span>';
     return '<b>เครื่องวัดฝนใกล้คุณ (ฝน 24 ชม. ที่วัดได้จริง)</b>'+l.map(function(r){
-      return '<div class="gl"><span>'+esc(r.name)+' <small>'+r.distance_km+' กม.</small></span><b>'+Math.round(r.mm24)+' มม.</b></div>'; }).join("");
+      return '<div class="gl"><span>'+esc(r.name)+' <small>'+r.distance_km+' กม.</small></span><b>'+Math.round(r.mm24)+' มม.'+(r.mm3d!=null ? ' <small>· 3 วัน '+Math.round(r.mm3d)+' มม.</small>' : '')+'</b></div>'; }).join("")+
+      (g.three_day_period ? '<div class="note" style="margin:2px 0 0">"3 วัน" คือฝนสะสม '+esc(thDays(g.three_day_period.start, g.three_day_period.end))+' (เฉพาะวันที่ครบแล้ว ไม่รวมวันนี้)</div>' : '');
   }
   if(!g || !g.stations) return '<span class="note">ยังไม่มีเครื่องวัดฝนในจังหวัดนี้ที่รายงานเมื่อไม่นานมานี้</span>';
   return '<b>เครื่องวัดฝนจริง 24 ชม.: สูงสุด '+Math.round(g.max.mm24)+' มม.</b> ที่ '+esc(g.max.name)+
-    '<div class="note" style="margin:2px 0 0">เฉลี่ย '+Math.round(g.mean_mm)+' มม. จาก '+g.stations+' สถานี'+(g.over_35 ? ' · ตั้งแต่ 35 มม. ขึ้นไป '+g.over_35+' สถานี' : '')+'</div>';
+    '<div class="note" style="margin:2px 0 0">เฉลี่ย '+Math.round(g.mean_mm)+' มม. จาก '+g.stations+' สถานี'+(g.over_35 ? ' · ตั้งแต่ 35 มม. ขึ้นไป '+g.over_35+' สถานี' : '')+'</div>'+
+    (g.three_day ? '<div style="margin-top:6px"><b>ฝนสะสม 3 วัน ('+esc(thDays(g.three_day.start, g.three_day.end))+') สูงสุด '+Math.round(g.three_day.max.mm3d)+' มม.</b> ที่ '+esc(g.three_day.max.name)+
+      '<div class="note" style="margin:2px 0 0">เฉลี่ย '+Math.round(g.three_day.mean_mm)+' มม. จาก '+g.three_day.stations+' สถานี'+(g.three_day.over_100 ? ' · ตั้งแต่ 100 มม. ขึ้นไป '+g.three_day.over_100+' สถานี' : '')+' (วันที่ครบแล้ว ไม่รวมวันนี้)</div></div>' : '');
 }
 function loadGauges(pt){
   var my = ++gaugeSeq, box = $("gaugeLine"); if(!box) return;
@@ -901,6 +911,70 @@ function loadGauges(pt){
   if(hit && Date.now()-hit.t < 5*60000){ show(hit.g); return; }
   getJSON("/api/rain?"+q).then(function(g){ gaugeCache[q] = {t:Date.now(), g:g}; show(g); })
     .catch(function(){ var b = $("gaugeLine"); if(my===gaugeSeq && b) b.innerHTML = '<span class="note">ยังไม่มีข้อมูลจากเครื่องวัดฝนตอนนี้</span>'; });
+}
+
+/* ---------- a picture of the station's situation, to post in a group chat ---------- */
+var CARD_INK = {normal:"#12724b", watch:"#845900", alert:"#b02a22", unknown:"#566a75"};   // the same text colours as the light theme: the picture is always light
+function cardWrap(ctx, text, maxW){
+  var words = text.split(/(\s+)/), lines = [], cur = "";
+  words.forEach(function(w){ var t = cur + w; if(cur && ctx.measureText(t).width > maxW){ lines.push(cur.trim()); cur = w.trim() ? w : ""; } else cur = t; });
+  if(cur.trim()) lines.push(cur.trim());
+  // a long name without spaces (Thai): break by characters
+  var out = [];
+  lines.forEach(function(l){
+    while(ctx.measureText(l).width > maxW && l.length > 1){ var k = l.length; while(k > 1 && ctx.measureText(l.slice(0,k)).width > maxW) k--; out.push(l.slice(0,k)); l = l.slice(k); }
+    out.push(l);
+  });
+  return out;
+}
+function drawShareCard(s, link, when){
+  var W = 1080, H = 1350, cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+  var c = cv.getContext("2d"), F = '"IBM Plex Sans Thai", system-ui, sans-serif', col = COLOR[s.status] || COLOR.unknown, ink = CARD_INK[s.status] || CARD_INK.unknown;
+  c.fillStyle = "#f3f6f8"; c.fillRect(0,0,W,H);
+  c.fillStyle = "#0e5a78"; c.fillRect(0,0,W,210);
+  c.fillStyle = "#fff"; c.font = "700 60px "+F; c.textBaseline = "alphabetic"; c.fillText("น้ำใกล้บ้านฉัน", 60, 105);
+  c.font = "400 34px "+F; c.fillStyle = "#d3dfe5"; c.fillText("สถานการณ์น้ำ ณ "+when, 60, 165);
+  c.fillStyle = "#fff"; c.beginPath(); c.roundRect ? c.roundRect(40, 250, W-80, 940, 36) : c.rect(40, 250, W-80, 940); c.fill();
+  var y = 340; c.fillStyle = "#0f2530"; c.font = "700 72px "+F;
+  cardWrap(c, s.name || "", W-160).slice(0,2).forEach(function(l){ c.fillText(l, 80, y); y += 86; });
+  c.font = "400 40px "+F; c.fillStyle = "#4f6a77"; c.fillText((s.province ? "จ."+s.province : "")+(s.river ? " · "+s.river : ""), 80, y); y += 40;
+  var st = statusText(s); c.font = "700 46px "+F; var pw = c.measureText(st).width + 64;
+  c.fillStyle = col; c.beginPath(); c.roundRect ? c.roundRect(80, y+20, pw, 80, 40) : c.rect(80, y+20, pw, 80); c.fill();
+  c.fillStyle = s.status==="watch" ? "#1a1200" : "#fff"; c.fillText(st, 112, y+78); y += 110;
+  c.fillStyle = ink; c.font = "700 200px "+F; c.fillText(s.pct_of_bank==null ? "-" : Math.round(s.pct_of_bank)+"%", 76, y+200);
+  var pctW = c.measureText(s.pct_of_bank==null ? "-" : Math.round(s.pct_of_bank)+"%").width;
+  c.font = "400 52px "+F; c.fillStyle = "#4f6a77"; c.fillText("ของตลิ่ง", 76+pctW+24, y+200); y += 250;
+  if(s.pct_of_bank!=null){   // gauge
+    c.fillStyle = "#d3dfe5"; c.beginPath(); c.roundRect ? c.roundRect(80, y, W-160, 36, 18) : c.rect(80, y, W-160, 36); c.fill();
+    c.fillStyle = col; c.beginPath(); var gw = Math.max(36, Math.min(100, s.pct_of_bank)/100*(W-160)); c.roundRect ? c.roundRect(80, y, gw, 36, 18) : c.rect(80, y, gw, 36); c.fill(); y += 90;
+  }
+  c.font = "400 44px "+F; c.fillStyle = "#0f2530";
+  var t = TREND[s.trend];
+  if(t && s.trend_pct_per_hr!=null){ c.fillStyle = s.trend==="rising" ? ink : "#4f6a77"; c.fillText(t[0]+" "+t[1]+" "+(s.trend_pct_per_hr>=0 ? "+" : "")+s.trend_pct_per_hr.toFixed(1)+"%/ชม.", 80, y); y += 62; }
+  if((s.rise_3h_m||0) >= 0.3){ c.fillStyle = ink; c.fillText("น้ำขึ้น +"+s.rise_3h_m.toFixed(2)+" ม. ใน 3 ชม.", 80, y); y += 62; }
+  if(s.water_level!=null){ c.fillStyle = "#4f6a77"; c.font = "400 38px "+F; c.fillText("ระดับน้ำ "+s.water_level.toFixed(2)+" ม.รทก."+(s.bank_level!=null ? " (ตลิ่ง "+(+s.bank_level).toFixed(2)+")" : ""), 80, y); y += 54; }
+  if(s.stale){ c.fillStyle = "#845900"; c.font = "700 40px "+F; c.fillText("⚠ สถานีนี้ข้อมูลไม่อัปเดต ใช้ประกอบอย่างระวัง", 80, y); }
+  c.fillStyle = "#4f6a77"; c.font = "400 30px "+F;
+  cardWrap(c, "ข้อมูลจาก ThaiWater ใช้ประกอบการตัดสินใจเท่านั้น ไม่ใช่ประกาศทางการ ให้ยึดประกาศ ปภ. (โทร 1784)", W-160).slice(0,3).forEach(function(l,i){ c.fillText(l, 80, 1112+i*40); });
+  c.fillStyle = "#0e5a78"; c.font = "700 32px "+F; c.fillText(link.replace(/^https?:\/\//,""), 60, 1262);
+  return cv;
+}
+function shareImage(s, btn){
+  if(!s) return;
+  var msg = $("shareMsg"), done = function(t){ if(msg) msg.textContent = t; };
+  var u = new URL("/", location.href); u.searchParams.set("station", s.id); var link = u.toString();
+  var when = s.ts ? new Date(s.ts).toLocaleString("th-TH",{timeZone:"Asia/Bangkok",day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})+" น." : "ล่าสุด";
+  btn.disabled = true; done("กำลังสร้างภาพ…");
+  var fonts = (document.fonts && document.fonts.load) ? Promise.race([Promise.all([document.fonts.load('400 30px "IBM Plex Sans Thai"'), document.fonts.load('700 30px "IBM Plex Sans Thai"')]), new Promise(function(r){ setTimeout(r,1500); })]) : Promise.resolve();
+  fonts.catch(function(){}).then(function(){
+    var cv = drawShareCard(s, link, when);
+    return new Promise(function(res, rej){ cv.toBlob(function(b){ b ? res(b) : rej(new Error("no image")); }, "image/png"); });
+  }).then(function(blob){
+    var file = new File([blob], "namklaiban-"+s.id+".png", {type:"image/png"}), text = s.name+" "+pctText(s)+" ของตลิ่ง ("+statusText(s)+") "+link;
+    if(navigator.canShare && navigator.canShare({files:[file]})){ return navigator.share({files:[file], title:"น้ำใกล้บ้านฉัน – "+s.name, text:text}).then(function(){ done(""); }, function(e){ done(e && e.name==="AbortError" ? "" : "แชร์ไม่สำเร็จ"); }); }
+    var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 5000); done("บันทึกภาพแล้ว (ส่งต่อได้จากแกลเลอรี)");
+  }).catch(function(){ done("สร้างภาพไม่ได้ ลองใหม่อีกครั้ง"); }).then(function(){ btn.disabled = false; });
 }
 
 /* ---------- low battery: switch off the heavy layers (Chrome on Android only; other browsers have no Battery API) ---------- */
@@ -1205,6 +1279,12 @@ function isDark(){
 }
 function syncTheme(){
   var cur = currentTheme();
+  var tb = $("btnTheme");
+  if(tb){   // the quick button in the top bar: shows the current mode, a tap goes to the next one
+    Array.prototype.forEach.call(tb.querySelectorAll("g[data-mode]"), function(g){ g.hidden = g.getAttribute("data-mode")!==cur; });
+    var nx = THEME_NEXT[cur];
+    tb.setAttribute("aria-label", "โหมดสี "+THEME_NAME[cur]+" แตะเพื่อเปลี่ยนเป็น"+THEME_NAME[nx]); tb.title = "โหมดสี: "+THEME_NAME[cur];
+  }
   Array.prototype.forEach.call(document.querySelectorAll("#themeSeg button"), function(b){ b.setAttribute("aria-pressed", b.getAttribute("data-theme-set")===cur ? "true" : "false"); });
   Array.prototype.forEach.call(document.querySelectorAll('meta[name="theme-color"]'), function(m){   // the browser's address-bar colour follows the choice
     if(!m.hasAttribute("data-orig")) m.setAttribute("data-orig", m.getAttribute("content"));
@@ -1218,6 +1298,27 @@ function setTheme(t){
   try{ if(t==="auto") localStorage.removeItem(THEME_KEY); else localStorage.setItem(THEME_KEY, t); }catch(e){}
   syncTheme();
 }
+/* Install to the home screen. Chrome / Edge on Android and desktop offer "beforeinstallprompt": keep it and show our own button.
+   iPhone / iPad Safari has no such event, so show the two-step instruction instead. Nothing is shown inside the installed app. */
+var deferredInstall = null;
+function isStandalone(){ return (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone===true; }
+function isIos(){ return /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1); }
+function syncInstall(){
+  var box = $("installBox"); if(!box) return;
+  var can = !!deferredInstall, ios = isIos() && !can;
+  box.hidden = isStandalone() || !(can || ios);
+  $("btnInstall").hidden = !can; $("installIos").hidden = !ios;
+}
+window.addEventListener("beforeinstallprompt", function(e){ e.preventDefault(); deferredInstall = e; syncInstall(); });
+window.addEventListener("appinstalled", function(){ deferredInstall = null; syncInstall(); toast("ติดตั้งแล้ว เปิดได้จากหน้าจอหลัก"); });
+$("btnInstall").addEventListener("click", function(){
+  var e = deferredInstall; if(!e) return;
+  deferredInstall = null; syncInstall();   // a saved prompt can be used once
+  try{ e.prompt(); if(e.userChoice) e.userChoice.then(function(c){ if(c && c.outcome==="accepted") toast("กำลังติดตั้ง…"); }); }catch(err){}
+});
+syncInstall();
+var THEME_NAME = {auto:"ตามเครื่อง", light:"สว่าง", dark:"มืด"}, THEME_NEXT = {auto:"light", light:"dark", dark:"auto"};
+$("btnTheme").addEventListener("click", function(){ var n = THEME_NEXT[currentTheme()]; setTheme(n); toast("โหมดสี: "+THEME_NAME[n]); });
 $("themeSeg").addEventListener("click", function(e){ var b = e.target.closest ? e.target.closest("button[data-theme-set]") : null; if(b) setTheme(b.getAttribute("data-theme-set")); });
 try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncTheme); }catch(e){}
 syncTheme();

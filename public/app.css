@@ -295,6 +295,7 @@ svg.chart{width:100%;height:auto;display:block}
 @media (min-width:900px){#layers{right:16px;top:calc(76px + env(safe-area-inset-top,0px))}}
 #layers h3{font-size:13px;margin:14px 0 6px;color:var(--muted);font-weight:600}
 #layers h3:first-child{margin-top:0}
+#btnTheme g[hidden]{display:none}
 .seg{display:flex;gap:6px;margin:4px 0 10px}.seg button{flex:1;min-height:44px;border:1px solid var(--line);border-radius:12px;background:var(--surface);font-weight:600}
 .seg button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .chk{display:flex;gap:10px;align-items:flex-start;font-size:14px;margin:6px 0}

@@ -29,11 +29,11 @@
 </script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icon.svg">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" integrity="sha384-c6Rcwz4e4CITMbu/NBmnNS8yN2sC3cUElMEMfP3vqqKFp7GOYaaBBCqmaWBjmkjb" crossorigin="anonymous">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css" integrity="sha384-uIZNAcoEHVWMk8LrCSX95DJk6FQzH6zG00LQC9BykRY1UKKpkDzDhbDLYQ1Ho3mI" crossorigin="anonymous">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="app.css?v=43">
+<link rel="stylesheet" href="app.css?v=44">
 </head>
 <body>
 <h1 class="sr">น้ำใกล้บ้านฉัน</h1>
@@ -49,6 +49,13 @@
     </div>
     <button class="iconbtn glass" id="btnMe" type="button" aria-label="ใกล้ฉัน ใช้ตำแหน่งปัจจุบัน" title="ใกล้ฉัน">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3.5M12 18.5V22M2 12h3.5M18.5 12H22"/><circle cx="12" cy="12" r="7.5"/></svg>
+    </button>
+    <button class="iconbtn glass" id="btnTheme" type="button" aria-label="โหมดสี ตามเครื่อง แตะเพื่อเปลี่ยน" title="โหมดสี">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <g data-mode="auto"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" fill="currentColor" stroke="none"/></g>
+        <g data-mode="light" hidden><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6"/></g>
+        <g data-mode="dark" hidden><path d="M20 14.5A8 8 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z"/></g>
+      </svg>
     </button>
     <button class="iconbtn labelbtn glass" id="btnLayers" type="button" aria-label="ชั้นแผนที่ เปิดปิดน้ำท่วมดาวเทียม เรดาร์ฝน ศูนย์พักพิง" aria-expanded="false" aria-controls="layers" title="ชั้นแผนที่">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5z"/><path d="m3 13 9 5 9-5"/></svg>
@@ -72,6 +79,11 @@
 <div id="layers" hidden role="dialog" aria-label="ตัวเลือกแผนที่">
   <h3>โหมดสี</h3>
   <div class="seg" id="themeSeg"><button type="button" data-theme-set="auto" aria-pressed="true">ตามเครื่อง</button><button type="button" data-theme-set="light" aria-pressed="false">สว่าง</button><button type="button" data-theme-set="dark" aria-pressed="false">มืด</button></div>
+  <div id="installBox" hidden>
+    <h3>ติดตั้งบนหน้าจอหลัก</h3>
+    <button class="btn block" id="btnInstall" type="button" hidden>ติดตั้งแอปน้ำใกล้บ้านฉัน</button>
+    <p class="note" id="installIos" hidden>บน iPhone/iPad: แตะปุ่มแชร์ (สี่เหลี่ยมมีลูกศรชี้ขึ้น) ที่ Safari แล้วเลือก "เพิ่มลงในหน้าจอโฮม" จะได้ไอคอนเปิดได้เร็วเหมือนแอป</p>
+  </div>
   <h3>เลเยอร์</h3>
   <label class="chk"><input type="checkbox" id="chkRiver"><span>เส้นเชื่อมสถานีตามแม่น้ำ<br><span class="note">เป็นเส้นตรงระหว่างสถานี ไม่ใช่แนวแม่น้ำจริง เรียงต้นน้ำ→ปลายน้ำจากระดับท้องน้ำ (ประมาณ)</span></span></label>
   <div id="floodBox" hidden>
@@ -192,6 +204,6 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" integrity="sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js" integrity="sha384-eXVCORTRlv4FUUgS/xmOyr66XBVraen8ATNLMESp92FKXLAMiKkerixTiBvXriZr" crossorigin="anonymous"></script>
-<script src="app.js?v=43"></script>
+<script src="app.js?v=44"></script>
 </body>
 </html>
