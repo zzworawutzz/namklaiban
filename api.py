@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 
 import areas
 import boundaries
+import districts
 import budget
 import core
 import dams
@@ -265,6 +266,18 @@ def boundary(response: Response, province: str, district: Optional[str] = None, 
     if f is None:
         raise HTTPException(404, "ไม่มีขอบเขตของพื้นที่นี้")
     return f
+
+
+@app.get("/api/districts")
+def district_summary(response: Response, province: str):
+    """District outlines of a province coloured by its worst fresh station (see districts.py)."""
+    response.headers["Cache-Control"] = "public, max-age=120"
+    with conn() as c:
+        rows = core.latest(c, now(), province)
+    data = districts.summary(province, rows)
+    if data is None:
+        raise HTTPException(404, "ไม่มีขอบเขตอำเภอของจังหวัดนี้")
+    return data
 
 
 @app.get("/api/line/add-friend", include_in_schema=False)
