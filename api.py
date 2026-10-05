@@ -203,9 +203,16 @@ def rain_gauges(response: Response, province: Optional[str] = None,
     if rows is None:
         raise HTTPException(503, "สถานีวัดฝนไม่พร้อมให้บริการตอนนี้")
     response.headers["Cache-Control"] = "public, max-age=300, s-maxage=600, stale-while-revalidate=600"
+    rows3 = gauges.get3()                      # the completed-days totals; the page works without them
     if province is not None:
-        return gauges.for_province(rows, province) or {"stations": 0}
-    return {"nearby": gauges.nearest(rows, lat, lng, limit)}
+        out = gauges.for_province(rows, province) or {"stations": 0}
+        g3 = gauges.province_3d(rows3, province) if rows3 else None
+        if g3:
+            out["three_day"] = g3
+        return out
+    near = gauges.nearest(rows, lat, lng, limit)
+    period = gauges.with_3d(near, rows3)
+    return {"nearby": near, **({"three_day_period": period} if period else {})}
 
 
 @app.get("/api/dams")
@@ -217,7 +224,9 @@ def dams_for_province(response: Response, province: str = Query(..., min_length=
     with conn() as c:
         g = dams.for_province(c, province, rows)
     response.headers["Cache-Control"] = "public, max-age=900, s-maxage=1800, stale-while-revalidate=1800"
-    return {"as_of": g["as_of"], "dams": g["dams"][:limit], "total": len(g["dams"])} if g else {"dams": [], "total": 0}
+    if not g:
+        return {"dams": [], "total": 0}
+    return {"as_of": g["as_of"], "dams": dams.add_trends(g["dams"][:limit]), "total": len(g["dams"])}
 
 
 @app.get("/api/shelters")

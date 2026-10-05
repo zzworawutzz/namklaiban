@@ -133,3 +133,49 @@ def test_the_line_names_big_reservoirs_first_and_leaves_out_a_release_of_nothing
     assert [d["name"] for d in high] == ["ใหญ่", "เล็ก"]
     text = dams.line(high)
     assert "ใหญ่ 95% ระบาย 12 ล้าน ลบ.ม./วัน" in text and "เล็ก 99% " in text and "เล็ก 99% ระบาย" not in text
+
+
+def graph(storages, year=2026, start="2026-09-28"):
+    from datetime import date, timedelta
+    d0 = date.fromisoformat(start)
+    return {"data": {"graph_data": [{"year": year, "data": [{"date": f"{(d0 + timedelta(days=i)).isoformat()}T00:00:00+07:00", "value": v}
+                                                          for i, v in enumerate(storages)]}]}}
+
+
+def test_seven_day_change_is_in_percentage_points_of_normal_storage():
+    d = {"id": 5, "date": "2026-10-05", "storage_mcm": 957.13, "normal_mcm": 872.0}
+    fetch = lambda dam_id, year: graph([870.0, 880, 890, 900, 920, 940, 950, 957.13])     # 2026-09-28 .. 2026-10-05
+    c = dams.change_7d(d, fetch)
+    assert c == round((957.13 - 870.0) / 872.0 * 100, 1) == 10.0
+    assert dams.trend_text(c) == "▲ +10.0 จุดใน 7 วัน" and dams.trend_text(-3.04) == "▼ -3.0 จุดใน 7 วัน"
+    assert dams.trend_text(0.4) == "" and dams.trend_text(None) == ""                    # steady or unknown: nothing said
+
+
+def test_a_missing_day_uses_the_neighbour_and_no_series_means_no_figure():
+    d = {"id": 6, "date": "2026-10-05", "storage_mcm": 900.0, "normal_mcm": 1000.0}
+    gappy = graph([800.0, 810, 820, 830, 840, 850, 860, 870])
+    gappy["data"]["graph_data"][0]["data"].pop(0)                                         # 2026-09-28 is missing: 09-29 (810) is used
+    assert dams.change_7d(d, lambda i, y: gappy) == 9.0
+    dams._graph_cache.clear()
+    assert dams.change_7d(d, lambda i, y: (_ for _ in ()).throw(OSError("down"))) is None
+    assert dams.change_7d({**d, "id": None}, lambda i, y: gappy) is None and dams.change_7d({**d, "storage_mcm": None}, lambda i, y: gappy) is None
+
+
+def test_around_new_year_both_years_are_read_and_series_are_cached():
+    calls = []
+    def fetch(dam_id, year):
+        calls.append(year)
+        return graph([100.0] * 5, start="2025-12-26") if year == 2025 else graph([110.0] * 5, start="2026-01-01")
+    d = {"id": 7, "date": "2026-01-03", "storage_mcm": 120.0, "normal_mcm": 200.0}
+    assert dams.change_7d(d, fetch) == 10.0 and sorted(calls) == [2025, 2026]           
+    dams.change_7d(d, fetch)
+    assert sorted(calls) == [2025, 2026]                                                  # the second call came from the cache
+
+
+def test_the_summary_line_shows_the_week_when_known(monkeypatch):
+    c = conn()
+    monkeypatch.setattr(dams, "get", lambda: dams.parse({"data": {"dam_daily": [dam("ใหญ่", "สระบุรี", "ลุ่มน้ำป่าสัก", 95.0, released=12.0, normal=900.0)]}}, NOW))
+    monkeypatch.setattr(dams, "fetch_graph", lambda dam_id, year: graph([700.0, 720, 740, 760, 780, 800, 820, 840], start="2026-09-28"))
+    high = dams.high_in(c, "พระนครศรีอยุธยา")
+    assert high[0]["change_7d"] == round((80.0 - 700.0) / 900.0 * 100, 1)                 # the helper's dam holds 80 now: the figure follows the data it is given
+    assert "▼" in dams.line(high)

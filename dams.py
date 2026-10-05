@@ -12,14 +12,20 @@ import os
 import sys
 import time
 import urllib.request
-from datetime import datetime, timedelta, timezone
+from concurrent.futures import ThreadPoolExecutor
+from datetime import date, datetime, timedelta, timezone
 
 URL = "https://api-v3.thaiwater.net/api/v1/thaiwater30/analyst/dam"
+GRAPH_URL = "https://api-v3.thaiwater.net/api/v1/thaiwater30/analyst/dam_yearly_graph?data_type=dam_storage&dam_id={id}&year={year}"
+GRAPH_CACHE_S = 6 * 3600         # a dam's daily storage for the whole year (14 kB compressed) only gains one point a day
+TREND_DAYS = 7
+TREND_MIN_POINTS = 1.0           # a change smaller than this many percentage points is "steady", not worth a sentence
 CACHE_S = 1800
 MAX_AGE_DAYS = 3                 # a dam that has not reported for this long is left out
 DEFAULT_ALERT_PCT = 90.0         # shown in the LINE summary from this share of normal storage
 TZ_TH = timezone(timedelta(hours=7))
 _cache = {"at": 0.0, "rows": None}
+_graph_cache = {}
 
 # Basins whose water reaches another basin we have stations in. The Chao Phraya is formed by the Ping, Wang, Yom and Nan
 # (joined by Sakae Krang and Pasak on the way down); the Chi runs into the Mun.
@@ -61,7 +67,7 @@ def parse(payload, now=None):
                 continue
             if float(pct) == 0 and (r.get("dam_storage") or 0) > 0:   # a reservoir holding water cannot be at 0 %: a bad figure
                 continue
-            out.append({"name": (dam.get("dam_name") or {}).get("th") or str(dam.get("id")),
+            out.append({"id": dam.get("id"), "name": (dam.get("dam_name") or {}).get("th") or str(dam.get("id")),
                         "province": ((r.get("geocode") or {}).get("province_name") or {}).get("th") or "",
                         "basin": ((r.get("basin") or {}).get("basin_name") or {}).get("th") or "",
                         "pct": round(float(pct), 1),
@@ -95,6 +101,72 @@ def get(fetcher=None, clock=time.time, now=None):
     return rows
 
 
+def fetch_graph(dam_id, year):
+    req = urllib.request.Request(GRAPH_URL.format(id=int(dam_id), year=int(year)), headers={"User-Agent": "nam-klai-baan-chan/0.1", "Accept-Encoding": "gzip"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        raw = r.read()
+        if r.headers.get("Content-Encoding") == "gzip":
+            raw = gzip.decompress(raw)
+    return json.loads(raw)
+
+
+def storage_series(dam_id, year, fetcher=None, clock=time.time):
+    """{'2026-09-28': storage in million m3, ...} for one dam and year, or None when ThaiWater cannot be reached."""
+    key = (dam_id, year)
+    hit = _graph_cache.get(key)
+    if hit and clock() - hit[0] < GRAPH_CACHE_S:
+        return hit[1]
+    try:
+        j = (fetcher or fetch_graph)(dam_id, year)
+        points = (((j.get("data") or {}).get("graph_data") or [{}])[0]).get("data") or []
+        series = {p["date"][:10]: float(p["value"]) for p in points if p.get("value") is not None}
+    except Exception as e:
+        print(f"dam graph failed: {type(e).__name__}: {e}", file=sys.stderr)
+        return hit[1] if hit else None
+    _graph_cache[key] = (clock(), series)
+    return series
+
+
+def change_7d(d, fetcher=None, clock=time.time):
+    """How many percentage points of normal storage the dam gained (+) or lost (-) over the last 7 days, or None.
+    Uses the day-by-day series for the reservoir (a point a day apart, the day before or after is accepted when one is missing)."""
+    try:
+        if not d.get("id") or not d.get("storage_mcm") or not d.get("normal_mcm"):
+            return None
+        today = date.fromisoformat(d["date"])
+        then = today - timedelta(days=TREND_DAYS)
+        series = {}
+        for year in {then.year, today.year}:
+            s = storage_series(d["id"], year, fetcher, clock)
+            if s is None:
+                return None
+            series.update(s)
+        for off in (0, -1, 1):
+            v = series.get((then + timedelta(days=off)).isoformat())
+            if v is not None:
+                return round((d["storage_mcm"] - v) / d["normal_mcm"] * 100, 1)
+    except Exception as e:
+        print(f"dam trend failed: {type(e).__name__}: {e}", file=sys.stderr)
+    return None
+
+
+def add_trends(dams, fetcher=None):
+    """Sets d['change_7d'] on each dam (None when unknown), fetching the day-by-day series in parallel."""
+    if not dams:
+        return dams
+    with ThreadPoolExecutor(max_workers=min(6, len(dams))) as pool:
+        for d, c in zip(dams, pool.map(lambda x: change_7d(x, fetcher), dams)):
+            d["change_7d"] = c
+    return dams
+
+
+def trend_text(c):
+    """"▲ +4.2 จุดใน 7 วัน" / "▼ -3.0 จุดใน 7 วัน", or "" when there is no figure or it is tiny."""
+    if c is None or abs(c) < TREND_MIN_POINTS:
+        return ""
+    return f"{'▲' if c > 0 else '▼'} {c:+.1f} จุดใน {TREND_DAYS} วัน"
+
+
 def basins_of(conn, province, min_stations=2):
     """The basins our stations in this province sit in (a basin needs a couple of stations to count, so a stray one on the
     border does not pull in another river system)."""
@@ -126,6 +198,8 @@ def high_in(conn, province):
     try:
         g = for_province(conn, province)
         top = sorted((d for d in (g["dams"] if g else []) if d["pct"] >= alert_pct()), key=lambda d: -(d["normal_mcm"] or 0))[:3]   # the big reservoirs matter most downstream
+        if top:
+            add_trends(top)
         return top or None
     except Exception as e:
         print(f"dam line failed: {type(e).__name__}: {e}", file=sys.stderr)
@@ -137,6 +211,7 @@ def line(dams):
     parts = []
     for d in dams:
         out = f" ระบาย {d['released']:.0f} ล้าน ลบ.ม./วัน" if (d.get("released") or 0) >= 0.5 else ""
-        parts.append(f"{d['name']} {round(d['pct'])}%{out}")
+        tr = trend_text(d.get("change_7d"))
+        parts.append(f"{d['name']} {round(d['pct'])}%{out}" + (f" ({tr})" if tr else ""))
     return ("🏞 เขื่อนใหญ่ในลุ่มน้ำนี้และต้นน้ำที่เก็บน้ำสูง: " + " · ".join(parts)
             + " (% ของความจุปกติ ข้อมูลรายวัน เป็นบริบทประกอบ ไม่ได้บอกว่าจะท่วม)")

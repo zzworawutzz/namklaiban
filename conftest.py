@@ -42,7 +42,9 @@ def _no_real_rain_gauges(monkeypatch):
     """Tests never call ThaiWater's rain feed: no gauges unless a test supplies some."""
     import gauges
     gauges._cache.update(at=0.0, rows=None)
-    monkeypatch.setattr(gauges, "fetch", lambda: {"data": []})
+    gauges._cache3.update(at=0.0, rows=None)
+    monkeypatch.setattr(gauges, "fetch", lambda url=None: {"data": []})
+    monkeypatch.setattr(gauges, "fetch3", lambda: {"data": []})
 
 
 @pytest.fixture(autouse=True)
@@ -51,6 +53,8 @@ def _no_real_dams(monkeypatch):
     import dams
     dams._cache.update(at=0.0, rows=None)
     monkeypatch.setattr(dams, "fetch", lambda: {"data": {"dam_daily": []}})
+    dams._graph_cache.clear()
+    monkeypatch.setattr(dams, "fetch_graph", lambda dam_id, year: (_ for _ in ()).throw(OSError("no network in tests")))   # no day-by-day series unless a test gives one
 
 
 @pytest.fixture(autouse=True)
