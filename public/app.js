@@ -494,7 +494,7 @@ function damsHtml(g, prov){
   return '<div class="eyebrow">เขื่อนใหญ่ในลุ่มน้ำนี้และต้นน้ำ · จ.'+esc(prov)+'</div>'+
     list.map(function(x){
       var hot = x.pct>=90;
-      return '<div class="dr"><span>'+esc(x.name)+'<small>'+esc(x.province ? "จ."+x.province : "")+(x.released ? " · ระบายออก "+Math.round(x.released)+" ล้าน ลบ.ม./วัน" : "")+'</small></span>'+
+      return '<div class="dr"><span>'+esc(x.name)+'<small>'+esc(x.province ? "จ."+x.province : "")+((x.released||0)>=0.5 ? " · ระบายออก "+Math.round(x.released)+" ล้าน ลบ.ม./วัน" : "")+'</small></span>'+
              '<b style="color:'+(hot ? "var(--watch-ink)" : "inherit")+'">'+Math.round(x.pct)+'%</b></div>';
     }).join("")+
     (g.total>list.length ? '<div class="note" style="margin:4px 0 0">และอีก '+(g.total-list.length)+' แห่งในลุ่มน้ำนี้และต้นน้ำ</div>' : "")+
@@ -867,6 +867,7 @@ function drawRain(j, pt){
   }).join("");
   var ticks = [0,6,12,18].filter(function(i){return i<mm.length;}).map(function(i){ return '<text x="'+(i*bw+2)+'" y="'+(Hh-2)+'" font-size="11" fill="var(--muted)">'+(i===0?"ตอนนี้":H.time[i0+i].slice(11,13)+":00")+'</text>'; }).join("");
   var D = j.daily, names = ["วันนี้","พรุ่งนี้","มะรืนนี้"];
+  var d0 = Math.max(0, D.time.indexOf(now.slice(0,10)));   // the daily list now starts three days in the past (past_days=3): begin at today
   card.innerHTML = '<div class="eyebrow">พยากรณ์ฝน · '+esc(pt.name)+'</div>'+
     '<div class="big">'+total.toFixed(0)+' มม. <small>ใน 24 ชม. · '+rainClass(total)+' · โอกาสฝนสูงสุด '+pmax+'%</small></div>'+
     (past!==null ? '<div class="note" style="margin:2px 0">ที่ผ่านมา 24 ชม. ตกไปแล้ว ~'+past.toFixed(0)+' มม. ('+rainClass(past)+')'+(past72!==null ? ' · 3 วันรวม ~'+past72.toFixed(0)+' มม.' : '')+'</div>' : "")+
@@ -874,7 +875,7 @@ function drawRain(j, pt){
     '<div class="raingauge" id="gaugeLine" aria-live="polite"><span class="note">กำลังโหลดค่าจากเครื่องวัดฝน…</span></div>'+
     (total>=0.5 ? '<div class="note" style="margin:2px 0">ช่วงที่ฝนแรงสุด ~'+H.time[i0+peak].slice(11,16)+' น. ('+mm[peak].toFixed(1)+' มม./ชม.)</div>' : '<div class="note" style="margin:2px 0">ช่วง 24 ชม. ข้างหน้าแทบไม่มีฝน</div>')+
     '<svg viewBox="0 0 '+W+' '+Hh+'" role="img" aria-label="ปริมาณฝนรายชั่วโมงใน 24 ชั่วโมงข้างหน้า">'+bars+ticks+'</svg>'+
-    '<div class="days">'+D.time.map(function(d,i){ return '<div class="day">'+names[i]+'<b>'+(D.precipitation_sum[i]||0).toFixed(0)+' มม.</b><span class="note">โอกาส '+(D.precipitation_probability_max[i]||0)+'%</span></div>'; }).join("")+'</div>'+
+    '<div class="days">'+D.time.slice(d0, d0+3).map(function(d,k){ var i = d0+k; return '<div class="day">'+names[k]+'<b>'+(D.precipitation_sum[i]||0).toFixed(0)+' มม.</b><span class="note">โอกาส '+(D.precipitation_probability_max[i]||0)+'%</span></div>'; }).join("")+'</div>'+
     '<p class="note">ข้อมูลพยากรณ์และฝนที่ผ่านมาจาก <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> เป็นผลจากแบบจำลอง ไม่ใช่เครื่องวัดฝนจริง ไม่ใช่ประกาศของกรมอุตุนิยมวิทยา ตำแหน่งที่ใช้ดึงพยากรณ์จะถูกส่งไปยังบริการนี้</p>';
   card.hidden = false;
   lastRain = {name:pt.name, past:past, next:total}; drawOneLine();
