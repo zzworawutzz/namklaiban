@@ -12,7 +12,7 @@ var CLUSTER_OFF_ZOOM = 11;
 var DEFAULT_PROVINCE = "พระนครศรีอยุธยา";
 var province = DEFAULT_PROVINCE;   // always open on the default province; the choice is not remembered between visits
 var filter = null;
-var stations = [], byId = {}, markers = {}, sel = null, origin = null, pinMode = false, originLayer = null;
+var stations = [], byId = {}, markers = {}, sel = null, origin = null, pinMode = false, originLayer = null, nearProv = "";
 function $(id){return document.getElementById(id);}
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
 function store(k,v){try{ if(v===null) localStorage.removeItem(k); else if(v===undefined) return localStorage.getItem(k); else localStorage.setItem(k,v);}catch(e){} return null;}
@@ -467,8 +467,9 @@ function setOrigin(o){
 }
 function drawNear(o, s0){
   var el = $("nearCard");
-  if(!o || !s0){ el.hidden = true; el.innerHTML = ""; return; }
+  if(!o || !s0){ el.hidden = true; el.innerHTML = ""; nearProv = ""; loadDams(); return; }
   var s = byId[s0.id] || s0, d = kmBetween(o, s);
+  nearProv = s.province || "";
   var who = o.kind==="home" ? "บ้านของคุณ" : o.kind==="area" ? (o.label || "พื้นที่ที่เลือก") : o.kind==="shared" ? "จุดที่แชร์" : "ตำแหน่งของคุณ";
   var col = COLOR[s.status] || COLOR.unknown, t = TREND[s.trend];
   var line = s.pct_of_bank!=null
@@ -482,6 +483,32 @@ function drawNear(o, s0){
     '<div class="sharept"><button type="button" class="linkbtn" id="btnSharePt">แชร์ลิงก์จุดนี้</button> <span class="note" id="sharePtMsg"></span></div>';
   el.hidden = false;
   if(o.kind!=="area") loadElevation(o, s, d);
+  loadDams();
+}
+/* Large dams in the basin of the chosen place's province, or above it (ThaiWater, via our server). Context only: how full
+   each reservoir is (share of its normal storage, can pass 100) and what it lets out. */
+var damCache = {}, damSeq = 0;
+function damsHtml(g, prov){
+  var list = (g && g.dams) || []; if(!list.length) return "";
+  var d = (g.as_of||"").split("-"), when = d.length===3 ? +d[2]+"/"+(+d[1]) : "";
+  return '<div class="eyebrow">เขื่อนใหญ่ในลุ่มน้ำนี้และต้นน้ำ · จ.'+esc(prov)+'</div>'+
+    list.map(function(x){
+      var hot = x.pct>=90;
+      return '<div class="dr"><span>'+esc(x.name)+'<small>'+esc(x.province ? "จ."+x.province : "")+(x.released ? " · ระบายออก "+Math.round(x.released)+" ล้าน ลบ.ม./วัน" : "")+'</small></span>'+
+             '<b style="color:'+(hot ? "var(--watch-ink)" : "inherit")+'">'+Math.round(x.pct)+'%</b></div>';
+    }).join("")+
+    (g.total>list.length ? '<div class="note" style="margin:4px 0 0">และอีก '+(g.total-list.length)+' แห่งในลุ่มน้ำนี้และต้นน้ำ</div>' : "")+
+    '<p class="note" style="margin:6px 0 0">% คือสัดส่วนของความจุเก็บกักปกติ (เกิน 100% ได้) ข้อมูลรายวัน'+(when ? " ณ วันที่ "+esc(when) : "")+' จาก ThaiWater (ชป./กฟผ.) เป็นข้อมูลประกอบ ไม่ได้บอกว่าจะท่วมหรือไม่ท่วม ให้ยึดประกาศ ปภ. (1784)</p>';
+}
+function loadDams(){
+  var card = $("damCard"), prov = origin ? nearProv : province, my = ++damSeq;
+  if(!card) return;
+  if(!prov){ card.hidden = true; return; }
+  function show(g){ if(my!==damSeq) return; var h = damsHtml(g, prov); card.innerHTML = h; card.hidden = !h; }
+  var hit = damCache[prov];
+  if(hit && Date.now()-hit.t < 15*60000){ show(hit.g); return; }
+  getJSON("/api/dams?limit=4&province="+encodeURIComponent(prov)).then(function(g){ damCache[prov] = {t:Date.now(), g:g}; show(g); })
+    .catch(function(){ if(my===damSeq) card.hidden = true; });   // no dam data: the card simply is not shown
 }
 /* How high the place is (Open-Meteo elevation, a ~90 m terrain model) next to the nearest station's current water level.
    A rough comparison of two numbers: it ignores the slope of the river, levees and rain that pools locally. */
@@ -810,15 +837,17 @@ function rainPoint(){
   var l = stations.filter(function(s){ return s.province===province; }); if(!l.length) return null;
   return {lat:l.reduce(function(a,s){return a+s.lat;},0)/l.length, lng:l.reduce(function(a,s){return a+s.lng;},0)/l.length, province:province, name:"จ."+province};
 }
+var RAIN72_HIGH = 100;   // mm over the last 3 days (model analysis); from here the card says the ground has had a lot of rain
 function rainClass(mm){ return mm<0.1 ? "ไม่มีฝน" : mm<=10 ? "ฝนเล็กน้อย" : mm<=35 ? "ฝนปานกลาง" : mm<=90 ? "ฝนหนัก" : "ฝนหนักมาก"; }
 function refreshRain(){ clearTimeout(rainTimer); rainTimer = setTimeout(loadRain, 400); }
 function loadRain(){
   var pt = rainPoint(), card = $("rainCard"), my = ++rainSeq;
+  if(!origin) loadDams();
   if(!pt){ card.hidden = true; return; }
   var key = pt.lat.toFixed(1)+","+pt.lng.toFixed(1), hit = rainCache[key];
   if(hit && Date.now()-hit.t < 30*60000){ drawRain(hit.j, pt); return; }
   fetch("https://api.open-meteo.com/v1/forecast?latitude="+pt.lat.toFixed(3)+"&longitude="+pt.lng.toFixed(3)+
-        "&hourly=precipitation,precipitation_probability&daily=precipitation_sum,precipitation_probability_max&timezone=Asia%2FBangkok&forecast_days=3&past_hours=24")
+        "&hourly=precipitation,precipitation_probability&daily=precipitation_sum,precipitation_probability_max&timezone=Asia%2FBangkok&forecast_days=3&past_days=3")
     .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
     .then(function(j){ if(my!==rainSeq) return; rainCache[key] = {t:Date.now(), j:j}; drawRain(j, pt); })
     .catch(function(e){ console.warn("rain forecast:", e); if(my===rainSeq) card.hidden = true; });
@@ -827,7 +856,9 @@ function drawRain(j, pt){
   var card = $("rainCard"), H = j.hourly, now = new Date().toLocaleString("sv-SE",{timeZone:"Asia/Bangkok"}).slice(0,13).replace(" ","T")+":00";
   var i0 = Math.max(0, H.time.indexOf(now)), mm = H.precipitation.slice(i0, i0+24), pr = H.precipitation_probability.slice(i0, i0+24);
   if(mm.length<6){ card.hidden = true; return; }
-  var past = i0>=24 ? H.precipitation.slice(i0-24, i0).reduce(function(a,b){return a+(b||0);},0) : null;   // rain that already fell (model analysis, not a gauge)
+  var sumOf = function(a){ return a.reduce(function(x,y){ return x+(y||0); },0); };
+  var past = i0>=24 ? sumOf(H.precipitation.slice(i0-24, i0)) : null;   // rain that already fell (model analysis, not a gauge)
+  var past72 = i0>=72 ? sumOf(H.precipitation.slice(i0-72, i0)) : null;
   var total = mm.reduce(function(a,b){return a+(b||0);},0), pmax = Math.max.apply(null, pr.map(function(x){return x||0;}));
   var peak = mm.indexOf(Math.max.apply(null, mm)), mx = Math.max(2, Math.max.apply(null, mm));
   var W = 300, Hh = 64, bw = W/mm.length, bars = mm.map(function(v,i){
@@ -838,7 +869,8 @@ function drawRain(j, pt){
   var D = j.daily, names = ["วันนี้","พรุ่งนี้","มะรืนนี้"];
   card.innerHTML = '<div class="eyebrow">พยากรณ์ฝน · '+esc(pt.name)+'</div>'+
     '<div class="big">'+total.toFixed(0)+' มม. <small>ใน 24 ชม. · '+rainClass(total)+' · โอกาสฝนสูงสุด '+pmax+'%</small></div>'+
-    (past!==null ? '<div class="note" style="margin:2px 0">ที่ผ่านมา 24 ชม. ตกไปแล้ว ~'+past.toFixed(0)+' มม. ('+rainClass(past)+')</div>' : "")+
+    (past!==null ? '<div class="note" style="margin:2px 0">ที่ผ่านมา 24 ชม. ตกไปแล้ว ~'+past.toFixed(0)+' มม. ('+rainClass(past)+')'+(past72!==null ? ' · 3 วันรวม ~'+past72.toFixed(0)+' มม.' : '')+'</div>' : "")+
+    (past72!==null && past72>=RAIN72_HIGH ? '<div class="note" style="margin:2px 0;color:var(--watch-ink)">ฝนสะสม 3 วันค่อนข้างมาก ถ้าฝนตกซ้ำ น้ำอาจระบายช้าและท่วมขังได้ง่ายกว่าปกติ (ประมาณจากแบบจำลอง)</div>' : "")+
     '<div class="raingauge" id="gaugeLine" aria-live="polite"><span class="note">กำลังโหลดค่าจากเครื่องวัดฝน…</span></div>'+
     (total>=0.5 ? '<div class="note" style="margin:2px 0">ช่วงที่ฝนแรงสุด ~'+H.time[i0+peak].slice(11,16)+' น. ('+mm[peak].toFixed(1)+' มม./ชม.)</div>' : '<div class="note" style="margin:2px 0">ช่วง 24 ชม. ข้างหน้าแทบไม่มีฝน</div>')+
     '<svg viewBox="0 0 '+W+' '+Hh+'" role="img" aria-label="ปริมาณฝนรายชั่วโมงใน 24 ชั่วโมงข้างหน้า">'+bars+ticks+'</svg>'+

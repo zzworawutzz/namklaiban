@@ -244,6 +244,8 @@ html.booting #emergency, html.booting #foot{display:none}
 .verdict .vn{font-size:13px;color:var(--muted);margin-top:6px}
 .near{border-width:2px;border-color:var(--accent)}
 button.linkbtn{border:0;color:var(--accent);font-family:inherit;cursor:pointer}
+.dams .dr{display:flex;justify-content:space-between;gap:10px;align-items:baseline;padding:4px 0;border-top:1px solid var(--line);font-size:14px}
+.dams .dr:first-of-type{border-top:0}.dams .dr b{white-space:nowrap}.dams .dr small{display:block;color:var(--muted);font-size:12px}
 .sharept{margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .nearbtn{display:block;width:100%;text-align:left;background:none;border:0;padding:6px 0 0;color:var(--ink)}
 .nearbtn .nh{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:17px;font-weight:700}
