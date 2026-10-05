@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>หลังบ้าน น้ำใกล้บ้านฉัน</title>
+<meta name="description" content="หน้าดูสถานะระบบสำหรับเจ้าของ: โควตา LINE ข้อความที่ส่ง ฐานข้อมูล สถานีเงียบ ต้องใช้รหัส cron">
+<meta name="theme-color" content="#0b6e8f">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+:root{--bg:#f3f6f8;--surface:#fff;--ink:#0f2530;--muted:#4f6a77;--line:#e1e9ee;--accent:#0b6e8f;--accent-ink:#fff;--accent-soft:rgba(11,110,143,.1);
+--ok-ink:#12724b;--warn-ink:#845900;--bad-ink:#b02a22;--ok:#17835a;--warn:#c98a00;--bad:#d2372f;--ok-bg:rgba(27,143,97,.13);--warn-bg:rgba(201,138,0,.15);--bad-bg:rgba(210,55,47,.12);
+--shadow:0 8px 28px rgba(15,37,48,.14),0 1px 3px rgba(15,37,48,.08)}
+@media (prefers-color-scheme:dark){:root{--bg:#0a171d;--surface:#122630;--ink:#e8f1f5;--muted:#93acb8;--line:#223e4a;--accent:#5bc0e6;--accent-ink:#04202b;--accent-soft:rgba(91,192,230,.14);--ok-ink:#3dc08a;--warn-ink:#e8b630;--bad-ink:#ff8d84;--ok:#2fb078;--warn:#e0a526;--bad:#f0615a;--shadow:0 8px 28px rgba(0,0,0,.45)}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"IBM Plex Sans Thai",system-ui,sans-serif;font-size:16px;line-height:1.6;-webkit-text-size-adjust:100%}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+header{background:var(--surface);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;gap:10px;align-items:center;justify-content:space-between}
+header h1{margin:0;font-size:18px;font-weight:600}
+a{color:var(--accent)}
+button{font:inherit;cursor:pointer}
+.btn{min-height:44px;padding:0 18px;border-radius:14px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-weight:600}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+main{max-width:860px;margin:0 auto;padding:6px 16px 40px;min-width:0}
+section,.card{min-width:0}
+section,.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:16px 18px;margin-top:14px;box-shadow:var(--shadow)}
+h2{margin:0 0 6px;font-size:18px}
+.note{color:var(--muted);font-size:14px}
+input[type=password]{width:100%;min-height:46px;border:1px solid var(--line);border-radius:12px;padding:0 14px;font:inherit;background:var(--bg);color:var(--ink)}
+.row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.big{font-size:28px;font-weight:700;line-height:1.2}
+.bar{height:10px;border-radius:5px;background:var(--line);overflow:hidden;margin:8px 0}
+.bar>i{display:block;height:100%;background:var(--ok)}
+.bar.warn>i{background:var(--warn)}.bar.bad>i{background:var(--bad)}
+.pill{display:inline-block;border-radius:999px;padding:2px 12px;font-size:14px;font-weight:600}
+.pill.ok{background:var(--ok-bg);color:var(--ok-ink)}.pill.warn{background:var(--warn-bg);color:var(--warn-ink)}.pill.bad{background:var(--bad-bg);color:var(--bad-ink)}
+table{width:100%;border-collapse:collapse;font-size:15px;margin-top:6px}
+th,td{text-align:left;padding:7px 6px;border-top:1px solid var(--line)}th{color:var(--muted);font-weight:500;border-top:0}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:0 14px}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.err{color:var(--bad-ink);font-weight:600}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1>หลังบ้าน น้ำใกล้บ้านฉัน</h1>
+  <a href="/">กลับแผนที่</a>
+</header>
+<main>
+<div class="card" id="login">
+  <h2>เข้าดูสถานะระบบ</h2>
+  <p class="note">ใส่รหัส cron (<code>CRON_SECRET</code> หรือ <code>CRON_SECRET_EXTERNAL</code>) รหัสไม่ถูกเก็บถาวร อยู่ในแท็บนี้จนกว่าจะปิดแท็บหรือกด "ออก" หน้านี้ส่งรหัสไปยังเซิร์ฟเวอร์นี้เท่านั้น และอ่านอย่างเดียว</p>
+  <form id="f" autocomplete="off">
+    <label for="secret" class="note">รหัส</label>
+    <input id="secret" type="password" autocomplete="off" spellcheck="false" required>
+    <div class="row"><button class="btn primary" type="submit">ดูข้อมูล</button></div>
+  </form>
+  <p class="err" id="loginErr" role="alert" hidden></p>
+</div>
+
+<div id="dash" hidden>
+  <div class="row" style="justify-content:space-between;align-items:center">
+    <span class="note" id="stamp">…</span>
+    <span><button class="btn" id="reload" type="button">รีเฟรช</button> <button class="btn" id="logout" type="button">ออก</button></span>
+  </div>
+  <section id="sysSec"><h2>ระบบ</h2><div id="sys"></div></section>
+  <section id="quotaSec"><h2>โควตาข้อความ LINE เดือนนี้</h2><div id="quota"></div></section>
+  <section id="dbSec"><h2>ฐานข้อมูลและผู้ติดตาม</h2><div id="db"></div></section>
+  <section id="silentSec"><h2>สถานีที่เงียบ</h2><div id="silent"></div></section>
+  <section id="daysSec"><h2>ข้อความที่ส่งแต่ละวัน</h2><div id="days"></div></section>
+  <section id="provSec"><h2>จังหวัดที่ได้รับข้อความมากที่สุด</h2><div id="provs"></div></section>
+  <section id="backupSec"><h2>การสำรองข้อมูล</h2><div id="backup"></div></section>
+</div>
+</main>
+<script>
+(function(){
+  var KEY = "nkb-admin", $ = function(id){ return document.getElementById(id); };
+  var KIND = {status:"สถานะเปลี่ยน", early:"เตือนล่วงหน้า", fast:"น้ำขึ้นเร็ว", report:"รายงานน้ำท่วม", digest:"สรุป", admin:"ถึงเจ้าของ"};
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+  function getSecret(){ try { return sessionStorage.getItem(KEY) || ""; } catch(e){ return window.__nkbSecret || ""; } }
+  function setSecret(v){ try { v ? sessionStorage.setItem(KEY, v) : sessionStorage.removeItem(KEY); } catch(e){} window.__nkbSecret = v; }
+  function pill(cls, text){ return '<span class="pill '+cls+'">'+esc(text)+'</span>'; }
+  function bar(p, cls){ return '<div class="bar '+(cls||"")+'" role="img" aria-label="'+Math.round(p)+' เปอร์เซ็นต์"><i style="width:'+Math.max(1, Math.min(100, p))+'%"></i></div>'; }
+  function ago(min){ return min==null ? "ไม่ทราบ" : min < 90 ? min+" นาทีก่อน" : Math.round(min/60)+" ชม.ก่อน"; }
+
+  function show(loggedIn){ $("login").hidden = loggedIn; $("dash").hidden = !loggedIn; }
+  function get(path, secret){
+    return fetch(path, {headers: secret ? {Authorization: "Bearer " + secret} : {}, cache: "no-store"}).then(function(r){
+      if(r.status === 401) { var e = new Error("401"); e.code = 401; throw e; }
+      if(!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    });
+  }
+
+  function render(st, h){
+    var sys = h && h.ingest_ok ? pill("ok","ดึงข้อมูลปกติ") : pill("bad","ดึงข้อมูลมีปัญหา");
+    $("sys").innerHTML = '<p>'+sys+' <span class="note">สถานี '+esc(h && h.stations)+' · ข้อมูลล่าสุด '+esc(ago(h && h.latest_reading_age_min))+' · ดึงล่าสุด '+esc(ago(h && h.last_ingest_age_min))+'</span></p>'+
+      (h && h.last_ingest_error ? '<p class="err">'+esc(h.last_ingest_error)+'</p>' : '');
+
+    var q = st.line_quota || {}, b = st.budget, qh;
+    if(q.error){ qh = '<p class="err">ถามโควตาจาก LINE ไม่ได้: '+esc(q.error)+'</p>'; }
+    else if(q.limit == null){ qh = '<p>'+pill("ok","แผนไม่จำกัดจำนวน")+' <span class="note">ใช้ไปแล้ว '+esc(q.used)+' ข้อความเดือนนี้</span></p>'; }
+    else {
+      var p = q.used / q.limit * 100, cls = p >= 95 ? "bad" : p >= 80 ? "warn" : "";
+      qh = '<div class="big">'+esc(q.used)+' <span class="note">/ '+esc(q.limit)+' ('+Math.round(p)+'%)</span></div>'+bar(p, cls)+
+        '<p>เหลือ <b>'+esc(Math.max(q.limit - q.used, 0))+'</b> ข้อความ · ส่วนสำรองสำหรับข่าวเตือนภัย '+esc(b ? b.reserve : "-")+'</p>'+
+        (b && b.holding ? '<p>'+pill("warn","กำลังพักข้อความไม่เร่งด่วน")+' <span class="note">เหลือแต่ส่วนสำรอง: สรุปเช้า เตือนน้ำขึ้นเร็ว และการเปลี่ยนเป็นปกติรอไว้ ระดับเตือนภัยยังส่ง</span></p>' : '<p>'+pill("ok","ส่งตามปกติ")+'</p>');
+    }
+    $("quota").innerHTML = qh;
+
+    var dbp = st.db_mb / st.db_limit_mb * 100;
+    $("db").innerHTML = '<div class="grid"><div><div class="note">ฐานข้อมูล</div><div class="big">'+esc(st.db_mb)+' <span class="note">/ '+esc(st.db_limit_mb)+' MB</span></div>'+bar(dbp, dbp >= 80 ? "warn" : "")+'</div>'+
+      '<div><div class="note">ผู้ติดตาม</div><div class="big">'+esc(st.subscriptions)+'</div><div class="note">จังหวัดที่เฝ้าดู: '+esc((st.watch_provinces||[]).length ? st.watch_provinces.join(", ") : "ทั้งประเทศ")+'</div></div></div>';
+
+    var sg = st.silent_groups || [];
+    $("silent").innerHTML = sg.length ? '<ul>'+sg.map(function(g){ return '<li>'+esc(g)+'</li>'; }).join("")+'</ul>' : '<p>'+pill("ok","ไม่มีกลุ่มสถานีที่เงียบเกิน 6 ชม.")+'</p>';
+
+    var days = (st.days || []).slice().reverse(), kinds = Object.keys(KIND);
+    $("days").innerHTML = days.length ? '<div class="scroll"><table><thead><tr><th>วัน</th>'+kinds.map(function(k){ return '<th class="n">'+esc(KIND[k])+'</th>'; }).join("")+'<th class="n">รวม</th><th class="n">ส่งไม่สำเร็จ</th></tr></thead><tbody>'+
+      days.map(function(d){ return '<tr><td>'+esc(d.day)+'</td>'+kinds.map(function(k){ return '<td class="n">'+esc(d.by_kind[k]||0)+'</td>'; }).join("")+'<td class="n"><b>'+esc(d.total)+'</b></td><td class="n">'+(d.failed ? '<span class="err">'+esc(d.failed)+'</span>' : '0')+'</td></tr>'; }).join("")+'</tbody></table></div>'+
+      '<p class="note">ข้อความถึงเจ้าของเริ่มนับตั้งแต่เวอร์ชันที่เพิ่มการบันทึกนี้ ก่อนหน้านั้นไม่มีในตาราง</p>' : '<p class="note">ยังไม่มีบันทึก</p>';
+
+    var tp = st.top_provinces || [];
+    $("provs").innerHTML = tp.length ? '<table><tbody>'+tp.map(function(r){ return '<tr><td>'+esc(r.province)+'</td><td class="n">'+esc(r.messages)+'</td></tr>'; }).join("")+'</tbody></table>' : '<p class="note">ยังไม่มีบันทึก</p>';
+
+    var bk = st.backup;
+    $("backup").innerHTML = bk ? '<p>เตือนครั้งถัดไปอีก <b>'+esc(bk.days_left)+'</b> วัน <span class="note">(นับจาก '+esc(bk.since.slice(0,10))+')</span></p><p class="note">สำรองด้วย <code>backup_export.py</code> บนเครื่องของคุณ</p>' : '<p class="note">ยังไม่เริ่มนับ (หรือปิดการเตือนด้วย BACKUP_REMIND=0)</p>';
+
+    $("stamp").textContent = "อัปเดต " + new Date().toLocaleTimeString("th-TH", {hour:"2-digit", minute:"2-digit", second:"2-digit"});
+  }
+
+  function load(){
+    var secret = getSecret();
+    if(!secret){ show(false); return; }
+    $("loginErr").hidden = true;
+    Promise.all([get("/api/cron/stats?days=14", secret), get("/health").catch(function(){ return null; })]).then(function(r){
+      show(true); render(r[0], r[1]);
+    }).catch(function(e){
+      if(e.code === 401){ setSecret(""); }
+      show(false);
+      $("loginErr").hidden = false;
+      $("loginErr").textContent = e.code === 401 ? "รหัสไม่ถูกต้อง" : "โหลดข้อมูลไม่สำเร็จ: " + e.message;
+    });
+  }
+  $("f").addEventListener("submit", function(ev){ ev.preventDefault(); setSecret($("secret").value.trim()); $("secret").value = ""; load(); });
+  $("reload").addEventListener("click", load);
+  $("logout").addEventListener("click", function(){ setSecret(""); show(false); });
+  load();
+})();
+</script>
+</body>
+</html>
