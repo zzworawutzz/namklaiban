@@ -92,3 +92,18 @@ def test_map_libraries_from_the_cdn_are_pinned_with_integrity_hashes():
     assert len(tags) == 4, tags                                                    # leaflet js+css, markercluster js+css
     for t in tags:
         assert re.search(r'integrity="sha384-[A-Za-z0-9+/]{64}"', t) and 'crossorigin="anonymous"' in t, t
+
+
+def test_admin_page_is_private_read_only_and_never_keeps_the_secret_on_disk():
+    html = _public("admin.html")
+    assert 'name="robots" content="noindex' in html                                    # not for search engines
+    assert "sessionStorage" in html and "localStorage" not in html                     # the secret lives in the tab only
+    assert not re.search(r'<script[^>]+src=', html)                                    # no outside scripts
+    assert "/api/cron/stats" in html and 'method="post"' not in html.lower()
+    assert "innerHTML" in html and "function esc(" in html                             # everything shown goes through esc()
+    assert api.app.openapi() and TestClient(api.app).get("/admin.html").status_code == 200
+
+
+def test_monthly_audit_workflow_exists_and_audits_the_runtime_requirements():
+    wf = (ROOT / ".github" / "workflows" / "audit.yml").read_text(encoding="utf-8")
+    assert "schedule:" in wf and "workflow_dispatch:" in wf and "pip-audit -r requirements.txt" in wf

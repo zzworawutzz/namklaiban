@@ -7,6 +7,7 @@ Run:  pip install -r requirements.txt
 """
 import hmac
 import json
+import math
 import os
 import urllib.error
 import urllib.parse
@@ -23,6 +24,7 @@ from pydantic import BaseModel, Field
 
 import areas
 import boundaries
+import budget
 import core
 import ews
 import db
@@ -361,11 +363,20 @@ def cron_stats(days: int = Query(7, ge=1, le=60), authorization: Optional[str] =
         out["db_mb"] = round(watchdog.db_size_mb(c), 1)
         out["db_limit_mb"] = watchdog.db_limit_mb()
         out["silent_groups"] = watchdog.silent_groups(c, at)
+        out["watch_provinces"] = watchdog.watched_provinces()
+        row = c.execute("SELECT ts FROM alert_state WHERE name=?", (watchdog.BACKUP_KEY,)).fetchone()
+        if row and os.environ.get("BACKUP_REMIND", "1") != "0":
+            due = core.parse(row["ts"]) + timedelta(days=watchdog.BACKUP_EVERY_DAYS)
+            out["backup"] = {"since": row["ts"], "days_left": max(math.ceil((due - at).total_seconds() / 86400), 0)}
+        else:
+            out["backup"] = None
     try:
         limit, used = notify.line_quota()
         out["line_quota"] = {"limit": limit, "used": used}
+        out["budget"] = None if limit is None else {"reserve": budget.reserve(limit), "holding": limit - used <= budget.reserve(limit)}
     except Exception as e:
         out["line_quota"] = {"error": f"{type(e).__name__}: {e}"[:200]}
+        out["budget"] = None
     return out
 
 

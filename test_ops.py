@@ -196,3 +196,25 @@ def test_the_owners_own_alerts_are_counted_in_the_send_log(tmp_path, monkeypatch
         raise RuntimeError("HTTP 429")
     assert watchdog.check_storage(c, AT, refuse, size_mb=500) is None             # a refused message breaks nothing...
     assert [(r["kind"], r["ok"]) for r in c.execute("SELECT kind, ok FROM send_log ORDER BY id")] == [("admin", 1), ("admin", 0)]   # ...and is counted as failed
+
+
+def test_stats_endpoint_also_reports_what_the_admin_page_shows(tmp_path, monkeypatch):
+    monkeypatch.setenv("WATER_DB", str(tmp_path / "s2.db"))
+    monkeypatch.setenv("CRON_SECRET", "sekret")
+    monkeypatch.setenv("WATCH_PROVINCES", "ปทุมธานี")
+    monkeypatch.setattr(notify, "line_quota", lambda: (300, 292))
+    api._ready.clear()
+    client, auth = TestClient(api.app), {"Authorization": "Bearer sekret"}
+    with api.conn() as c:
+        c.execute("INSERT INTO alert_state(name, ts) VALUES(?,?)", (watchdog.BACKUP_KEY, api.core.iso(api.now() - timedelta(days=10))))
+        c.commit()
+    j = client.get("/api/cron/stats", headers=auth).json()
+    assert j["watch_provinces"] == ["ปทุมธานี"]
+    assert j["budget"] == {"reserve": 15, "holding": True}                  # 8 left, only the reserve remains
+    assert j["backup"]["days_left"] == 20
+    monkeypatch.setattr(notify, "line_quota", lambda: (None, 5000))
+    j = client.get("/api/cron/stats", headers=auth).json()
+    assert j["budget"] is None and j["line_quota"] == {"limit": None, "used": 5000}
+    monkeypatch.setattr(notify, "line_quota", lambda: 1 / 0)
+    j = client.get("/api/cron/stats", headers=auth).json()
+    assert "error" in j["line_quota"] and j["budget"] is None
