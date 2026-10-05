@@ -430,6 +430,11 @@ function select(id, fly){
 }
 
 /* ---------- my location, province ---------- */
+/* A shared link such as /?lat=13.912&lng=100.545 opens that point like a pinned home (kind "shared"). Only plain numbers inside Thailand count. */
+function sharedPoint(){
+  var la = parseFloat(QS.get("lat")), ln = parseFloat(QS.get("lng"));
+  return (isFinite(la) && isFinite(ln) && la>=5 && la<=21 && ln>=97 && ln<=106) ? {lat:+la.toFixed(3), lng:+ln.toFixed(3), kind:"shared", label:"จุดที่แชร์"} : null;
+}
 function setOrigin(o){
   origin = o;
   if(originLayer){ map.removeLayer(originLayer); originLayer=null; }
@@ -440,7 +445,7 @@ function setOrigin(o){
   }
   $("btnClear").hidden = !o;
   if((!o || o.kind!=="area") && $("tam").value!=="") $("tam").value = "";   // another kind of place replaces the picked subdistrict
-  say(!o ? "" : (o.kind==="home" ? "ใช้ตำแหน่งบ้านที่ปักไว้ (ใช้เฉพาะตอนเปิดหน้านี้ ไม่ถูกเก็บไว้)" : o.kind==="area" ? "ตรวจพื้นที่ "+o.label+" (พิกัดกลางพื้นที่โดยประมาณ)" : "ใช้ตำแหน่งปัจจุบันของคุณ"));
+  say(!o ? "" : (o.kind==="home" ? "ใช้ตำแหน่งบ้านที่ปักไว้ (ใช้เฉพาะตอนเปิดหน้านี้ ไม่ถูกเก็บไว้)" : o.kind==="area" ? "ตรวจพื้นที่ "+o.label+" (พิกัดกลางพื้นที่โดยประมาณ)" : o.kind==="shared" ? "เปิดจากลิงก์ที่มีผู้แชร์มา: ดูสถานีใกล้จุดนั้น (ไม่ใช่ตำแหน่งของคุณ และไม่ถูกเก็บไว้)" : "ใช้ตำแหน่งปัจจุบันของคุณ"));
   showNearShelters(o); refreshRain();
   if(!o){ $("results").hidden = true; drawNear(null); return; }
   getJSON("/stations/nearby?lat="+o.lat+"&lng="+o.lng+"&limit=3").then(function(list){
@@ -464,7 +469,7 @@ function drawNear(o, s0){
   var el = $("nearCard");
   if(!o || !s0){ el.hidden = true; el.innerHTML = ""; return; }
   var s = byId[s0.id] || s0, d = kmBetween(o, s);
-  var who = o.kind==="home" ? "บ้านของคุณ" : o.kind==="area" ? (o.label || "พื้นที่ที่เลือก") : "ตำแหน่งของคุณ";
+  var who = o.kind==="home" ? "บ้านของคุณ" : o.kind==="area" ? (o.label || "พื้นที่ที่เลือก") : o.kind==="shared" ? "จุดที่แชร์" : "ตำแหน่งของคุณ";
   var col = COLOR[s.status] || COLOR.unknown, t = TREND[s.trend];
   var line = s.pct_of_bank!=null
     ? '<div class="nm">น้ำ <b>'+pctText(s)+'</b> ของตลิ่ง ('+pctHint(s.pct_of_bank)+')'+(t && s.trend!=="steady" ? ' · '+t[0]+' '+t[1] : s.trend==="steady" ? ' · ทรงตัว' : '')+'</div>'
@@ -473,7 +478,8 @@ function drawNear(o, s0){
     '<button type="button" class="nearbtn" data-id="'+esc(s.id)+'"><div class="nh"><span>'+esc(s.name)+'</span><span class="badge '+s.status+'">'+esc(statusText(s))+'</span></div>'+
     '<div class="nn">ห่างประมาณ '+(d<10 ? d.toFixed(1) : Math.round(d))+' กม.'+(s.province ? ' · จ.'+esc(s.province) : '')+'</div>'+line+
     (s.stale ? '<div class="nn" style="color:var(--watch-ink)">⚠ สถานีนี้ข้อมูลไม่อัปเดต ใช้ประกอบอย่างระวัง</div>' : '')+
-    '<div class="nn">แตะเพื่อดูรายละเอียดและกราฟ →</div></button>'+(o.kind==="area" ? "" : '<div class="elev" id="elevBox"></div>');
+    '<div class="nn">แตะเพื่อดูรายละเอียดและกราฟ →</div></button>'+(o.kind==="area" ? "" : '<div class="elev" id="elevBox"></div>')+
+    '<div class="sharept"><button type="button" class="linkbtn" id="btnSharePt">แชร์ลิงก์จุดนี้</button> <span class="note" id="sharePtMsg"></span></div>';
   el.hidden = false;
   if(o.kind!=="area") loadElevation(o, s, d);
 }
@@ -503,6 +509,14 @@ function loadElevation(o, s, d){
     .catch(function(){});   // no elevation: the card simply stays without this block
 }
 $("nearCard").addEventListener("click",function(e){
+  if(e.target.id==="btnSharePt" && origin){   // the link carries this point rounded to about 100 m, nothing else
+    var u = new URL("/", location.href); u.searchParams.set("lat", origin.lat.toFixed(3)); u.searchParams.set("lng", origin.lng.toFixed(3));
+    var url = u.toString(), done = function(t){ if($("sharePtMsg")) $("sharePtMsg").textContent = t; };
+    if(navigator.share){ navigator.share({title:"น้ำใกล้บ้านฉัน – สถานีใกล้จุดนี้", url:url}).catch(function(){}); }
+    else if(navigator.clipboard){ navigator.clipboard.writeText(url).then(function(){ done("คัดลอกลิงก์แล้ว (มีพิกัดโดยประมาณของจุดนี้)"); }, function(){ done(url); }); }
+    else done(url);
+    return;
+  }
   var b = e.target.closest ? e.target.closest(".nearbtn") : null; if(b) select(b.getAttribute("data-id"), true);
 });
 function updateRepLink(){
@@ -1288,7 +1302,7 @@ var placeP = /^[a-z]+$/.test(SLUG)
 syncQuick();
 (function(){   // first placement without the slide animation, so the sheet does not visibly move while the page loads
   var sh = $("sheet"); sh.classList.add("drag");
-  setSheet(isMobile() && !QS.get("station") ? "peek" : "half");
+  setSheet(isMobile() && !QS.get("station") && !sharedPoint() ? "peek" : "half");
   void sh.offsetHeight; requestAnimationFrame(function(){ sh.classList.remove("drag"); });
 })();   // phones: map first, drag the sheet up for details
 load().then(function(){
@@ -1298,6 +1312,8 @@ load().then(function(){
     if(sp && sp!==province){ province = sp; $("prov").value = province; redraw(); updateRepLink(); syncAreaPills(); }
     select(want,true); return;
   }
+  var pt = sharedPoint();
+  if(pt){ setOrigin(pt); return; }   // a shared point link: show the stations around it
   return placeP.then(function(pl){
     if(pl && pl.province && stations.some(function(s){ return s.province===pl.province; })){   // a pretty link such as /rangsit or /pathumthani
       province = pl.province; $("prov").value = province; redraw(); updateRepLink(); syncAreaPills();
