@@ -65,6 +65,18 @@ def station_card(label, st, url=None):
     return _bubble(header, {"type": "box", "layout": "vertical", "spacing": "sm", "contents": body}, _footer(url, snooze=True))
 
 
+def note_card(label, text):
+    """A small plain card for news that has no card of its own (e.g. a user flood report), so it can sit in a carousel."""
+    header = {"type": "box", "layout": "vertical", "backgroundColor": BRAND, "paddingAll": "12px", "contents": [
+        _text(f"น้ำใกล้บ้านฉัน{' · ' + label if label else ''}", color="#ffffff", size="xs")]}
+    return _bubble(header, {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [_text(text, size="sm", color="#333333")]})
+
+
+def carousel(bubbles):
+    """Several cards in ONE message object (LINE counts message objects, so this costs one message, not one per card)."""
+    return {"type": "carousel", "contents": list(bubbles)[:10]}
+
+
 def digest_card(rep, when_text, url=None):
     """Morning province report card."""
     c = rep["counts"]

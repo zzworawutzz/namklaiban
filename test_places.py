@@ -122,7 +122,8 @@ def test_alerts_use_the_label_of_each_place_and_morning_report_is_sent_once_per_
     conn.execute("UPDATE subscriptions SET last_status=NULL"); conn.commit()
     out = []
     sent, failed = notify.run(conn, AT, {"line": lambda t, m: out.append(m)})
-    assert sent == 2 and any("(บ้านของคุณ)" in m for m in out) and any("(จุดที่ 2)" in m for m in out)
+    assert sent == 1 and len(out) == 1                                       # two places changing together: one merged message, one quota unit
+    assert "(บ้านของคุณ)" in out[0] and "(จุดที่ 2)" in out[0] and "2 จุด" in out[0]
     morning = AT.replace(hour=1, minute=0) + timedelta(days=1)             # 08:00 Thai
     digests = []
     notify.run_digest(conn, morning, {"line": lambda t, m: digests.append(m)})

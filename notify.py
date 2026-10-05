@@ -233,8 +233,22 @@ def in_quiet_hours(at):
     return h >= QUIET_FROM_H or h < QUIET_TO_H
 
 
+KIND_ORDER = ["status", "early", "fast", "report"]   # which kind a merged message is logged as (send_log): the most serious first
+
+
+def merge_events(evs):
+    """One alert -> its own text and card. Several alerts for the same person in the same round (several saved places
+    changing at once) -> one text and ONE carousel, because LINE counts message objects against the monthly quota."""
+    if len(evs) == 1:
+        return evs[0]["text"], evs[0]["flex"]
+    body = "\n\n".join(e["text"].replace(FOOTER, "").strip() for e in evs)
+    text = f"น้ำใกล้บ้านฉัน: มีการเปลี่ยนแปลง {len(evs)} จุด\n\n{body}\n\n{FOOTER}"
+    flex = cards.carousel(e["flex"] or cards.note_card(e["label"], e["text"].replace(FOOTER, "").strip()) for e in evs)
+    return text, flex
+
+
 def run(conn, at=None, senders=SENDERS):
-    """Returns (sent, failed). Only fresh stations are considered for a subscriber.
+    """Returns (sent, failed); sent counts messages, so several alerts merged into one count once. Only fresh stations are considered for a subscriber.
     Settings: notify_level 'alert' = only when entering/leaving the alert level;
     quiet = no pushes 22:00-06:00 Thai time unless the status is alert (held back, sent after 06:00)."""
     at = at or datetime.now(timezone.utc)
@@ -243,6 +257,11 @@ def run(conn, at=None, senders=SENDERS):
     reports = [r for r in floodreports.active(conn, at) if r["confirmed"] >= REPORT_MIN_CONFIRMED]
     bud = budget.Budget(conn, at)
     ok = lambda sub, urgent: sub["channel"] != "line" or bud.allow(urgent)   # quota nearly used up: only alert-level news goes out
+    groups = {}   # (channel, target) -> alerts due this round; one person with several saved places gets ONE message
+
+    def queue(sub, kind, text, flex, province, sql, params):
+        groups.setdefault((sub["channel"], sub["target"]), []).append(
+            {"kind": kind, "label": sub["label"], "text": text, "flex": flex, "province": province, "sql": sql, "params": params})
     for sub in conn.execute("SELECT * FROM subscriptions").fetchall():
         if is_group(sub):
             continue
@@ -261,18 +280,9 @@ def run(conn, at=None, senders=SENDERS):
             if ((eta_soon or fast_rise(st)) and (sub["notify_level"] != "alert" or urgent)
                     and not (quiet_now and not urgent) and _since(sub["last_early"], at, EARLY_COOLDOWN_H)
                     and ok(sub, urgent)):
-                kind = "early" if eta_soon else "fast"
-                try:
-                    _invoke(senders[sub["channel"]], sub["target"], (early_message if eta_soon else fast_message)(sub, st),
-                            flex=cards.station_card(sub["label"], st, report_link(st["province"])))
-                    conn.execute("UPDATE subscriptions SET last_early=? WHERE id=?", (_iso(at), sub["id"]))
-                    sendlog.record(conn, at, kind, st["province"])
-                    bud.spent()
-                    sent += 1
-                except Exception as e:
-                    print(f"early warning failed for subscription {sub['id']}: {e}", file=sys.stderr)
-                    sendlog.record(conn, at, kind, st["province"], ok=False)
-                    failed += 1
+                queue(sub, "early" if eta_soon else "fast", (early_message if eta_soon else fast_message)(sub, st),
+                      cards.station_card(sub["label"], st, report_link(st["province"])), st["province"],
+                      "UPDATE subscriptions SET last_early=? WHERE id=?", (_iso(at), sub["id"]))
                 continue
             # 2) people near home report flooding and others confirm it
             if (sub["notify_level"] != "alert" and not quiet_now and _since(sub["last_report_alert"], at, REPORT_COOLDOWN_H)
@@ -280,16 +290,8 @@ def run(conn, at=None, senders=SENDERS):
                 close = sorted(((core.km(sub["lat"], sub["lng"], r["lat"], r["lng"]), r) for r in reports),
                                key=lambda t: t[0])
                 if close and close[0][0] <= REPORT_RADIUS_KM and close[0][1]["age_min"] <= 180:
-                    try:
-                        _invoke(senders[sub["channel"]], sub["target"], report_alert_message(sub, close[0][1], close[0][0]))
-                        conn.execute("UPDATE subscriptions SET last_report_alert=? WHERE id=?", (_iso(at), sub["id"]))
-                        sendlog.record(conn, at, "report", st["province"])
-                        bud.spent()
-                        sent += 1
-                    except Exception as e:
-                        print(f"report alert failed for subscription {sub['id']}: {e}", file=sys.stderr)
-                        sendlog.record(conn, at, "report", st["province"], ok=False)
-                        failed += 1
+                    queue(sub, "report", report_alert_message(sub, close[0][1], close[0][0]), None, st["province"],
+                          "UPDATE subscriptions SET last_report_alert=? WHERE id=?", (_iso(at), sub["id"]))
                     continue
         if not changed or (prev is None and st["status"] not in ("watch", "alert")):
             if prev is None:  # silent baseline
@@ -302,17 +304,21 @@ def run(conn, at=None, senders=SENDERS):
             continue  # keep last_status unchanged so it is sent after the quiet hours if still different
         if not ok(sub, st["status"] == "alert"):
             continue  # same while the message quota is nearly used up: held, sent later if still different
+        queue(sub, "status", message(sub, st), cards.station_card(sub["label"], st, report_link(st["province"])), st["province"],
+              "UPDATE subscriptions SET last_status=?, last_notified=? WHERE id=?", (st["status"], utc_now(), sub["id"]))
+    for (channel, target), evs in groups.items():
+        text, flex = merge_events(evs)
+        top = min(evs, key=lambda e: KIND_ORDER.index(e["kind"]))
         try:
-            _invoke(senders[sub["channel"]], sub["target"], message(sub, st),
-                    flex=cards.station_card(sub["label"], st, report_link(st["province"])))
+            _invoke(senders[channel], target, text, flex=flex)
         except Exception as e:
-            print(f"send failed for subscription {sub['id']}: {e}", file=sys.stderr)
-            sendlog.record(conn, at, "status", st["province"], ok=False)
+            print(f"send failed for {len(evs)} alert(s) to one recipient: {e}", file=sys.stderr)
+            sendlog.record(conn, at, top["kind"], top["province"], ok=False)
             failed += 1
-            continue
-        conn.execute("UPDATE subscriptions SET last_status=?, last_notified=? WHERE id=?",
-                     (st["status"], utc_now(), sub["id"]))
-        sendlog.record(conn, at, "status", st["province"])
+            continue          # nothing is marked as sent, so every one of them is tried again next round
+        for ev in evs:
+            conn.execute(ev["sql"], ev["params"])
+        sendlog.record(conn, at, top["kind"], top["province"])
         bud.spent()
         sent += 1
     conn.commit()

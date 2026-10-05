@@ -170,3 +170,54 @@ def test_snooze_holds_early_warnings_and_status_changes_but_not_alert_and_ends_o
     assert go() == (0, 0) and c.execute("SELECT last_status FROM subscriptions").fetchone()[0] == "normal"   # change is kept for later
     c.execute("UPDATE subscriptions SET snooze_until='2026-10-01T16:00:00Z'")                                  # pause has run out
     assert go() == (1, 0) and "เฝ้าระวัง" in out[0]                  # the change is sent now
+
+
+def two_places(tmp_path):
+    c = setup(tmp_path)
+    c.execute("INSERT INTO subscriptions(channel,target,lat,lng,label) VALUES('stdout','U1',14.21,99.01,'จุดที่ 2')")
+    c.commit()
+    return c
+
+
+def test_two_places_of_one_person_are_merged_into_one_message_with_one_carousel(tmp_path):
+    c, out = two_places(tmp_path), []
+    senders = {"stdout": lambda t, m, flex=None: out.append((t, m, flex))}
+    assert notify.run(c, AT, senders) == (1, 0)                               # sent counts messages, not alerts
+    assert len(out) == 1
+    _, text, flex = out[0]
+    assert "2 จุด" in text and "(บ้าน)" in text and "(จุดที่ 2)" in text
+    assert text.count(notify.FOOTER) == 1                                     # the disclaimer once, not once per place
+    assert flex["type"] == "carousel" and len(flex["contents"]) == 2
+    assert all(c_["type"] == "bubble" for c_ in flex["contents"])
+    assert [r[0] for r in c.execute("SELECT last_status FROM subscriptions ORDER BY id")] == ["alert", "alert"]
+    assert notify.run(c, AT, senders) == (0, 0)                               # both are marked, nothing repeats
+
+
+def test_a_failed_merged_message_leaves_every_place_to_be_retried(tmp_path):
+    c = two_places(tmp_path)
+    assert notify.run(c, AT, {"stdout": lambda t, m, flex=None: 1 / 0}) == (0, 1)
+    assert [r[0] for r in c.execute("SELECT last_status FROM subscriptions")] == [None, None]
+    assert notify.run(c, AT, {"stdout": lambda t, m, flex=None: None}) == (1, 0)
+
+
+def test_places_of_different_people_are_not_merged_and_a_single_alert_is_unchanged(tmp_path):
+    c, out = two_places(tmp_path), []
+    c.execute("UPDATE subscriptions SET target='U2' WHERE label='จุดที่ 2'"); c.commit()
+    senders = {"stdout": lambda t, m, flex=None: out.append((t, m, flex))}
+    assert notify.run(c, AT, senders) == (2, 0)
+    assert sorted(o[0] for o in out) == ["U1", "U2"]
+    assert all("2 จุด" not in o[1] and o[2]["type"] == "bubble" for o in out)  # one alert: plain text + single card as before
+
+
+def test_merged_message_counts_once_in_the_send_log(tmp_path):
+    c = two_places(tmp_path)
+    notify.run(c, AT, {"stdout": lambda t, m, flex=None: None})
+    assert c.execute("SELECT COUNT(*) FROM send_log").fetchone()[0] == 1
+
+
+def test_a_report_alert_without_a_card_gets_a_small_card_inside_the_carousel():
+    evs = [{"kind": "status", "label": "บ้าน", "text": "ข้อความหนึ่ง\n" + notify.FOOTER, "flex": {"type": "bubble"}},
+           {"kind": "report", "label": "จุดที่ 2", "text": "มีผู้ใช้รายงานน้ำท่วม\n" + notify.FOOTER, "flex": None}]
+    text, flex = notify.merge_events(evs)
+    assert len(flex["contents"]) == 2 and flex["contents"][1]["type"] == "bubble"
+    assert "มีผู้ใช้รายงานน้ำท่วม" in str(flex["contents"][1]) and "มีผู้ใช้รายงานน้ำท่วม" in text
