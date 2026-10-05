@@ -75,3 +75,58 @@ def test_the_other_pages_use_the_saved_choice(browser, site, path):
     bad = contrast.audit(page)
     assert not bad, [f"{f['ratio']} (need {f['need']}) {f['el']} '{f['text']}'" for f in bad]
     ctx.close()
+
+
+def test_the_quick_button_cycles_auto_light_dark_and_says_which_mode_it_is_in(browser, site):
+    ctx, page = make_page(browser, "light")
+    errors = watch(page)
+    open_page(page, site)
+    shown = "[...document.querySelectorAll('#btnTheme g[data-mode]')].filter(g => !g.hidden).map(g => g.dataset.mode)"
+    assert page.evaluate(shown) == ["auto"] and "ตามเครื่อง" in page.get_attribute("#btnTheme", "aria-label")
+    for want, label in (("light", "สว่าง"), ("dark", "มืด"), ("auto", "ตามเครื่อง")):
+        page.click("#btnTheme")
+        assert page.evaluate(shown) == [want] and label in page.get_attribute("#btnTheme", "aria-label"), want
+        assert page.evaluate("document.querySelector('#themeSeg [aria-pressed=true]').dataset.themeSet") == want    # the panel agrees
+    assert page.evaluate("localStorage.getItem('nkb-theme')") is None                                               # back on auto: nothing kept
+    page.click("#btnTheme"); page.click("#btnTheme")
+    assert bg(page) == DARK_BG and page.evaluate("localStorage.getItem('nkb-theme')") == "dark"
+    assert not errors
+    ctx.close()
+
+
+def test_install_button_appears_only_when_the_browser_offers_installing_and_uses_the_saved_prompt_once(browser, site):
+    ctx, page = make_page(browser, "light")
+    errors = watch(page)
+    open_page(page, site)
+    assert page.is_hidden("#installBox")                                                       # nothing to install: nothing shown
+    page.evaluate("""() => { const e = new Event('beforeinstallprompt', {cancelable: true});
+        e.prompt = () => { window.__prompted = (window.__prompted || 0) + 1; return Promise.resolve(); };
+        e.userChoice = Promise.resolve({outcome: 'dismissed'}); window.dispatchEvent(e); }""")
+    page.evaluate("document.getElementById('btnLayers').click()")
+    assert page.is_visible("#btnInstall") and page.is_hidden("#installIos")
+    page.click("#btnInstall")
+    assert page.evaluate("window.__prompted") == 1 and page.is_hidden("#installBox")           # a saved prompt works once
+    assert not errors
+    ctx.close()
+
+
+def test_iphone_gets_the_two_step_instruction_instead_of_a_button(browser, site):
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, locale="th-TH", service_workers="block", is_mobile=True, has_touch=True,
+                              user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1")
+    stub_outside_world(ctx)
+    page = ctx.new_page()
+    open_page(page, site)
+    page.evaluate("document.getElementById('btnLayers').click()")
+    assert page.is_visible("#installIos") and page.is_hidden("#btnInstall")
+    assert "เพิ่มลงในหน้าจอโฮม" in page.inner_text("#installIos")
+    ctx.close()
+
+
+def test_the_app_manifest_has_png_icons_for_installing(site):
+    import json, urllib.request
+    m = json.loads(urllib.request.urlopen(site + "/manifest.webmanifest").read())
+    sizes = {(i["sizes"], i["type"], i["purpose"]) for i in m["icons"]}
+    assert ("192x192", "image/png", "any") in sizes and ("512x512", "image/png", "any") in sizes and ("512x512", "image/png", "maskable") in sizes
+    for f in ("icon-192.png", "icon-512.png", "apple-touch-icon.png"):
+        r = urllib.request.urlopen(site + "/" + f)
+        assert r.status == 200 and r.headers["content-type"] == "image/png" and r.read(8) == b"\x89PNG\r\n\x1a\n", f

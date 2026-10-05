@@ -225,6 +225,7 @@ def test_rain_card_shows_what_the_gauges_measured_next_to_the_forecast(page, sit
     until(page, "document.getElementById('gaugeLine').innerText.includes('สูงสุด 62 มม.')")
     box = page.inner_text("#gaugeLine")
     assert "รร.วัดทดสอบ" in box and "11 สถานี" in box and "35 มม." in box and "ThaiWater" in box
+    assert "ฝนสะสม 3 วัน (2–4 ต.ค.) สูงสุด 188 มม." in box and "ปตร.ฝนมาก" in box and "ตั้งแต่ 100 มม. ขึ้นไป 2 สถานี" in box and "ไม่รวมวันนี้" in box, box
     # a CSS class shared with the bank-level bar once made this text overlap itself: the text must flow normally
     assert page.eval_on_selector("#gaugeLine b", "e => getComputedStyle(e).position") == "static"
     assert page.eval_on_selector("#gaugeLine", "e => getComputedStyle(e).display") == "block"
@@ -244,7 +245,8 @@ def test_gps_near_an_alert_station_shows_the_ground_height_but_never_compares_it
     assert "ระดับเตือนภัย" in elev and "ไม่นำมาเทียบกับระดับน้ำ" in elev and "1784" in elev
     assert "ไม่ได้บอกว่าจะท่วมหรือไม่ท่วม" in elev
     until(page, "document.getElementById('gaugeLine') && document.getElementById('gaugeLine').innerText.includes('ปตร.ทดสอบ')")
-    assert "2.4 กม." in page.inner_text("#gaugeLine")
+    near = page.inner_text("#gaugeLine")
+    assert "2.4 กม." in near and "3 วัน 77 มม." in near and "ฝนสะสม 2–4 ต.ค." in near and "ไม่รวมวันนี้" in near, near      # the gauge without a 3-day figure just shows its 24 h
     assert not errors
 
 
@@ -327,7 +329,8 @@ def test_dam_card_lists_the_big_dams_of_the_basin_with_the_caveat(page, site):
     page.wait_for_selector("#damCard:not([hidden])", timeout=15000)
     text = page.inner_text("#damCard")
     assert "เขื่อนทดสอบหนึ่ง" in text and "110%" in text and "ระบายออก 43 ล้าน ลบ.ม./วัน" in text and "เขื่อนทดสอบสอง" in text and "61%" in text, text
-    assert "และอีก 4 แห่ง" in text and "ไม่ได้บอกว่าจะท่วมหรือไม่ท่วม" in text and "1784" in text
+    assert "▲ +13.3 จุดใน 7 วัน" in text and "▼ -2.4 จุดใน 7 วัน" in text and "+0.3" not in text and "▲ +0" not in text, text   # a week's change, only when it is at least a point
+    assert "และอีก 3 แห่ง" in text and "ไม่ได้บอกว่าจะท่วมหรือไม่ท่วม" in text and "1784" in text
     assert not errors
 
 
@@ -340,4 +343,33 @@ def test_forecast_days_start_today_and_are_all_labelled_even_though_the_answer_a
     assert [d.split(" ")[0] for d in days] == ["วันนี้", "พรุ่งนี้", "มะรืนนี้"], days
     assert "undefined" not in page.inner_text("#rainCard")
     assert days[0].startswith("วันนี้ 6 มม.") and days[1].startswith("พรุ่งนี้ 4 มม.") and days[2].startswith("มะรืนนี้ 2 มม."), days   # the past days (31-33 mm) never appear as forecast
+    assert not errors
+
+
+def test_share_as_picture_makes_a_1080_by_1350_png_and_hands_it_to_the_share_sheet(context, site):
+    context.add_init_script("window.__files = []; navigator.canShare = d => !!d.files; navigator.share = d => { window.__files.push({file: d.files[0], text: d.text}); return Promise.resolve(); };")
+    page = context.new_page()
+    errors = watch(page)
+    page.goto(site + "/pathumthani?station=A", wait_until="domcontentloaded")
+    page.wait_for_selector("#btnShareImg", timeout=30000)
+    page.click("#btnShareImg")
+    until(page, "window.__files.length === 1", timeout=20)
+    info = page.evaluate("""async () => { const {file, text} = window.__files[0]; const bmp = await createImageBitmap(file);
+        return {name: file.name, type: file.type, size: file.size, w: bmp.width, h: bmp.height, text}; }""")
+    assert info["name"] == "namklaiban-A.png" and info["type"] == "image/png" and info["w"] == 1080 and info["h"] == 1350 and info["size"] > 20000, info
+    assert "ท่าช้าง" in info["text"] and "ของตลิ่ง" in info["text"] and "?station=A" in info["text"], info["text"]
+    assert page.is_enabled("#btnShareImg")                                                   # usable again afterwards
+    assert not errors
+
+
+def test_share_as_picture_downloads_the_file_when_the_browser_has_no_share_sheet(context, site):
+    context.add_init_script("for (const k of ['share', 'canShare']) Object.defineProperty(Navigator.prototype, k, {value: undefined, configurable: true});")
+    page = context.new_page()
+    errors = watch(page)
+    page.goto(site + "/pathumthani?station=A", wait_until="domcontentloaded")
+    page.wait_for_selector("#btnShareImg", timeout=30000)
+    with page.expect_download(timeout=20000) as dl:
+        page.click("#btnShareImg")
+    assert dl.value.suggested_filename == "namklaiban-A.png"
+    until(page, "document.getElementById('shareMsg').innerText.includes('บันทึกภาพแล้ว')")
     assert not errors

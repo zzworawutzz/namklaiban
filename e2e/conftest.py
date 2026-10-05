@@ -115,14 +115,17 @@ def stub_outside_world(context):
     context.route("**/tilecache.invalid/**", lambda r: r.abort())
     context.route("**/api.open-meteo.com/**", lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps(fake_forecast())))
     context.route("**/api/rain?*", lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps(
-        {"nearby": [{"name": "ปตร.ทดสอบ", "distance_km": 2.4, "mm24": 14.0, "mm1": 1.0}, {"name": "สะพานทดสอบ", "distance_km": 6.1, "mm24": 9.0, "mm1": 0.0}]}
+        {"nearby": [{"name": "ปตร.ทดสอบ", "distance_km": 2.4, "mm24": 14.0, "mm1": 1.0, "mm3d": 77.0}, {"name": "สะพานทดสอบ", "distance_km": 6.1, "mm24": 9.0, "mm1": 0.0, "mm3d": None}],
+         "three_day_period": {"start": "2026-10-02", "end": "2026-10-04"}}
         if "lat=" in r.request.url else
-        {"stations": 11, "mean_mm": 9.1, "over_35": 1, "max": {"name": "รร.วัดทดสอบ", "mm24": 62.0, "mm1": 12.0}, "top": [], "as_of": "2026-10-04T14:00:00Z"})))
+        {"stations": 11, "mean_mm": 9.1, "over_35": 1, "max": {"name": "รร.วัดทดสอบ", "mm24": 62.0, "mm1": 12.0}, "top": [], "as_of": "2026-10-04T14:00:00Z",
+         "three_day": {"stations": 11, "mean_mm": 40.2, "over_100": 2, "max": {"name": "ปตร.ฝนมาก", "mm3d": 188.0}, "start": "2026-10-02", "end": "2026-10-04"}})))
     context.route("**/api.open-meteo.com/v1/elevation*", lambda r: r.fulfill(status=200, content_type="application/json", body='{"elevation":[2.6]}'))   # registered after the forecast stub, so it wins
     context.route("**/api/dams*", lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps(
         {"as_of": "2026-10-05", "total": 6, "dams": [
-            {"name": "เขื่อนทดสอบหนึ่ง", "province": "สระบุรี", "pct": 109.8, "released": 43.2, "basin": "ลุ่มน้ำป่าสัก"},
-            {"name": "เขื่อนทดสอบสอง", "province": "อุตรดิตถ์", "pct": 61.0, "released": None, "basin": "ลุ่มน้ำน่าน"}]})))
+            {"name": "เขื่อนทดสอบหนึ่ง", "province": "สระบุรี", "pct": 109.8, "released": 43.2, "basin": "ลุ่มน้ำป่าสัก", "change_7d": 13.3},
+            {"name": "เขื่อนทดสอบสอง", "province": "อุตรดิตถ์", "pct": 61.0, "released": None, "basin": "ลุ่มน้ำน่าน", "change_7d": -2.4},
+            {"name": "เขื่อนทดสอบสาม", "province": "ตาก", "pct": 50.0, "released": 1.0, "basin": "ลุ่มน้ำปิง", "change_7d": 0.3}]})))
     context.route("**/api/line/add-friend", lambda r: r.fulfill(status=200, content_type="application/json", body='{"url":"https://line.me/R/ti/p/%40test"}'))   # production has the LINE button; the test server has no bot
     context.route("**/nominatim.openstreetmap.org/**", lambda r: r.fulfill(status=200, content_type="application/json", body="[]"))
 
