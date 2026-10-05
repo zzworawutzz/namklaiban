@@ -13,6 +13,10 @@
 <script>
 /* Start fetching the stations right now, while the map libraries download; the app picks this request up (getJSON). */
 (function(){ try{
+  var th = localStorage.getItem("nkb-theme");   /* the visitor's colour choice, applied before the first paint so the page does not flash */
+  if(th==="light" || th==="dark") document.documentElement.setAttribute("data-theme", th);
+}catch(e){} })();
+(function(){ try{
   /* The emergency numbers and the footer sit at the bottom of the panel; keep them out of the layout until the cards above
      have appeared (so they are not pushed down in front of the reader), but never longer than 3 s even if scripts fail. */
   var de = document.documentElement; de.classList.add("booting");
@@ -29,7 +33,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" integrity="sha384-c6Rcwz4e4CITMbu/NBmnNS8yN2sC3cUElMEMfP3vqqKFp7GOYaaBBCqmaWBjmkjb" crossorigin="anonymous">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css" integrity="sha384-uIZNAcoEHVWMk8LrCSX95DJk6FQzH6zG00LQC9BykRY1UKKpkDzDhbDLYQ1Ho3mI" crossorigin="anonymous">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="app.css?v=42">
+<link rel="stylesheet" href="app.css?v=43">
 </head>
 <body>
 <h1 class="sr">น้ำใกล้บ้านฉัน</h1>
@@ -66,6 +70,8 @@
 </header>
 
 <div id="layers" hidden role="dialog" aria-label="ตัวเลือกแผนที่">
+  <h3>โหมดสี</h3>
+  <div class="seg" id="themeSeg"><button type="button" data-theme-set="auto" aria-pressed="true">ตามเครื่อง</button><button type="button" data-theme-set="light" aria-pressed="false">สว่าง</button><button type="button" data-theme-set="dark" aria-pressed="false">มืด</button></div>
   <h3>เลเยอร์</h3>
   <label class="chk"><input type="checkbox" id="chkRiver"><span>เส้นเชื่อมสถานีตามแม่น้ำ<br><span class="note">เป็นเส้นตรงระหว่างสถานี ไม่ใช่แนวแม่น้ำจริง เรียงต้นน้ำ→ปลายน้ำจากระดับท้องน้ำ (ประมาณ)</span></span></label>
   <div id="floodBox" hidden>
@@ -186,6 +192,6 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" integrity="sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js" integrity="sha384-eXVCORTRlv4FUUgS/xmOyr66XBVraen8ATNLMESp92FKXLAMiKkerixTiBvXriZr" crossorigin="anonymous"></script>
-<script src="app.js?v=42"></script>
+<script src="app.js?v=43"></script>
 </body>
 </html>

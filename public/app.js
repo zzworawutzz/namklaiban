@@ -1195,8 +1195,34 @@ $("rtGo").addEventListener("click",function(){
       rtFail(m.indexOf("nf:")===0 ? "ไม่พบสถานที่ \""+m.slice(3)+"\" ลองพิมพ์ให้ละเอียดขึ้น เช่นเพิ่มชื่ออำเภอหรือจังหวัด" : m==="noroute" ? "หาเส้นทางระหว่างสองจุดนี้ไม่ได้" : "คำนวณเส้นทางไม่ได้ในขณะนี้ ลองใหม่อีกครั้ง"); });
 });
 
+/* Colour mode: follow the device (default), or light / dark by choice. The choice is kept in this browser only (localStorage "nkb-theme")
+   and applied by a small script in the head of every page, so nothing flashes. */
+var THEME_KEY = "nkb-theme";
+function currentTheme(){ var t = document.documentElement.getAttribute("data-theme"); return t==="light" || t==="dark" ? t : "auto"; }
+function isDark(){
+  var t = document.documentElement.getAttribute("data-theme");
+  return t==="dark" || (t!=="light" && !!window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches);
+}
+function syncTheme(){
+  var cur = currentTheme();
+  Array.prototype.forEach.call(document.querySelectorAll("#themeSeg button"), function(b){ b.setAttribute("aria-pressed", b.getAttribute("data-theme-set")===cur ? "true" : "false"); });
+  Array.prototype.forEach.call(document.querySelectorAll('meta[name="theme-color"]'), function(m){   // the browser's address-bar colour follows the choice
+    if(!m.hasAttribute("data-orig")) m.setAttribute("data-orig", m.getAttribute("content"));
+    m.setAttribute("content", cur==="auto" ? m.getAttribute("data-orig") : (cur==="dark" ? "#0a171d" : "#f3f6f8"));
+  });
+  if(typeof boundLayer!=="undefined" && boundLayer && boundLayer.setStyle) boundLayer.setStyle({color: boundColor()});
+}
+function setTheme(t){
+  var de = document.documentElement;
+  if(t==="light" || t==="dark"){ de.setAttribute("data-theme", t); } else { de.removeAttribute("data-theme"); t = "auto"; }
+  try{ if(t==="auto") localStorage.removeItem(THEME_KEY); else localStorage.setItem(THEME_KEY, t); }catch(e){}
+  syncTheme();
+}
+$("themeSeg").addEventListener("click", function(e){ var b = e.target.closest ? e.target.closest("button[data-theme-set]") : null; if(b) setTheme(b.getAttribute("data-theme-set")); });
+try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncTheme); }catch(e){}
+syncTheme();
 function boundColor(){   // navy on the light map; a lighter blue on the dark one, where navy would vanish. Never red: red means "alert" on the stations
-  return window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "#5b8cff" : "#1e3a8a";
+  return isDark() ? "#5b8cff" : "#1e3a8a";
 }
 /* ---------- outline of the chosen province / district / subdistrict (UN OCHA boundaries, via our API) ---------- */
 var boundLayer = null, boundKey = "", boundSeq = 0;
