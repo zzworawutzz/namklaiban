@@ -99,10 +99,10 @@ def browser():
 
 
 def fake_forecast():
-    """What Open-Meteo would answer: 24 h of past rain, 3 days ahead, a little rain this evening."""
+    """What Open-Meteo would answer: 3 days of past rain (10 mm every 6 h), 3 days ahead, a little rain this evening."""
     th = datetime.now(timezone(timedelta(hours=7))).replace(minute=0, second=0, microsecond=0)
-    times = [(th + timedelta(hours=i)).strftime("%Y-%m-%dT%H:00") for i in range(-24, 72)]
-    mm = [1.0 if i < 0 and i % 6 == 0 else (2.0 if 3 <= i <= 8 else 0.0) for i in range(-24, 72)]
+    times = [(th + timedelta(hours=i)).strftime("%Y-%m-%dT%H:00") for i in range(-72, 72)]
+    mm = [10.0 if i < 0 and i % 6 == 0 else (2.0 if 3 <= i <= 8 else 0.0) for i in range(-72, 72)]
     days = [(th + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(3)]
     return {"hourly": {"time": times, "precipitation": mm, "precipitation_probability": [40] * len(times)},
             "daily": {"time": days, "precipitation_sum": [6.0, 4.0, 2.0], "precipitation_probability_max": [60, 50, 40]}}
@@ -119,6 +119,10 @@ def stub_outside_world(context):
         if "lat=" in r.request.url else
         {"stations": 11, "mean_mm": 9.1, "over_35": 1, "max": {"name": "รร.วัดทดสอบ", "mm24": 62.0, "mm1": 12.0}, "top": [], "as_of": "2026-10-04T14:00:00Z"})))
     context.route("**/api.open-meteo.com/v1/elevation*", lambda r: r.fulfill(status=200, content_type="application/json", body='{"elevation":[2.6]}'))   # registered after the forecast stub, so it wins
+    context.route("**/api/dams*", lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps(
+        {"as_of": "2026-10-05", "total": 6, "dams": [
+            {"name": "เขื่อนทดสอบหนึ่ง", "province": "สระบุรี", "pct": 109.8, "released": 43.2, "basin": "ลุ่มน้ำป่าสัก"},
+            {"name": "เขื่อนทดสอบสอง", "province": "อุตรดิตถ์", "pct": 61.0, "released": None, "basin": "ลุ่มน้ำน่าน"}]})))
     context.route("**/api/line/add-friend", lambda r: r.fulfill(status=200, content_type="application/json", body='{"url":"https://line.me/R/ti/p/%40test"}'))   # production has the LINE button; the test server has no bot
     context.route("**/nominatim.openstreetmap.org/**", lambda r: r.fulfill(status=200, content_type="application/json", body="[]"))
 

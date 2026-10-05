@@ -310,3 +310,22 @@ def test_share_button_gives_a_link_with_only_the_rounded_point(context, site):
     url = page.evaluate("window.__shared[0]")
     assert url == site + "/?lat=14.201&lng=100.501", url                                  # 3 decimals, no station, nothing else
     assert not errors
+
+
+def test_rain_card_adds_up_the_last_three_days_and_says_so_when_it_has_been_a_lot(page, site):
+    errors = watch(page)
+    open_page(page, site)
+    page.wait_for_selector("#rainCard:not([hidden])", timeout=15000)
+    note = page.inner_text("#rainCard")
+    assert "3 วันรวม ~120 มม." in note and "ฝนสะสม 3 วันค่อนข้างมาก" in note and "ประมาณจากแบบจำลอง" in note, note    # 12 readings of 10 mm in the last 72 h
+    assert not errors
+
+
+def test_dam_card_lists_the_big_dams_of_the_basin_with_the_caveat(page, site):
+    errors = watch(page)
+    open_page(page, site)
+    page.wait_for_selector("#damCard:not([hidden])", timeout=15000)
+    text = page.inner_text("#damCard")
+    assert "เขื่อนทดสอบหนึ่ง" in text and "110%" in text and "ระบายออก 43 ล้าน ลบ.ม./วัน" in text and "เขื่อนทดสอบสอง" in text and "61%" in text, text
+    assert "และอีก 4 แห่ง" in text and "ไม่ได้บอกว่าจะท่วมหรือไม่ท่วม" in text and "1784" in text
+    assert not errors
