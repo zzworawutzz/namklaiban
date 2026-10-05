@@ -46,6 +46,14 @@ def _no_real_rain_gauges(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_real_dams(monkeypatch):
+    """Tests never call ThaiWater's dam feed: no dams unless a test supplies some."""
+    import dams
+    dams._cache.update(at=0.0, rows=None)
+    monkeypatch.setattr(dams, "fetch", lambda: {"data": {"dam_daily": []}})
+
+
+@pytest.fixture(autouse=True)
 def _no_real_rain_forecast(monkeypatch):
     """Tests never call Open-Meteo: dry forecast by default, and a fresh cache per test."""
     import rainalert

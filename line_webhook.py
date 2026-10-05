@@ -49,7 +49,8 @@ DIGEST_ON = {"เปิดสรุป"}
 SETTINGS = {"ตั้งค่า", "settings"}
 MY_ID_CMD = {"ไอดีของฉัน", "my id"}
 GROUP_HELP_WORDS = {"ช่วยเหลือ", "help"}
-MENU = ["สถานะ", "รายงาน", "แจ้งน้ำท่วม", "ศูนย์พักพิง", "ตำแหน่งของฉัน", "ตั้งค่า", "วิธีใช้"]
+MENU = ["สถานะ", "รายงาน", "แจ้งน้ำท่วม", "ศูนย์พักพิง", "แชร์ให้ญาติ", "ตำแหน่งของฉัน", "ตั้งค่า", "วิธีใช้"]
+SHARE_CMD = {"แชร์ให้ญาติ", "แชร์", "แชร์ลิงก์", "ชวนญาติ", "share"}
 SNOOZE_CMD = {"พักแจ้งเตือน", "พักแจ้งเตือน 6 ชม.", "พัก"}
 SNOOZE_OFF = {"เลิกพัก", "เลิกพักแจ้งเตือน"}
 SNOOZE_H = 6
@@ -67,7 +68,7 @@ CHANGES = {
 HELP = ("น้ำใกล้บ้านฉัน: ส่งตำแหน่งบ้านของคุณมาที่นี่ (กด + แล้วเลือก \"ตำแหน่งที่ตั้ง\") "
         "เพื่อรับแจ้งเตือนเมื่อสถานีวัดน้ำที่ใกล้ที่สุดเปลี่ยนสถานะ\n"
         "พิมพ์ \"สถานะ\" ดูค่าล่าสุด · \"รายงาน\" ดูสรุปทั้งจังหวัด · \"ตั้งค่า\" เลือกระดับแจ้งเตือน/ช่วงไม่รบกวน · "
-        "พิมพ์ชื่อตำบล/อำเภอ/จังหวัด/สถานี เช่น \"บางบัวทอง\" เพื่อดูสถานการณ์ที่นั่น · \"พักแจ้งเตือน\" หยุดแจ้ง 6 ชม. · \"แจ้งน้ำท่วม\" รายงานจุดที่ท่วมแถวคุณ · \"ตำแหน่งของฉัน\" ดู/ลบจุดที่ติดตาม (ได้สูงสุด 3 จุด) · \"ศูนย์พักพิง\" ดู 3 แห่งที่ใกล้ที่สุด · \"ปิดสรุป\" หยุดสรุปสถานการณ์อัตโนมัติ · \"ยกเลิก\" หยุดทุกอย่างและลบตำแหน่งที่เก็บไว้\n"
+        "พิมพ์ชื่อตำบล/อำเภอ/จังหวัด/สถานี เช่น \"บางบัวทอง\" เพื่อดูสถานการณ์ที่นั่น · \"พักแจ้งเตือน\" หยุดแจ้ง 6 ชม. · \"แชร์ให้ญาติ\" ส่งลิงก์ดูน้ำใกล้บ้านให้คนอื่น · \"แจ้งน้ำท่วม\" รายงานจุดที่ท่วมแถวคุณ · \"ตำแหน่งของฉัน\" ดู/ลบจุดที่ติดตาม (ได้สูงสุด 3 จุด) · \"ศูนย์พักพิง\" ดู 3 แห่งที่ใกล้ที่สุด · \"ปิดสรุป\" หยุดสรุปสถานการณ์อัตโนมัติ · \"ยกเลิก\" หยุดทุกอย่างและลบตำแหน่งที่เก็บไว้\n"
         "ข้อมูลจาก ThaiWater ใช้ประกอบการตัดสินใจเท่านั้น ให้ยึดประกาศ ปภ. เป็นหลัก")
 GROUP_HELP = ("น้ำใกล้บ้านฉัน: พิมพ์ \"ติดตาม <ชื่อจังหวัด>\" เช่น ติดตาม อยุธยา "
               "เพื่อให้บอตส่งสรุปสถานการณ์น้ำของจังหวัดนั้นเข้ากลุ่มนี้ทุกเช้า 07:00\n"
@@ -174,6 +175,8 @@ def handle_event(conn, ev, at, reply):
         near = shelters.nearest(sub["lat"], sub["lng"], 3, 50)
         return _reply(reply, token, shelters.line_text(near) if near else
                       "ไม่พบศูนย์พักพิงในรัศมี 50 กม. จากตำแหน่งที่บันทึกไว้ ฉุกเฉินโทร 1784 (ปภ.)", quick=cards.quick(MENU))
+    if text in SHARE_CMD:
+        return _share(conn, user, token, reply)
     if text in SNOOZE_CMD | SNOOZE_OFF:
         return _snooze(conn, user, token, text in SNOOZE_CMD, at, reply)
     if text in STATUS | REPORT | SETTINGS | set(CHANGES) | DIGEST_OFF | DIGEST_ON:
@@ -274,6 +277,23 @@ def _send_report(conn, reply, token, prov, at):
     url = report_link(prov)
     _reply(reply, token, report.digest_text(rep, at, url), cards.digest_card(rep, report.thai_date(at), url),
            cards.quick(MENU))
+
+
+def _share(conn, user, token, reply):
+    """A link that shows the water near each saved place, for people who do not use the bot. Needs the public web address."""
+    places = _places(conn, user)
+    if not places:
+        return _reply(reply, token, "ส่งตำแหน่งบ้านของคุณมาก่อน (กด + แล้วเลือก \"ตำแหน่งที่ตั้ง\") แล้วพิมพ์ \"แชร์ให้ญาติ\" อีกครั้ง")
+    base = public_url()
+    if not base:
+        return _reply(reply, token, "ตอนนี้ยังสร้างลิงก์แชร์ไม่ได้ ลองเปิดเว็บแล้วปักหมุดที่จุดนั้น กด \"แชร์ลิงก์จุดนี้\" แทน", quick=cards.quick(MENU))
+    items = []
+    for p in places:
+        link = f"{base}/?lat={p['lat']:.3f}&lng={p['lng']:.3f}"
+        msg = "ดูระดับน้ำจากสถานีวัดน้ำใกล้จุดนี้ได้ที่ " + link
+        items.append((p["label"] or "จุดนี้", link, "https://line.me/R/share?text=" + urllib.parse.quote(msg, safe="")))
+    text = "แชร์ให้ญาติดู ส่งลิงก์นี้ให้คนที่ไว้ใจ (มีพิกัดโดยประมาณของจุด ปัดราว 100 ม.):\n" + "\n".join(f"{l}: {link}" for l, link, _ in items)
+    _reply(reply, token, text, cards.share_card(items), cards.quick(MENU))
 
 
 def _quota_note(conn, at):

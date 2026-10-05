@@ -30,6 +30,7 @@ import db
 import gauges
 import rainalert
 import budget
+import dams
 import sendlog
 import report
 from ingest import TZ_TH, init_db, utc_now
@@ -388,6 +389,7 @@ def run_digest(conn, at=None, senders=SENDERS):
             if cache[prov] is not None:
                 cache[prov]["rain"] = rainalert.for_province(rows, prov)   # one forecast per province, None unless heavy
                 cache[prov]["gauge"] = gauges.heavy_in(prov)                # what the gauges caught: None unless heavy
+                cache[prov]["dams"] = dams.high_in(conn, prov)              # big dams in the basin or above it that are nearly full: None otherwise
         rep = cache[prov]
         try:
             if rep is None:

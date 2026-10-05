@@ -123,7 +123,7 @@ def test_endpoint_passes_cards_and_buttons_through_to_line(tmp_path, monkeypatch
     post(text("สถานะ"))
     post(text("ตั้งค่า"))
     status, settings = got[1], got[2]
-    assert status[1]["type"] == "bubble" and [q["action"]["text"] for q in status[2]] == ["สถานะ", "รายงาน", "แจ้งน้ำท่วม", "ศูนย์พักพิง", "ตำแหน่งของฉัน", "ตั้งค่า", "วิธีใช้"]
+    assert status[1]["type"] == "bubble" and [q["action"]["text"] for q in status[2]] == ["สถานะ", "รายงาน", "แจ้งน้ำท่วม", "ศูนย์พักพิง", "แชร์ให้ญาติ", "ตำแหน่งของฉัน", "ตั้งค่า", "วิธีใช้"]
     assert settings[1] is None and "แจ้งเฉพาะเตือนภัย" in [q["action"]["text"] for q in settings[2]]
 
 
@@ -238,3 +238,30 @@ def test_a_signup_while_the_quota_is_nearly_gone_is_told_so(conn, monkeypatch):
     monkeypatch.setattr(notify, "line_quota", lambda: (300, 20))
     (r,) = run_full(conn, loc())
     assert "ใกล้เต็ม" not in r["text"]
+
+
+def test_share_with_family_gives_a_link_and_a_button_per_saved_place(conn, monkeypatch):
+    import urllib.parse
+    monkeypatch.setenv("PUBLIC_URL", "https://nkb.example")
+    assert "ส่งตำแหน่งบ้านของคุณมาก่อน" in run(conn, text("แชร์ให้ญาติ"))[0]               # nobody saved yet
+    run(conn, loc(14.2, 99.0))
+    (r,) = run_full(conn, text("แชร์ให้ญาติ"))
+    assert "https://nkb.example/?lat=14.200&lng=99.000" in r["text"] and "ปัดราว 100 ม." in r["text"]
+    buttons = [n for n in r["flex"]["footer"]["contents"] if n["type"] == "button"]
+    assert len(buttons) == 1 and buttons[0]["action"]["type"] == "uri"
+    uri = buttons[0]["action"]["uri"]
+    assert uri.startswith("https://line.me/R/share?text=") and len(uri) < 1000
+    assert "https://nkb.example/?lat=14.200&lng=99.000" in urllib.parse.unquote(uri)
+    assert "แชร์ให้ญาติ" in lw.MENU and r["quick"] is not None
+    # a second place gets its own button
+    run(conn, loc(14.9, 100.9))
+    run(conn, {"type": "postback", "replyToken": "r", "source": {"userId": "U1"}, "postback": {"data": "act=add&lat=14.9&lng=100.9"}})
+    (r2,) = run_full(conn, text("แชร์"))
+    assert len([n for n in r2["flex"]["footer"]["contents"] if n["type"] == "button"]) == 2 and "lat=14.900&lng=100.900" in r2["text"]
+
+
+def test_share_says_what_to_do_instead_when_the_web_address_is_not_set(conn, monkeypatch):
+    monkeypatch.delenv("PUBLIC_URL", raising=False)
+    monkeypatch.delenv("VERCEL_PROJECT_PRODUCTION_URL", raising=False)
+    run(conn, loc())
+    assert "แชร์ลิงก์จุดนี้" in run(conn, text("แชร์ให้ญาติ"))[0]

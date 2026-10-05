@@ -26,6 +26,7 @@ import areas
 import boundaries
 import budget
 import core
+import dams
 import ews
 import db
 import floodreports
@@ -205,6 +206,18 @@ def rain_gauges(response: Response, province: Optional[str] = None,
     if province is not None:
         return gauges.for_province(rows, province) or {"stations": 0}
     return {"nearby": gauges.nearest(rows, lat, lng, limit)}
+
+
+@app.get("/api/dams")
+def dams_for_province(response: Response, province: str = Query(..., min_length=1, max_length=60), limit: int = Query(6, ge=1, le=20)):
+    """Large dams (ThaiWater) in the basins of a province's stations and above them: how full and how much they release."""
+    rows = dams.get()
+    if rows is None:
+        raise HTTPException(503, "ข้อมูลเขื่อนไม่พร้อมให้บริการตอนนี้")
+    with conn() as c:
+        g = dams.for_province(c, province, rows)
+    response.headers["Cache-Control"] = "public, max-age=900, s-maxage=1800, stale-while-revalidate=1800"
+    return {"as_of": g["as_of"], "dams": g["dams"][:limit], "total": len(g["dams"])} if g else {"dams": [], "total": 0}
 
 
 @app.get("/api/shelters")

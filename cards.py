@@ -92,6 +92,9 @@ def digest_card(rep, when_text, url=None):
     if rep.get("gauge"):
         import gauges
         body.append(_text(gauges.line(rep["gauge"]), size="xs", color=COLORS["watch"], weight="bold"))
+    if rep.get("dams"):
+        import dams
+        body.append(_text(dams.line(rep["dams"]), size="xs", color=COLORS["watch"], weight="bold"))
     if rep.get("top"):
         body.append(_text("น้ำสูงสุด", size="sm", weight="bold", margin="md"))
         for r in rep["top"][:5]:
@@ -100,6 +103,19 @@ def digest_card(rep, when_text, url=None):
                 _text(r["name"], size="sm", flex=4), _text(f"{round(r['pct_of_bank'])}%", size="sm", flex=1,
                                                            align="end", weight="bold", color=col)]})
     return _bubble(header, {"type": "box", "layout": "vertical", "spacing": "sm", "contents": body}, _footer(url))
+
+
+def share_card(items):
+    """"Share with family": items = [(label, link, share_url)]. Each button opens LINE's own share picker with the text and
+    link ready; nothing is sent from here and the person picks who gets it."""
+    body = [_text("ส่งลิงก์ให้คนที่คุณไว้ใจ เปิดแล้วเห็นสถานีวัดน้ำที่ใกล้จุดนี้และระดับน้ำตอนนี้ โดยไม่ต้องสมัครบอต", size="sm", color="#333333"),
+            _text("ลิงก์มีพิกัดโดยประมาณของจุดนั้น (ปัดราว 100 ม.) ส่งเฉพาะคนที่ไว้ใจ", size="xs", color=MUTED, margin="md")]
+    buttons = [{"type": "button", "style": "primary", "color": BRAND, "height": "sm", "margin": "sm",
+                "action": {"type": "uri", "label": ("ส่งต่อ: " + label)[:20], "uri": share_url}} for label, _, share_url in items]
+    header = {"type": "box", "layout": "vertical", "backgroundColor": BRAND, "paddingAll": "12px", "contents": [
+        _text("น้ำใกล้บ้านฉัน", color="#ffffff", size="xs"), _text("แชร์ให้ญาติดู", color="#ffffff", weight="bold", size="lg")]}
+    return _bubble(header, {"type": "box", "layout": "vertical", "spacing": "sm", "contents": body},
+                   {"type": "box", "layout": "vertical", "spacing": "sm", "contents": buttons})
 
 
 def quick(labels):
