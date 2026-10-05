@@ -373,3 +373,38 @@ def test_share_as_picture_downloads_the_file_when_the_browser_has_no_share_sheet
     assert dl.value.suggested_filename == "namklaiban-A.png"
     until(page, "document.getElementById('shareMsg').innerText.includes('บันทึกภาพแล้ว')")
     assert not errors
+
+
+def test_gps_puts_a_pulsing_dot_on_the_map_and_clearing_removes_it(context, site):
+    context.grant_permissions(["geolocation"])
+    context.set_geolocation({"latitude": 14.031, "longitude": 100.731})
+    page = context.new_page()
+    errors = watch(page)
+    open_page(page, site)
+    assert page.locator(".mepos").count() == 0
+    page.evaluate("document.getElementById('btnMe').click()")
+    page.wait_for_selector(".mepos .mering", state="attached", timeout=20000)
+    assert page.evaluate("getComputedStyle(document.querySelector('.mepos .mering')).animationName") == "mepulse"
+    assert page.locator(".mepos .medot").count() == 1
+    page.evaluate("document.getElementById('btnClear').click()")
+    until(page, "document.querySelectorAll('.mepos').length === 0")
+    assert not errors
+
+
+def test_follow_moves_the_dot_with_the_user_and_stops_when_switched_off(context, site):
+    context.grant_permissions(["geolocation"])
+    context.set_geolocation({"latitude": 14.031, "longitude": 100.731})
+    page = context.new_page()
+    errors = watch(page)
+    open_page(page, site)
+    page.evaluate("var c=document.getElementById('chkFollow'); c.checked=true; c.dispatchEvent(new Event('change'))")
+    page.wait_for_selector(".mepos .medot", state="attached", timeout=20000)
+    before = page.evaluate("document.querySelector('.mepos').getBoundingClientRect().left")
+    context.set_geolocation({"latitude": 14.0315, "longitude": 100.7345})            # about 400 m east: the dot moves, no new lookup needed
+    until(page, "Math.abs(document.querySelector('.mepos').getBoundingClientRect().left - %s) > 3" % before, 20)
+    page.evaluate("window.__cleared = 0; var o = navigator.geolocation.clearWatch.bind(navigator.geolocation); navigator.geolocation.clearWatch = function(i){ window.__cleared++; return o(i); }")
+    page.evaluate("var c=document.getElementById('chkFollow'); c.checked=false; c.dispatchEvent(new Event('change'))")
+    assert page.evaluate("window.__cleared") == 1                                      # switched off: the position watch is released
+    page.evaluate("document.getElementById('btnClear').click()")
+    until(page, "document.querySelectorAll('.mepos').length === 0")
+    assert not errors
