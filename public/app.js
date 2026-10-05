@@ -246,7 +246,7 @@ function fastHtml(list){
   }).join("")+'<div class="note" style="margin:6px 0 0">นับจากระดับน้ำจริงของสถานี ไม่นับค่าที่กระโดดผิดปกติ</div></div>';
 }
 $("sumBody").addEventListener("click",function(e){ var b = e.target.closest ? e.target.closest(".fastrow") : null; if(b) select(b.getAttribute("data-id"),true); });
-function redraw(){ drawMarkers(); drawChips(); drawSummary(); drawRivers(); if(typeof updateBoundary==="function") updateBoundary(); if(typeof refreshShelters==="function") refreshShelters(); if(typeof refreshRain==="function") refreshRain(); }
+function redraw(){ drawMarkers(); drawChips(); drawSummary(); drawRivers(); if(typeof updateBoundary==="function") updateBoundary(); if(typeof refreshDistricts==="function") refreshDistricts(); if(typeof refreshShelters==="function") refreshShelters(); if(typeof refreshRain==="function") refreshRain(); }
 
 /* ---------- river lines ---------- */
 var RIVER_MAX_KM = 80;
@@ -1370,6 +1370,53 @@ function updateBoundary(){
     boundLayer.bringToBack();
   }).catch(function(){});                            // no outline for this area: draw nothing rather than something wrong
 }
+
+/* ---------- district summary: every district of the chosen province coloured by its worst fresh station (GET /api/districts) ---------- */
+var distLayer = null, distKey = "", distSeq = 0, distCache = {};
+var DIST_FILL = {alert:"#d2372f", watch:"#c98a00", normal:"#17835a", none:"#6b7f8a"};
+function distClear(){ if(distLayer){ map.removeLayer(distLayer); distLayer = null; } distKey = ""; var c = $("distCard"); if(c){ c.hidden = true; c.innerHTML = ""; } }
+function distLine(p){
+  if(!p.stations) return "ไม่มีสถานีวัดน้ำในอำเภอนี้";
+  if(!p.fresh) return "สถานี "+p.stations+" แห่ง แต่ไม่มีข้อมูลล่าสุดที่ใช้ได้";
+  var parts = ["alert","watch","normal"].filter(function(k){ return p.counts[k]; }).map(function(k){ return LABEL[k]+" "+p.counts[k]; });
+  return "สถานี "+p.stations+" แห่ง · "+parts.join(" · ")+(p.top ? " · สูงสุด "+p.top.pct+"% ("+p.top.name+")" : "");
+}
+function distCard(fc, prov){
+  var pre = arPre(prov), order = {alert:0, watch:1, normal:2, none:3};
+  var items = fc.features.map(function(f,i){ return {p:f.properties, i:i}; })
+    .sort(function(a,b){ return order[a.p.status]-order[b.p.status] || a.p.district.localeCompare(b.p.district, "th"); });
+  return '<div class="eyebrow">สรุปราย'+pre.d+' · จ.'+esc(prov)+'</div>'+
+    items.map(function(x){
+      var s = x.p.status, word = s==="none" ? "ไม่มีสถานี" : LABEL[s];
+      return '<button type="button" class="dr dbtn" data-d="'+x.i+'"><span>'+pre.d+esc(x.p.district)+'<small>'+esc(distLine(x.p))+'</small></span>'+
+             '<b style="color:'+(s==="none" ? "var(--muted)" : "var(--"+s+"-ink)")+'">'+word+'</b></button>';
+    }).join("")+
+    '<p class="note" style="margin:6px 0 0">สีและสถานะมาจาก<b>สถานีวัดน้ำที่อยู่ในพื้นที่นั้น</b> (เฉพาะข้อมูลล่าสุด) ไม่ใช่ขอบเขตน้ำท่วมจริง และ'+pre.d+'ที่ไม่มีสถานีไม่ได้แปลว่าปลอดภัย ขอบเขตโดยประมาณ ให้ยึดประกาศ ปภ. (1784) · แตะแถวเพื่อซูมไปที่'+pre.d+'นั้น</p>';
+}
+function distDraw(fc, prov){
+  distClear(); distKey = prov;
+  distLayer = L.geoJSON(fc, {attribution:BOUND_ATTR,
+    style:function(f){ var s = f.properties.status, c = DIST_FILL[s]; return {color:c, weight:s==="none" ? 1 : 1.5, opacity:.75, dashArray:s==="none" ? "5 5" : null, fillColor:c, fillOpacity:s==="none" ? .07 : .24, lineJoin:"round"}; },
+    onEachFeature:function(f, l){ var p = f.properties; l.bindTooltip(esc(arPre(prov).d+p.district)+" · "+(p.status==="none" ? "ไม่มีสถานีวัด" : LABEL[p.status]), {sticky:true}); }}).addTo(map);
+  distLayer.bringToBack();
+  var c = $("distCard"); c.innerHTML = distCard(fc, prov); c.hidden = false; c._fc = fc;
+}
+function refreshDistricts(){
+  if(!$("chkDist").checked || !province || origin){ if(distLayer || distKey) distClear(); return; }   // with a pinned place the view is about that place
+  if(distKey===province && distLayer) return;
+  var prov = province, my = ++distSeq, hit = distCache[prov];
+  if(hit && Date.now()-hit.t < 120000){ distDraw(hit.fc, prov); return; }
+  getJSON("/api/districts?province="+encodeURIComponent(prov)).then(function(fc){
+    if(my!==distSeq || province!==prov) return;
+    distCache[prov] = {t:Date.now(), fc:fc}; distDraw(fc, prov);
+  }).catch(function(){ if(my===distSeq) distClear(); });   // no district outlines for this province: nothing is drawn
+}
+$("chkDist").addEventListener("change", function(){ distClear(); refreshDistricts(); });
+$("distCard").addEventListener("click", function(e){
+  var b = e.target.closest ? e.target.closest("button[data-d]") : null; if(!b || !distLayer) return;
+  var f = this._fc.features[+b.getAttribute("data-d")];
+  var l = L.geoJSON(f); map.fitBounds(l.getBounds(), {padding:[30,30], maxZoom:12});
+});
 
 /* ---------- area pills: province > district > subdistrict (centre point of the subdistrict) ---------- */
 var areaCache = {}, areaCur = null, areaSeq = 0;

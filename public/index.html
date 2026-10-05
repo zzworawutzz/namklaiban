@@ -33,7 +33,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" integrity="sha384-c6Rcwz4e4CITMbu/NBmnNS8yN2sC3cUElMEMfP3vqqKFp7GOYaaBBCqmaWBjmkjb" crossorigin="anonymous">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css" integrity="sha384-uIZNAcoEHVWMk8LrCSX95DJk6FQzH6zG00LQC9BykRY1UKKpkDzDhbDLYQ1Ho3mI" crossorigin="anonymous">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="app.css?v=47">
+<link rel="stylesheet" href="app.css?v=48">
 </head>
 <body>
 <h1 class="sr">น้ำใกล้บ้านฉัน</h1>
@@ -85,6 +85,7 @@
     <p class="note" id="installIos" hidden>บน iPhone/iPad: แตะปุ่มแชร์ (สี่เหลี่ยมมีลูกศรชี้ขึ้น) ที่ Safari แล้วเลือก "เพิ่มลงในหน้าจอโฮม" จะได้ไอคอนเปิดได้เร็วเหมือนแอป</p>
   </div>
   <h3>เลเยอร์</h3>
+  <label class="chk"><input type="checkbox" id="chkDist" checked><span>สรุปรายอำเภอ (ทั้งจังหวัดในภาพเดียว)<br><span class="note">ระบายสีอำเภอตามสถานีวัดน้ำที่สถานะแย่ที่สุดในอำเภอนั้น ไม่ใช่ขอบเขตน้ำท่วม อำเภอที่ไม่มีสถานีวัดเป็นสีเทาเส้นประ (ไม่ได้แปลว่าปลอดภัย) ขึ้นเมื่อเลือกจังหวัด</span></span></label>
   <label class="chk"><input type="checkbox" id="chkRiver"><span>เส้นเชื่อมสถานีตามแม่น้ำ<br><span class="note">เป็นเส้นตรงระหว่างสถานี ไม่ใช่แนวแม่น้ำจริง เรียงต้นน้ำ→ปลายน้ำจากระดับท้องน้ำ (ประมาณ)</span></span></label>
   <div id="floodBox" hidden>
     <label class="chk"><input type="checkbox" id="chkFlood"><span>พื้นที่น้ำท่วมจากดาวเทียม (GISTDA)<br><span class="note">ภาพถ่ายดาวเทียม อาจล่าช้าและถูกเมฆบัง ไม่ใช่ประกาศทางการ</span></span></label>
@@ -172,6 +173,7 @@
     <section class="card" id="placeCard" hidden></section>
     <section class="card rain" id="rainCard" hidden aria-live="polite"></section>
     <section class="card dams" id="damCard" hidden aria-live="polite"></section>
+    <section class="card dams dists" id="distCard" hidden></section>
     <div class="actrow" id="actrow">
       <button class="rpbtn" id="btnReport" type="button">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.2C9 7.4 6.5 10.3 6.5 13.7a5.5 5.5 0 0 0 11 0C17.5 10.3 15 7.4 12 3.2z"/></svg>
@@ -205,6 +207,6 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" integrity="sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js" integrity="sha384-eXVCORTRlv4FUUgS/xmOyr66XBVraen8ATNLMESp92FKXLAMiKkerixTiBvXriZr" crossorigin="anonymous"></script>
-<script src="app.js?v=47"></script>
+<script src="app.js?v=48"></script>
 </body>
 </html>
