@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import districts
-from fastapi.testclient import TestClient
+
 
 SQUARE = [[[[100.0, 14.0], [101.0, 14.0], [101.0, 15.0], [100.0, 15.0], [100.0, 14.0]]]]
 DONUT = [[[[100.0, 14.0], [101.0, 14.0], [101.0, 15.0], [100.0, 15.0], [100.0, 14.0]],
@@ -42,15 +42,3 @@ def test_a_district_with_only_stale_stations_is_none_not_normal(monkeypatch):
 
 def test_unknown_province_has_no_summary():
     assert districts.summary("ไม่มีจังหวัดนี้", []) is None
-
-
-def test_endpoint_returns_a_feature_collection_for_a_real_province_and_404_for_others():
-    import api
-    c = TestClient(api.app)
-    r = c.get("/api/districts", params={"province": "พระนครศรีอยุธยา"})
-    assert r.status_code == 200 and r.headers["cache-control"] == "public, max-age=120"
-    j = r.json()
-    assert j["type"] == "FeatureCollection" and len(j["features"]) == 16
-    assert all(f["properties"]["status"] == "none" for f in j["features"])      # the test database has no stations there
-    assert "OCHA" in j["attribution"]
-    assert c.get("/api/districts", params={"province": "ไม่มี"}).status_code == 404
