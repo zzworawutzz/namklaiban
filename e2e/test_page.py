@@ -274,3 +274,39 @@ def test_gps_near_a_normal_station_that_is_over_halfway_up_the_bank_shows_only_t
     assert "≈ 2.6 ม.รทก." in elev and "60% ของตลิ่ง" in elev and "ไม่นำมาเทียบกับระดับน้ำ" in elev, elev
     assert not any(w in elev for w in ("สูงกว่า", "ต่ำกว่า", "ใกล้เคียง", "ระดับน้ำที่สถานี")), elev
     assert not errors
+
+
+def test_a_shared_point_link_opens_the_stations_around_that_point(page, site):
+    errors = watch(page)
+    page.goto(site + "/?lat=14.0312&lng=100.7311", wait_until="domcontentloaded")          # extra digits are rounded to about 100 m
+    page.wait_for_selector("#nearCard:not([hidden]) .nearbtn", timeout=30000)
+    card = page.inner_text("#nearCard")
+    assert "จุดที่แชร์" in card and "ท่าช้าง" in card, card                                   # the nearest station to that point is A
+    page.wait_for_selector("#elevBox b", timeout=20000)                                    # the ground height is shown like for a pinned home
+    assert not errors
+
+
+def test_bad_shared_point_links_are_ignored(page, site):
+    errors = watch(page)
+    for q in ("?lat=99&lng=10", "?lat=abc&lng=100", "?lat=14.0", "?lat=14&lng=1e9"):
+        page.goto(site + "/" + q, wait_until="domcontentloaded")
+        page.wait_for_selector("#sumBody .verdict", timeout=30000)
+        assert page.is_hidden("#nearCard"), q
+    assert not errors
+
+
+def test_share_button_gives_a_link_with_only_the_rounded_point(context, site):
+    context.add_init_script("window.__shared = []; navigator.share = function(d){ window.__shared.push(d.url); return Promise.resolve(); };")
+    page = context.new_page()
+    errors = watch(page)
+    page.goto(site + "/?lat=14.0312&lng=100.7311&station=A", wait_until="domcontentloaded")
+    page.wait_for_selector("#sumBody .verdict", timeout=30000)
+    context.grant_permissions(["geolocation"])
+    context.set_geolocation({"latitude": 14.201234, "longitude": 100.501234})              # this visitor's own position
+    page.evaluate("document.getElementById('btnMe').click()")
+    page.wait_for_selector("#btnSharePt", timeout=20000)
+    page.click("#btnSharePt")
+    until(page, "window.__shared.length === 1")
+    url = page.evaluate("window.__shared[0]")
+    assert url == site + "/?lat=14.201&lng=100.501", url                                  # 3 decimals, no station, nothing else
+    assert not errors
