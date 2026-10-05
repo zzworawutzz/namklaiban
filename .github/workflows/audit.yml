@@ -1,0 +1,21 @@
+# Once a month (and on demand: Actions -> audit -> Run workflow) checks the libraries the app runs on against the
+# public vulnerability databases with pip-audit. A known hole in one of them makes this job fail, and GitHub then
+# e-mails the owner. Only the runtime libraries (requirements.txt) are audited; the test tools never reach production.
+name: audit
+on:
+  schedule:
+    - cron: "0 3 5 * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pip-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+      - run: pip install pip-audit
+      - run: pip-audit -r requirements.txt
