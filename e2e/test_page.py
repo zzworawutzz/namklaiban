@@ -329,3 +329,15 @@ def test_dam_card_lists_the_big_dams_of_the_basin_with_the_caveat(page, site):
     assert "เขื่อนทดสอบหนึ่ง" in text and "110%" in text and "ระบายออก 43 ล้าน ลบ.ม./วัน" in text and "เขื่อนทดสอบสอง" in text and "61%" in text, text
     assert "และอีก 4 แห่ง" in text and "ไม่ได้บอกว่าจะท่วมหรือไม่ท่วม" in text and "1784" in text
     assert not errors
+
+
+def test_forecast_days_start_today_and_are_all_labelled_even_though_the_answer_also_lists_past_days(page, site):
+    errors = watch(page)
+    open_page(page, site)
+    page.wait_for_selector("#rainCard:not([hidden])", timeout=15000)
+    days = page.eval_on_selector_all("#rainCard .day", "els => els.map(e => e.innerText.replace(/\\s+/g, ' ').trim())")
+    assert len(days) == 3, days                                                          # exactly today, tomorrow, the day after
+    assert [d.split(" ")[0] for d in days] == ["วันนี้", "พรุ่งนี้", "มะรืนนี้"], days
+    assert "undefined" not in page.inner_text("#rainCard")
+    assert days[0].startswith("วันนี้ 6 มม.") and days[1].startswith("พรุ่งนี้ 4 มม.") and days[2].startswith("มะรืนนี้ 2 มม."), days   # the past days (31-33 mm) never appear as forecast
+    assert not errors

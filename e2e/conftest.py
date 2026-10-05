@@ -103,9 +103,9 @@ def fake_forecast():
     th = datetime.now(timezone(timedelta(hours=7))).replace(minute=0, second=0, microsecond=0)
     times = [(th + timedelta(hours=i)).strftime("%Y-%m-%dT%H:00") for i in range(-72, 72)]
     mm = [10.0 if i < 0 and i % 6 == 0 else (2.0 if 3 <= i <= 8 else 0.0) for i in range(-72, 72)]
-    days = [(th + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(3)]
+    days = [(th + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(-3, 3)]          # like the real answer with past_days=3: three past days first
     return {"hourly": {"time": times, "precipitation": mm, "precipitation_probability": [40] * len(times)},
-            "daily": {"time": days, "precipitation_sum": [6.0, 4.0, 2.0], "precipitation_probability_max": [60, 50, 40]}}
+            "daily": {"time": days, "precipitation_sum": [31.0, 32.0, 33.0, 6.0, 4.0, 2.0], "precipitation_probability_max": [91, 92, 93, 60, 50, 40]}}
 
 
 def stub_outside_world(context):
