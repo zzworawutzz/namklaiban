@@ -34,14 +34,14 @@ def test_stations_are_requested_once_and_early(context, site):
     assert not errors
 
 
-def test_province_list_sorts_by_level_by_fast_rise_and_near_is_off_without_a_place(page, site):
+def test_province_list_sorts_by_level_and_by_fast_rise(page, site):
     open_page(page, site)
     rows = lambda: page.eval_on_selector_all("#resList .row", "els => els.map(e => e.innerText.split('\\n')[0])")
     assert rows() == ["ท่าช้าง", "บางบาล", "คลองหลวง"][:len(rows())] or rows()[0] == "ท่าช้าง"      # highest % first
     page.click("#resSort button[data-sort=fast]")
     assert page.inner_text("#resTitle").startswith("น้ำขึ้นเร็วที่สุดใน จ.ปทุมธานี")
     assert rows()[0] == "ท่าช้าง" and "ซม. ใน 3 ชม." in page.inner_text("#resList .row")
-    assert page.is_disabled("#resSort button[data-sort=near]")
+    assert not page.is_disabled("#resSort button[data-sort=near]")                 # never a dead button
     assert page.get_attribute("#resSort button[data-sort=fast]", "aria-pressed") == "true"
 
 
@@ -407,4 +407,17 @@ def test_follow_moves_the_dot_with_the_user_and_stops_when_switched_off(context,
     assert page.evaluate("window.__cleared") == 1                                      # switched off: the position watch is released
     page.evaluate("document.getElementById('btnClear').click()")
     until(page, "document.querySelectorAll('.mepos').length === 0")
+    assert not errors
+
+
+def test_near_me_tab_asks_for_the_position_and_then_sorts_by_distance(context, site):
+    context.grant_permissions(["geolocation"])
+    context.set_geolocation({"latitude": 14.201, "longitude": 100.501})              # next to station C, the farthest from A
+    page = context.new_page()
+    errors = watch(page)
+    open_page(page, site)
+    page.click("#resSort button[data-sort=near]")
+    until(page, "document.getElementById('resTitle').innerText.startsWith('ใกล้คุณที่สุดใน จ.ปทุมธานี')", 20)
+    assert page.evaluate("document.querySelector('#resList .row').innerText.split('\\n')[0]") == "คลองหลวง"
+    assert page.get_attribute("#resSort button[data-sort=near]", "aria-pressed") == "true"
     assert not errors
