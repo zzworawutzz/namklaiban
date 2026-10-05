@@ -163,7 +163,7 @@ def test_settings_menu_and_changes(conn):
     lw.handle_event(conn, user_event({"type": "location", "latitude": 14.36, "longitude": 100.55}), AT, rec)
     assert rec.last["quick"] == lw.MENU
     s = say(conn, rec, "ตั้งค่า")
-    assert "ทุกครั้งที่สถานะเปลี่ยน" in s["text"] and {"แจ้งเฉพาะเตือนภัย", "ไม่รบกวนกลางคืน", "ปิดสรุป"} <= set(s["quick"])
+    assert "ทุกครั้งที่สถานะเปลี่ยน" in s["text"] and {"แจ้งเฉพาะเตือนภัย", "ไม่รบกวนกลางคืน", "เปิดสรุป"} <= set(s["quick"]) and "ปิด" in s["text"]   # new followers start without the summary
     s = say(conn, rec, "แจ้งเฉพาะเตือนภัย")
     assert "เฉพาะตอนที่ถึง" in s["text"] and "แจ้งทุกระดับ" in s["quick"]
     say(conn, rec, "ไม่รบกวนกลางคืน")

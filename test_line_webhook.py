@@ -213,3 +213,28 @@ def test_snooze_command_button_and_cancel(conn):
     run(conn, {"type": "postback", "replyToken": "r", "source": {"userId": "U1"}, "postback": {"data": "act=snooze"}})
     assert subs(conn)[0]["snooze_until"] == "2026-10-01T22:30:00Z"
     assert "กลับมาแจ้งเตือน" in run(conn, text("เลิกพัก"))[0] and subs(conn)[0]["snooze_until"] is None
+
+
+def test_new_followers_start_without_the_daily_summary_and_can_turn_it_on(conn):
+    (r,) = run_full(conn, loc())
+    assert subs(conn)[0]["digest"] == 0
+    assert "ปิดไว้ก่อน" in r["text"] and 'พิมพ์ "เปิดสรุป"' in r["text"]
+    assert "จะส่งสรุปสถานการณ์" in run(conn, text("เปิดสรุป"))[0] and subs(conn)[0]["digest"] == 1
+
+
+def test_the_old_default_is_one_switch_away(conn, monkeypatch):
+    monkeypatch.setattr(lw, "NEW_USER_DIGEST", 1)
+    (r,) = run_full(conn, loc())
+    assert subs(conn)[0]["digest"] == 1 and "ปิดไว้ก่อน" not in r["text"] and 'พิมพ์ "เปิดสรุป"' not in r["text"]
+
+
+def test_a_signup_while_the_quota_is_nearly_gone_is_told_so(conn, monkeypatch):
+    import notify
+    monkeypatch.setattr(notify, "line_quota", lambda: (300, 296))
+    (r,) = run_full(conn, loc())
+    assert "โควตาข้อความของบอตเดือนนี้ใกล้เต็ม" in r["text"] and "เฉพาะระดับเตือนภัย" in r["text"]
+    assert "ใกล้เต็ม" in run(conn, text("เปิดสรุป"))[0]                                    # turning the summary on says the same
+    conn.execute("DELETE FROM subscriptions"); conn.execute("DELETE FROM alert_state"); conn.commit()
+    monkeypatch.setattr(notify, "line_quota", lambda: (300, 20))
+    (r,) = run_full(conn, loc())
+    assert "ใกล้เต็ม" not in r["text"]

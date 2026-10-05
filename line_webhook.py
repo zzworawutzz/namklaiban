@@ -25,6 +25,7 @@ import os
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 
+import budget
 import cards
 import core
 import floodreports
@@ -36,6 +37,7 @@ from notify import _invoke, message, province_of, public_url, report_link
 
 MAX_SUBSCRIBERS = int(os.environ.get("MAX_SUBSCRIBERS", "50"))   # people, not places
 MAX_PLACES = 3
+NEW_USER_DIGEST = 1 if os.environ.get("NEW_USER_DIGEST", "0") == "1" else 0   # new followers start without the daily summary: it is ~30 of the 300 monthly messages each
 PLACE_LABELS = ["บ้านของคุณ", "จุดที่ 2", "จุดที่ 3"]
 SAME_PLACE_KM = 0.2
 PLACES_CMD = {"ตำแหน่งของฉัน", "จุดที่บันทึก", "places"}
@@ -202,7 +204,7 @@ def handle_event(conn, ev, at, reply):
         on = 1 if text in DIGEST_ON else 0
         conn.execute("UPDATE subscriptions SET digest=? WHERE channel='line' AND target=?", (on, user))
         conn.commit()
-        return _reply(reply, token, f"จะส่งสรุปสถานการณ์ให้{report.digest_label()} (พิมพ์ \"ปิดสรุป\" เพื่อหยุด)" if on
+        return _reply(reply, token, f"จะส่งสรุปสถานการณ์ให้{report.digest_label()} (พิมพ์ \"ปิดสรุป\" เพื่อหยุด)\n" + _quota_note(conn, at).strip() if on
                       else "หยุดส่งสรุปแล้ว ยังแจ้งเตือนเมื่อสถานะเปลี่ยนตามเดิม (พิมพ์ \"เปิดสรุป\" เพื่อเปิดใหม่)",
                       quick=cards.quick(MENU))
     if text and _lookup(conn, user, token, text, at, reply):
@@ -274,6 +276,13 @@ def _send_report(conn, reply, token, prov, at):
            cards.quick(MENU))
 
 
+def _quota_note(conn, at):
+    """Said to someone who has just signed up (or turned the summary on) while this month's message quota is nearly used up."""
+    if budget.Budget(conn, at).allow(False):
+        return ""
+    return "⚠ โควตาข้อความของบอตเดือนนี้ใกล้เต็ม จึงแจ้งเฉพาะระดับเตือนภัยจนถึงต้นเดือนหน้า (สรุปและการเตือนอื่นๆ พักไว้ก่อน)\n\n"
+
+
 def _snooze_text(sub, at):
     """"พักถึง 18:30 น." while a pause is running, otherwise None."""
     until = sub["snooze_until"]
@@ -326,11 +335,18 @@ def _subscribe(conn, user, token, m, at, reply):
         return _reply(reply, token, "ขออภัย ตอนนี้รับผู้ใช้เต็มแล้ว")
     if not places:
         st = _nearest(conn, lat, lng, at)
-        _insert_place(conn, user, lat, lng, PLACE_LABELS[0], st, {"digest": 1, "notify_level": "all", "quiet": 0})
-        head = ("บันทึกตำแหน่งแล้ว จะแจ้งเตือนเมื่อสถานีใกล้บ้านเปลี่ยนสถานะ และส่งสรุปสถานการณ์ "
-                f"{report.digest_label()} "
-                "(เก็บเฉพาะตำแหน่งนี้ พิมพ์ \"ตั้งค่า\" เปลี่ยนระดับแจ้งเตือน/ช่วงไม่รบกวน \"ปิดสรุป\" หยุดสรุป "
-                "\"ส่งตำแหน่งอีกจุดเพื่อติดตามเพิ่มได้สูงสุด 3 จุด\" หรือ \"ยกเลิก\" เพื่อลบ)\n\n")
+        _insert_place(conn, user, lat, lng, PLACE_LABELS[0], st, {"digest": NEW_USER_DIGEST, "notify_level": "all", "quiet": 0})
+        if NEW_USER_DIGEST:
+            head = ("บันทึกตำแหน่งแล้ว จะแจ้งเตือนเมื่อสถานีใกล้บ้านเปลี่ยนสถานะ และส่งสรุปสถานการณ์ "
+                    f"{report.digest_label()} "
+                    "(เก็บเฉพาะตำแหน่งนี้ พิมพ์ \"ตั้งค่า\" เปลี่ยนระดับแจ้งเตือน/ช่วงไม่รบกวน \"ปิดสรุป\" หยุดสรุป "
+                    "\"ส่งตำแหน่งอีกจุดเพื่อติดตามเพิ่มได้สูงสุด 3 จุด\" หรือ \"ยกเลิก\" เพื่อลบ)\n\n")
+        else:
+            head = ("บันทึกตำแหน่งแล้ว จะแจ้งเตือนเมื่อสถานีใกล้บ้านเปลี่ยนสถานะ ส่วนสรุปสถานการณ์ปิดไว้ก่อนเพื่อไม่ให้ข้อความเยอะ "
+                    f"พิมพ์ \"เปิดสรุป\" ถ้าต้องการรับสรุป{report.digest_label()} "
+                    "(เก็บเฉพาะตำแหน่งนี้ พิมพ์ \"ตั้งค่า\" เปลี่ยนระดับแจ้งเตือน/ช่วงไม่รบกวน "
+                    "\"ส่งตำแหน่งอีกจุดเพื่อติดตามเพิ่มได้สูงสุด 3 จุด\" หรือ \"ยกเลิก\" เพื่อลบ)\n\n")
+        head += _quota_note(conn, at)
         return _reply(reply, token, head + (message({"label": PLACE_LABELS[0]}, st) if st else
                                             "ตอนนี้ยังไม่มีสถานีใกล้บ้านที่ข้อมูลล่าสุด"), quick=cards.quick(MENU))
     for p in places:

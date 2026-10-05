@@ -178,9 +178,10 @@ def test_cron_accepts_separate_external_key(pg, monkeypatch):
 
 
 
-def test_line_settings_and_group_on_postgres(pg):
+def test_line_settings_and_group_on_postgres(pg, monkeypatch):
     import test_line_features as tl
     import line_webhook as lw
+    monkeypatch.setattr(lw, "NEW_USER_DIGEST", 1)   # the summary counts below need the follower to have it on
     rec = tl.Recorder()
     with db.connect() as c:
         c.execute("CREATE TABLE subscriptions(id BIGSERIAL PRIMARY KEY, channel TEXT NOT NULL, target TEXT NOT NULL,"

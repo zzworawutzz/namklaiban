@@ -114,7 +114,8 @@ def test_user_cap_counts_people_not_places(conn, monkeypatch):
     assert "เต็ม" in rec.last[0]
 
 
-def test_alerts_use_the_label_of_each_place_and_morning_report_is_sent_once_per_province(conn):
+def test_alerts_use_the_label_of_each_place_and_morning_report_is_sent_once_per_province(conn, monkeypatch):
+    monkeypatch.setattr(lw, "NEW_USER_DIGEST", 1)   # this test is about the summary, so the follower has it switched on
     rec = Rec()
     lw.handle_event(conn, loc(14.2, 99.0), AT, rec)
     lw.handle_event(conn, loc(14.25, 99.05), AT, rec); pick(conn, rec, 0)   # a second place ~7 km away, same province
