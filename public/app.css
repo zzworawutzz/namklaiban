@@ -350,3 +350,10 @@ svg.chart{width:100%;height:auto;display:block}
   .row2>.provpill:not(.sub) select{width:140px;max-width:140px;text-overflow:ellipsis}
   .row2.more{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 24px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 24px),transparent)}   /* fade = "there is more to scroll" */
 }
+
+/* "you are here": a solid dot with a ring that pulses outwards */
+.mepos{position:relative}
+.mepos .medot{position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:#1a73e8;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);box-sizing:border-box}
+.mepos .mering{position:absolute;left:0;top:0;width:22px;height:22px;border-radius:50%;background:#1a73e8;opacity:.5;animation:mepulse 1.8s ease-out infinite}
+@keyframes mepulse{0%{transform:scale(.6);opacity:.55}100%{transform:scale(3);opacity:0}}
+@media (prefers-reduced-motion:reduce){.mepos .mering{animation:none;opacity:.25;transform:scale(1.8)}}

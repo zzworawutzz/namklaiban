@@ -435,13 +435,34 @@ function sharedPoint(){
   var la = parseFloat(QS.get("lat")), ln = parseFloat(QS.get("lng"));
   return (isFinite(la) && isFinite(ln) && la>=5 && la<=21 && ln>=97 && ln<=106) ? {lat:+la.toFixed(3), lng:+ln.toFixed(3), kind:"shared", label:"จุดที่แชร์"} : null;
 }
+var followId = null, followAt = null;
+function stopFollow(){
+  if(followId!==null && navigator.geolocation) navigator.geolocation.clearWatch(followId);
+  followId = null; followAt = null; var c = $("chkFollow"); if(c) c.checked = false;
+}
+function startFollow(){
+  if(!navigator.geolocation){ say("เบราว์เซอร์นี้ไม่รองรับการระบุตำแหน่ง"); stopFollow(); return; }
+  say("กำลังติดตามตำแหน่งของคุณ…", true);
+  followId = navigator.geolocation.watchPosition(function(p){
+    if(followId===null || p.coords.accuracy>500) return;                        // a rough fix (cell tower) would only make the dot jump about
+    var pt = {lat:p.coords.latitude, lng:p.coords.longitude};
+    if(!origin || origin.kind!=="me" || !followAt || kmBetween(pt, followAt)>=1){   // first fix, or 1 km further on: look up the nearest stations again
+      followAt = pt; setOrigin({lat:pt.lat, lng:pt.lng, kind:"me"}); return;
+    }
+    origin.lat = pt.lat; origin.lng = pt.lng;
+    if(originLayer && originLayer.setLatLng) originLayer.setLatLng([pt.lat,pt.lng]);
+    if(!map.getBounds().pad(-0.15).contains([pt.lat,pt.lng])) map.panTo([pt.lat,pt.lng]);   // keep the dot on screen
+  }, function(){ say("ติดตามตำแหน่งไม่ได้ กรุณาอนุญาตการเข้าถึงตำแหน่ง"); stopFollow(); },
+  {enableHighAccuracy:true, maximumAge:5000, timeout:20000});
+}
 function setOrigin(o){
+  if(followId!==null && (!o || o.kind!=="me")) stopFollow();   // a pinned home or an area replaces "me"
   origin = o;
   if(originLayer){ map.removeLayer(originLayer); originLayer=null; }
   if(o){
     originLayer = (o.kind==="home")
       ? L.marker([o.lat,o.lng],{icon:L.divIcon({className:"",iconSize:[30,30],iconAnchor:[15,15],html:'<svg width="30" height="30" viewBox="0 0 26 26" aria-hidden="true"><path d="M2 13 L13 2 L24 13 L21 13 L21 23 L5 23 L5 13 Z" fill="#0b6e8f" stroke="#fff" stroke-width="2"/></svg>'}),title:"บ้านของฉัน"}).addTo(map)
-      : L.circleMarker([o.lat,o.lng],{radius:8,color:"#fff",weight:2,fillColor:"#0b6e8f",fillOpacity:1}).addTo(map);
+      : L.marker([o.lat,o.lng],{icon:L.divIcon({className:"mepos",iconSize:[22,22],iconAnchor:[11,11],html:'<span class="mering"></span><span class="medot"></span>'}),title:"ตำแหน่งของคุณ",keyboard:false,zIndexOffset:900}).addTo(map);
   }
   $("btnClear").hidden = !o;
   if((!o || o.kind!=="area") && $("tam").value!=="") $("tam").value = "";   // another kind of place replaces the picked subdistrict
@@ -820,6 +841,7 @@ map.on("click",function(e){
   pinMode=false; $("btnPin").setAttribute("aria-pressed","false"); $("btnPin").textContent="ย้ายหมุดบ้าน"; map.getContainer().style.cursor="";
   setOrigin({lat:e.latlng.lat,lng:e.latlng.lng,kind:"home"});
 });
+$("chkFollow").addEventListener("change",function(){ if(this.checked) startFollow(); else { stopFollow(); say(""); } });
 $("btnClear").addEventListener("click",function(){ $("btnPin").textContent="ปักหมุดบ้านฉัน"; setOrigin(null); closeLayers(); });
 $("btnMe").addEventListener("click",function(){
   if(!navigator.geolocation){ say("เบราว์เซอร์นี้ไม่รองรับการระบุตำแหน่ง ลองปักหมุดบ้านแทน"); return; }
