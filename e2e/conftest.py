@@ -68,7 +68,8 @@ def site(tmp_path_factory):
     dbfile = tmp_path_factory.mktemp("e2e") / "water.db"
     build_database(dbfile)
     port = _free_port()
-    env = {**os.environ, "WATER_DB": str(dbfile), "RATE_LIMIT_PER_MIN": "0", "PYTHONPATH": str(ROOT)}
+    env = {**os.environ, "WATER_DB": str(dbfile), "RATE_LIMIT_PER_MIN": "0", "PYTHONPATH": str(ROOT),
+           "CRON_SECRET": "e2e-secret", "WATCH_PROVINCES": "ปทุมธานี"}
     for k in ("DATABASE_URL", "POSTGRES_URL", "LINE_CHANNEL_TOKEN", "LINE_CHANNEL_SECRET"):
         env.pop(k, None)
     proc = subprocess.Popen([sys.executable, "-m", "uvicorn", "api:app", "--port", str(port), "--log-level", "warning"],
