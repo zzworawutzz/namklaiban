@@ -317,3 +317,22 @@ def test_silent_message_when_no_other_station_reports():
     text = notify.stale_message({"label": "บ้าน"}, _silent(distance_km=1.2), None)
     assert "(บ้าน)" in text and "ยังไม่มีสถานีอื่นใกล้เคียงที่ส่งข้อมูลมาแทน" in text and "ราว 8 ชม." in text
     assert "ราว 3 วัน" in notify.stale_message({"label": None}, _silent(age_min=3 * 24 * 60, distance_km=1.2), None)    # days once it is long
+
+
+def test_when_one_agency_goes_quiet_but_others_report_the_people_near_its_stations_are_told(tmp_path, monkeypatch):
+    """6 Oct 2026: HII and FOP stopped publishing, RID and EGAT carried on. Our ingest was fine, so this is "those stations went quiet"
+    and must be said, unlike a failure of our own ingest where nothing reports."""
+    c, out, run = _run(tmp_path, monkeypatch, _silent(source="HII"))
+    hii = [_silent(source="HII", id=f"h{i}", name=f"เอชไอไอ{i}", lat=15.0 + i, lng=100.0) for i in range(5)]
+    rid = [_station(source="RID", id=f"r{i}", name=f"อาร์ไอดี{i}", lat=17.0 + i, lng=100.0, status="alert", pct_of_bank=105.0, trend=None, eta_to_bank_h=None) for i in range(6)]
+    monkeypatch.setattr(notify.core, "latest", lambda conn, a: [_silent(source="HII")] + hii + rid)
+    assert notify.run(c, AT, {"stdout": lambda t, m: out.append(m)}) == (1, 0)
+    assert "ไม่ส่งข้อมูลใหม่" in out[0] and "อาร์ไอดี" in out[0]                                  # told, and which station is used instead
+    assert notify.run(c, AT, {"stdout": lambda t, m: out.append(m)}) == (0, 0)                      # once
+
+
+def test_when_every_agency_is_quiet_nobody_is_told(tmp_path, monkeypatch):
+    c, out, run = _run(tmp_path, monkeypatch, _silent(source="HII"))
+    everyone = [_silent(source=s, id=f"{s}{i}", name=f"{s}{i}", lat=15.0 + i, lng=100.0) for s in ("HII", "RID") for i in range(6)]
+    monkeypatch.setattr(notify.core, "latest", lambda conn, a: [_silent(source="HII")] + everyone)
+    assert notify.run(c, AT, {"stdout": lambda t, m: out.append(m)}) == (0, 0) and out == []        # our ingest, or the whole source: the watchdog's job

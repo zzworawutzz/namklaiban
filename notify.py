@@ -33,7 +33,7 @@ import budget
 import dams
 import sendlog
 import report
-from ingest import TZ_TH, init_db, utc_now
+from ingest import STALE_MIN, TZ_TH, init_db, utc_now
 
 LINE_PUSH = "https://api.line.me/v2/bot/message/push"
 LABEL = {"normal": "ปกติ", "watch": "เฝ้าระวัง", "alert": "เตือนภัย", "unknown": "ไม่ทราบ"}
@@ -161,7 +161,10 @@ def message(sub, st):
     return "\n".join(lines)
 
 
-STALE_NOTICE_MAX_SHARE = 0.5  # when this share of ALL stations is silent the fault is ours (ingest or the source), not one station's: say nothing, the watchdog tells the owner
+STALE_NOTICE_HEALTHY_MIN_STATIONS = 5   # an agency this big with at least...
+STALE_NOTICE_HEALTHY_SHARE = 0.5        # ...this share of its stations reporting is "alive". If NO agency is alive, the fault is ours (our
+                                        # ingest) or the whole source: say nothing, the watchdog tells the owner. If some are alive and others
+                                        # are silent, one agency has stopped publishing and the people near its stations should hear it.
 STALE_NOTICE_MAX_H = 24 * 7   # ...but a station silent for over a week is more likely retired than broken: no message
 STALE_NOTICE_H = 6        # tell a subscriber when the station nearest to them has been silent this long while its last reading was high
 EARLY_WITHIN_H = 6        # warn when the nearest station is rising and should reach the bank within this many hours
@@ -278,7 +281,9 @@ def run(conn, at=None, senders=SENDERS):
     sent = failed = 0
     reports = [r for r in floodreports.active(conn, at) if r["confirmed"] >= REPORT_MIN_CONFIRMED]
     bud = budget.Budget(conn, at)
-    outage = bool(rows) and sum(1 for r in rows if r["stale"]) / len(rows) >= STALE_NOTICE_MAX_SHARE   # everything old: not "this station went quiet"
+    shares = core.agency_shares(rows, STALE_MIN)
+    outage = bool(rows) and not any(a["stations"] >= STALE_NOTICE_HEALTHY_MIN_STATIONS and a["recent"] / a["stations"] >= STALE_NOTICE_HEALTHY_SHARE
+                                    for a in shares.values())   # nobody is reporting: not "this station went quiet"
     ok = lambda sub, urgent: sub["channel"] != "line" or bud.allow(urgent)   # quota nearly used up: only alert-level news goes out
     groups = {}   # (channel, target) -> alerts due this round; one person with several saved places gets ONE message
 

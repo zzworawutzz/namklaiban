@@ -211,3 +211,32 @@ def test_health_monitor_with_an_empty_database_says_no_stations(tmp_path, monkey
     api._ready.clear()
     r = TestClient(api.app).get("/health/monitor")
     assert r.status_code == 503 and "no stations" in r.json()["problems"]
+
+
+def _fake_rows(agencies, now_ts="2026-10-01T16:00:00Z"):
+    """agencies: {name: (stations, how many of them have a reading 10 min old; the rest are 5 h old)}"""
+    rows = []
+    for name, (n, recent) in agencies.items():
+        for i in range(n):
+            fresh = i < recent
+            rows.append({"id": f"{name}{i}", "source": name, "ts": now_ts if fresh else "2026-10-01T11:00:00Z", "stale": not fresh,
+                         "age_min": 10 if fresh else 300})
+    return rows
+
+
+def test_health_monitor_fails_when_a_whole_agency_goes_quiet_while_others_report(client, monkeypatch):
+    _ingest_ran(5)
+    monkeypatch.setattr(api.core, "latest", lambda c, at, *a, **k: _fake_rows({"HII": (330, 6), "FOP": (89, 2), "RID": (314, 300), "EGAT": (72, 70)}))
+    r = client.get("/health/monitor")
+    assert r.status_code == 503 and r.json()["ok"] is False
+    probs = " | ".join(r.json()["problems"])
+    assert "agency HII has gone quiet: 6 of 330" in probs and "agency FOP has gone quiet: 2 of 89" in probs and "RID" not in probs and "EGAT" not in probs
+    assert r.json()["agencies"]["RID"] == {"stations": 314, "recent": 300}
+    assert r.json()["ingest_ok"] is True and r.json()["latest_reading_age_min"] is not None        # the old checks alone would have said 200
+
+
+def test_health_monitor_tolerates_the_normal_share_of_dead_stations_and_small_agencies(client, monkeypatch):
+    _ingest_ran(5)
+    monkeypatch.setattr(api.core, "latest", lambda c, at, *a, **k: _fake_rows({"HII": (330, 295), "FOP": (89, 88), "RID": (314, 295), "EGAT": (72, 69), "TINY": (6, 0)}))
+    r = client.get("/health/monitor")
+    assert r.status_code == 200 and r.json()["problems"] == []                                       # ~11 % dead HII stations are normal; a 6-station agency is too small to judge

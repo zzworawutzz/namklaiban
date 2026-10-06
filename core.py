@@ -160,6 +160,18 @@ def over_bank_text(cm):
     return ("สูงกว่าตลิ่งราว " if cm > 0 else "ต่ำกว่าตลิ่งราว ") + f"{abs(cm)} ซม."
 
 
+def agency_shares(rows, max_age_min):
+    """{agency: {"stations": n, "recent": how many have a reading no older than max_age_min}}. ThaiWater's four agencies
+    (HII, RID, FOP, EGAT) publish independently, so one can go quiet while the rest, and our own ingest, are fine."""
+    out = {}
+    for r in rows:
+        a = out.setdefault(r.get("source") or "?", {"stations": 0, "recent": 0})
+        a["stations"] += 1
+        if r.get("age_min") is not None and r["age_min"] <= max_age_min:
+            a["recent"] += 1
+    return out
+
+
 def bank_data_quality(rows, limit=10):
     """How trustworthy the bank figures are, for the owner (GET /api/cron/stats). Looks only at fresh readings and sorts each
     station into one of: fine, missing a level or the bank, bank not above the river bed (so the % is meaningless), far above

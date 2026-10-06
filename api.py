@@ -134,6 +134,8 @@ def health():
 
 
 MONITOR_MAX_READING_AGE_MIN = 180   # no new reading at all for this long: the source (or our reading of it) has stopped
+MONITOR_AGENCY_MIN_STATIONS = 20    # an agency this big...
+MONITOR_AGENCY_MIN_RECENT = 0.5     # ...with fewer than this share of its stations reporting within MONITOR_MAX_READING_AGE_MIN has gone quiet
 
 
 @app.get("/health/monitor")
@@ -141,8 +143,12 @@ def health_monitor():
     """For an outside uptime monitor (cron-job.org, UptimeRobot...) that can only look at the HTTP status: 200 when data is
     flowing, 503 with the reason when ingest has failed for over an hour, no station exists, or no reading at all is newer than
     3 hours. /health itself always answers 200 (the web page reads it for its "data may be late" bar), so it cannot be used for this.
-    A share of stations being old is NOT a failure here: some agencies simply report less often."""
+    Also 503 when one whole agency (HII, RID, FOP, EGAT...) has gone quiet while the others still report: the newest-reading
+    test alone would pass that (6 Oct 2026: HII and FOP, 421 stations, stopped at the source while RID and EGAT kept going).
+    A few stations being old is NOT a failure: every agency has some dead ones."""
     h = health_data()
+    with conn() as c:
+        agencies = core.agency_shares(core.latest(c, now()), MONITOR_MAX_READING_AGE_MIN)
     problems = []
     if not h["stations"]:
         problems.append("no stations")
@@ -150,7 +156,11 @@ def health_monitor():
         problems.append("ingest has not succeeded recently" + (f" ({h['last_ingest_error']})" if h["last_ingest_error"] else ""))
     if h["latest_reading_age_min"] is not None and h["latest_reading_age_min"] > MONITOR_MAX_READING_AGE_MIN:
         problems.append(f"newest reading is {h['latest_reading_age_min']} min old")
-    body = {"ok": not problems, "problems": problems, **h}
+    for name, a in sorted(agencies.items()):
+        if a["stations"] >= MONITOR_AGENCY_MIN_STATIONS and a["recent"] / a["stations"] < MONITOR_AGENCY_MIN_RECENT:
+            problems.append(f"agency {name} has gone quiet: {a['recent']} of {a['stations']} stations reported in the last "
+                            f"{MONITOR_MAX_READING_AGE_MIN // 60} h")
+    body = {"ok": not problems, "problems": problems, "agencies": agencies, **h}
     return JSONResponse(body, status_code=503 if problems else 200, headers={"Cache-Control": "no-store"})
 
 
