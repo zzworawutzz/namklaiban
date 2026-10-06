@@ -148,3 +148,17 @@ def test_a_forged_forwarded_for_does_not_dodge_the_rate_limit_without_a_proxy(mo
     c = TestClient(api.app)
     codes = [c.get("/stations", headers={"x-forwarded-for": f"7.7.7.{i}"}).status_code for i in range(5)]
     assert codes[:3] == [200, 200, 200] and 429 in codes[3:]                         # a new invented address per request changes nothing
+
+
+def test_cross_site_writes_are_refused_but_our_own_pages_and_tools_can_post(client):
+    body = {"lat": 14.2, "lng": 100.5, "level": 2}
+    assert client.post("/api/flood-reports", json=body, headers={"origin": "https://evil.example", "x-forwarded-for": "4.4.4.1"}).status_code == 403
+    assert client.post("/api/flood-reports/1/flag", headers={"origin": "https://evil.example"}).status_code == 403
+    assert client.post("/api/flood-reports", json=body, headers={"origin": "http://testserver", "x-forwarded-for": "4.4.4.2"}).status_code == 201   # our own page
+    assert client.post("/api/flood-reports", json=body, headers={"x-forwarded-for": "4.4.4.3"}).status_code == 201                                     # a script: no Origin at all
+    assert client.get("/stations", headers={"origin": "https://evil.example"}).status_code == 200                                                        # reads stay open
+
+
+def test_a_cross_site_preflight_for_a_post_is_not_granted(client):
+    r = client.options("/api/flood-reports", headers={"origin": "https://evil.example", "access-control-request-method": "POST"})
+    assert r.status_code == 400 or "POST" not in r.headers.get("access-control-allow-methods", "")

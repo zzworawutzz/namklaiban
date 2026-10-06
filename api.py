@@ -49,7 +49,18 @@ HEALTH_MAX_INGEST_AGE_MIN = 60  # ingest runs every ~20 min; this long means it 
 _DOCS = os.environ.get("ENABLE_DOCS") == "1"
 app = FastAPI(title="น้ำใกล้บ้านฉัน API", version="0.2",
               docs_url="/docs" if _DOCS else None, redoc_url="/redoc" if _DOCS else None, openapi_url="/openapi.json" if _DOCS else None)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST"])
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"])   # the data is public to read; browsers refuse cross-site POSTs (no preflight allowance)
+
+
+@app.middleware("http")
+async def own_site_writes_only(request: Request, call_next):
+    """A page on another site must not make a visitor's browser file or flag flood reports (it would be counted against the
+    visitor's address). A write that carries an Origin header must come from our own host; scripts and tools send none."""
+    if request.method == "POST" and request.url.path.startswith("/api/flood-reports"):
+        origin = request.headers.get("origin")
+        if origin and urllib.parse.urlparse(origin).netloc != request.headers.get("host", ""):
+            return JSONResponse({"detail": "cross-site requests are not allowed"}, status_code=403)
+    return await call_next(request)
 
 
 @app.middleware("http")
