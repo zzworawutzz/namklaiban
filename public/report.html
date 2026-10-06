@@ -136,8 +136,9 @@ function render(rep){
     '<div class="legend"><span><i style="background:var(--alert)"></i>เตือนภัย</span><span><i style="background:var(--watch)"></i>เฝ้าระวัง</span><span><i style="background:var(--normal)"></i>ปกติ</span></div></div>';
   h += '<div class="card"><h2>น้ำสูงสุด '+rep.top.length+' อันดับ</h2>'+stationRows(rep.top,false)+'</div>';
   if(rep.rising.length) h += '<div class="card"><h2>กำลังสูงขึ้นเร็ว</h2>'+stationRows(rep.rising,true)+'</div>';
-  h += '<div class="card"><h2>ข้อความสำหรับแชร์</h2><pre id="txt">'+esc(rep.text)+'</pre><button class="btn primary" id="copy" type="button">คัดลอกข้อความ</button> <button class="btn" type="button" onclick="window.print()">พิมพ์</button> <span class="sub" id="copyMsg" aria-live="polite"></span></div>';
+  h += '<div class="card"><h2>ข้อความสำหรับแชร์</h2><pre id="txt">'+esc(rep.text)+'</pre><button class="btn primary" id="copy" type="button">คัดลอกข้อความ</button> <button class="btn" id="print" type="button">พิมพ์</button> <span class="sub" id="copyMsg" aria-live="polite"></span></div>';
   $("out").innerHTML = h;
+  $("print").addEventListener("click",function(){ window.print(); });   // not an onclick= attribute: the CSP no longer allows inline handlers
   $("copy").addEventListener("click",function(){
     var t = rep.text + "\n" + location.href.split("&api=")[0];
     var done = function(m){ $("copyMsg").textContent = m; };
