@@ -8,6 +8,7 @@ import boundaries
 from core import km
 
 DATA = Path(__file__).parent / "shelters_data.json"
+SOURCE_DATE = "พ.ค. 2567"   # the dataset's own "last updated" on catalog.disaster.go.th when shelters_data.json was built (6 Oct 2026); public/*.js|html repeat it
 FIELDS = ("lat", "lng", "name", "province", "district", "subdistrict", "capacity", "phone")
 
 
@@ -41,7 +42,7 @@ def directions_url(s):
 
 
 def line_text(items):
-    lines = ["ศูนย์พักพิงชั่วคราวใกล้คุณ (ข้อมูล ปภ. ปรับปรุงล่าสุด พ.ค. 2567 อาจไม่เป็นปัจจุบัน โทรสอบถามก่อนเดินทาง ฉุกเฉินโทร 1784)"]
+    lines = ["ศูนย์พักพิงชั่วคราวใกล้คุณ (ข้อมูล ปภ. ปรับปรุงล่าสุด " + SOURCE_DATE + " อาจไม่เป็นปัจจุบัน โทรสอบถามก่อนเดินทาง ฉุกเฉินโทร 1784)"]
     for i, s in enumerate(items, 1):
         row = f"{i}. {s['name']} · {s['distance_km']} กม. · ต.{s['subdistrict']} อ.{s['district']}"
         if s["capacity"]:

@@ -165,6 +165,7 @@ STALE_NOTICE_HEALTHY_MIN_STATIONS = 5   # an agency this big with at least...
 STALE_NOTICE_HEALTHY_SHARE = 0.5        # ...this share of its stations reporting is "alive". If NO agency is alive, the fault is ours (our
                                         # ingest) or the whole source: say nothing, the watchdog tells the owner. If some are alive and others
                                         # are silent, one agency has stopped publishing and the people near its stations should hear it.
+BELOW_BANK_PCT = 97       # water that was over the bank is "back below" it once it reads under this share of the bank (not 100: it would flap)
 STALE_NOTICE_MAX_H = 24 * 7   # ...but a station silent for over a week is more likely retired than broken: no message
 STALE_NOTICE_H = 6        # tell a subscriber when the station nearest to them has been silent this long while its last reading was high
 EARLY_WITHIN_H = 6        # warn when the nearest station is rising and should reach the bank within this many hours
@@ -219,6 +220,19 @@ def stale_message(sub, own, instead):
     else:
         lines.append("ยังไม่มีสถานีอื่นใกล้เคียงที่ส่งข้อมูลมาแทน")
     return "\n".join(lines + ["ควรตรวจสถานการณ์จริงและประกาศ ปภ. (โทร 1784)", FOOTER])
+
+
+def below_bank_message(sub, st):
+    """The water at the nearest station was over the bank and has dropped back under it. The status may be unchanged (still alert
+    level, which starts below 100 %), so no status message says this."""
+    where = f" ({sub['label']})" if sub["label"] else ""
+    lines = [f"น้ำใกล้บ้านฉัน{where}",
+             f"สถานี {st['name']} {st['province'] or ''} อยู่ห่าง {st['distance_km']} กม.",
+             f"✅ ระดับน้ำลดลงต่ำกว่าตลิ่งแล้ว ตอนนี้ {round(st['pct_of_bank'])}% ของตลิ่ง สถานะ: {LABEL[st['status']]}"]
+    if st.get("over_bank_cm") is not None:
+        lines.append(core.over_bank_text(st["over_bank_cm"]) + " (ประมาณจากตลิ่งต่ำสุดของสถานี)")
+    lines.append("ไม่ได้แปลว่าปลอดภัย: น้ำอาจขึ้นอีก และน้ำที่ท่วมขังในพื้นที่อาจระบายช้ากว่าแม่น้ำ ติดตามประกาศ ปภ. (โทร 1784)")
+    return "\n".join(lines + [FOOTER])
 
 
 def report_alert_message(sub, rep, dist_km):
@@ -311,7 +325,19 @@ def run(conn, at=None, senders=SENDERS):
         st = near[0]
         prev = sub["last_status"]
         changed = st["status"] != prev
+        pct = st["pct_of_bank"]
+        if pct is not None and pct >= 100 and st.get("over_bank_cm") is not None:
+            if not sub["was_over_bank"]:
+                conn.execute("UPDATE subscriptions SET was_over_bank=1 WHERE id=?", (sub["id"],))   # remembered, so the drop can be told
+        elif sub["was_over_bank"] and pct is not None and pct < BELOW_BANK_PCT and (
+                changed or (sub["notify_level"] == "alert" and st["status"] != "alert")):
+            conn.execute("UPDATE subscriptions SET was_over_bank=0 WHERE id=?", (sub["id"],))   # the status message covers it / not wanted
+            sub = dict(sub, was_over_bank=0)
         if not changed:
+            if sub["was_over_bank"] and pct is not None and pct < BELOW_BANK_PCT and not quiet_now and ok(sub, False):
+                queue(sub, "status", below_bank_message(sub, st), None, st["province"],
+                      "UPDATE subscriptions SET was_over_bank=0 WHERE id=?", (sub["id"],))
+                continue
             # 1) rising water that should reach the bank soon (the status itself has not changed yet)
             urgent = st["status"] == "alert"
             eta_soon = (st["trend"] == "rising" and st["eta_to_bank_h"] and st["eta_to_bank_h"] <= EARLY_WITHIN_H

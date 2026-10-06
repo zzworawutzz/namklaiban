@@ -240,3 +240,10 @@ def test_health_monitor_tolerates_the_normal_share_of_dead_stations_and_small_ag
     monkeypatch.setattr(api.core, "latest", lambda c, at, *a, **k: _fake_rows({"HII": (330, 295), "FOP": (89, 88), "RID": (314, 295), "EGAT": (72, 69), "TINY": (6, 0)}))
     r = client.get("/health/monitor")
     assert r.status_code == 200 and r.json()["problems"] == []                                       # ~11 % dead HII stations are normal; a 6-station agency is too small to judge
+
+
+def test_health_lists_agencies_that_have_gone_quiet_for_the_web_notice(client, monkeypatch):
+    monkeypatch.setattr(api.core, "latest", lambda c, at, *a, **k: _fake_rows({"HII": (330, 6), "RID": (314, 300), "TINY": (6, 0)}))
+    assert client.get("/health").json()["quiet_agencies"] == ["HII"]                  # too-small agencies are not judged
+    monkeypatch.setattr(api.core, "latest", lambda c, at, *a, **k: _fake_rows({"HII": (330, 295), "RID": (314, 300)}))
+    assert client.get("/health").json()["quiet_agencies"] == []

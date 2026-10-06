@@ -317,3 +317,42 @@ def check_backup_reminder(conn, at, send=None):
             pass
         print(f"backup reminder failed: {type(e).__name__}: {e}", file=sys.stderr)
     return None
+
+
+# ---- quarterly check of the shelter dataset ----------------------------------------------------
+# shelters_data.json is a one-off copy of the DDPM open dataset (published once a year). Nothing refreshes it by itself, and a
+# wrong shelter sends people to the wrong place, so a person looks at the source every 3 months. Same clock logic as the backup
+# reminder. SHELTER_REMIND=0 turns it off.
+SHELTER_KEY, SHELTER_EVERY_DAYS = "shelter_reminder", 90
+SHELTER_SOURCE_URL = "https://catalog.disaster.go.th/dataset/dpm-gd002"
+
+
+def check_shelter_reminder(conn, at, send=None):
+    """Returns 'remind' when the message was sent. Never raises."""
+    try:
+        target = os.environ.get("ADMIN_LINE_ID", "").strip()
+        if not target or os.environ.get("SHELTER_REMIND", "1") == "0":
+            return None
+        row = conn.execute("SELECT ts FROM alert_state WHERE name=?", (SHELTER_KEY,)).fetchone()
+        if row is None:   # first run: start the clock
+            conn.execute("INSERT INTO alert_state(name, ts) VALUES(?,?)", (SHELTER_KEY, _iso(at)))
+            conn.commit()
+            return None
+        if at - core.parse(row["ts"]) < timedelta(days=SHELTER_EVERY_DAYS):
+            return None
+        import shelters
+        _sender(conn, at, send)(target, f"🏠 น้ำใกล้บ้านฉัน: ถึงเวลาตรวจชุดข้อมูลศูนย์พักพิงของ ปภ. (ตรวจทุก 3 เดือน)\n"
+                                       f"ที่เว็บใช้อยู่: {len(shelters._all())} แห่ง ปรับปรุงล่าสุดของ ปภ. {shelters.SOURCE_DATE}\n"
+                                       f"เปิด {SHELTER_SOURCE_URL} ดู \"วันที่ปรับปรุงข้อมูลล่าสุด\" ถ้าใหม่กว่านี้ ให้บอก Claude เทียบและสร้างไฟล์ใหม่ด้วย build_shelters.py\n"
+                                       "(ปิดการเตือนนี้ด้วย env SHELTER_REMIND=0)")
+        conn.execute("DELETE FROM alert_state WHERE name=?", (SHELTER_KEY,))
+        conn.execute("INSERT INTO alert_state(name, ts) VALUES(?,?)", (SHELTER_KEY, _iso(at)))
+        conn.commit()
+        return "remind"
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        print(f"shelter reminder failed: {type(e).__name__}: {e}", file=sys.stderr)
+    return None

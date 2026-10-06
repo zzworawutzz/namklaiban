@@ -121,8 +121,10 @@ def health_data():
     ingest_age = int((at - core.parse(ok_run)).total_seconds() // 60) if ok_run else None
     reading_age = int((at - core.parse(last)).total_seconds() // 60) if last else None
     healthy = ingest_age is not None and ingest_age <= HEALTH_MAX_INGEST_AGE_MIN
+    quiet = sorted(n for n, a in core.agency_shares(rows, MONITOR_MAX_READING_AGE_MIN).items()
+                   if a["stations"] >= MONITOR_AGENCY_MIN_STATIONS and a["recent"] / a["stations"] < MONITOR_AGENCY_MIN_RECENT)
     return {"stations": len(rows), "stale": sum(r["stale"] for r in rows), "latest_reading": last,
-            "latest_reading_age_min": reading_age,
+            "latest_reading_age_min": reading_age, "quiet_agencies": quiet,   # same test as /health/monitor; the page turns it into a notice
             "last_ingest_age_min": ingest_age,
             "last_ingest_error": run["error"] if run and not run["ok"] else None,
             "ingest_ok": healthy}
@@ -443,6 +445,7 @@ def cron_ingest(authorization: Optional[str] = Header(None)):
         watchdog.check_line_quota(c, now())
         watchdog.check_silent(c, now())
         watchdog.check_backup_reminder(c, now())
+        watchdog.check_shelter_reminder(c, now())
     return {"stations": n_st, "new_readings": n_rd, "skipped": skipped, "pruned": pruned,
             "notifications_sent": sent, "notifications_failed": failed,
             "digests_sent": digests, "digests_failed": digest_failed}

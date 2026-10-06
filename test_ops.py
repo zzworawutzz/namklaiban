@@ -230,3 +230,21 @@ def test_stats_endpoint_reports_the_quality_of_the_bank_data(tmp_path, monkeypat
     bd = j["bank_data"]
     assert set(bd) >= {"fresh", "usable", "far_below", "missing", "too_high", "disagree", "bank_not_above_bed", "too_high_count"}
     assert bd["fresh"] == 0 and bd["too_high"] == []                                  # an empty database: nothing to be doubtful about
+
+
+def test_shelter_reminder_starts_a_clock_then_asks_for_a_check_every_three_months(tmp_path, monkeypatch):
+    c, out = make(tmp_path, monkeypatch=monkeypatch), []
+    send = lambda t, m: out.append(m)
+    assert watchdog.check_shelter_reminder(c, AT, send) is None and out == []
+    assert watchdog.check_shelter_reminder(c, AT + timedelta(days=89), send) is None
+    assert watchdog.check_shelter_reminder(c, AT + timedelta(days=91), send) == "remind"
+    assert "9081" in out[0] and "พ.ค. 2567" in out[0] and "catalog.disaster.go.th/dataset/dpm-gd002" in out[0] and "build_shelters.py" in out[0]
+    assert watchdog.check_shelter_reminder(c, AT + timedelta(days=120), send) is None
+    assert watchdog.check_shelter_reminder(c, AT + timedelta(days=182), send) == "remind"
+
+
+def test_shelter_reminder_can_be_turned_off(tmp_path, monkeypatch):
+    c = make(tmp_path, monkeypatch=monkeypatch)
+    monkeypatch.setenv("SHELTER_REMIND", "0")
+    assert watchdog.check_shelter_reminder(c, AT, lambda t, m: 1 / 0) is None
+    assert watchdog.check_shelter_reminder(c, AT + timedelta(days=200), lambda t, m: 1 / 0) is None

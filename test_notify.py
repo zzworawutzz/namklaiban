@@ -336,3 +336,43 @@ def test_when_every_agency_is_quiet_nobody_is_told(tmp_path, monkeypatch):
     everyone = [_silent(source=s, id=f"{s}{i}", name=f"{s}{i}", lat=15.0 + i, lng=100.0) for s in ("HII", "RID") for i in range(6)]
     monkeypatch.setattr(notify.core, "latest", lambda conn, a: [_silent(source="HII")] + everyone)
     assert notify.run(c, AT, {"stdout": lambda t, m: out.append(m)}) == (0, 0) and out == []        # our ingest, or the whole source: the watchdog's job
+
+
+def test_drop_back_below_the_bank_is_told_once_even_when_the_status_is_unchanged(tmp_path, monkeypatch):
+    over = _station(status="alert", pct_of_bank=108.0, trend=None, eta_to_bank_h=None, over_bank_cm=25)
+    c, out, run = _run(tmp_path, monkeypatch, over)
+    run()
+    assert c.execute("SELECT was_over_bank FROM subscriptions").fetchone()[0] == 1       # remembered
+    n = len(out)
+    below = _station(status="alert", pct_of_bank=98.0, trend=None, eta_to_bank_h=None, over_bank_cm=-5)
+    monkeypatch.setattr(notify.core, "latest", lambda conn, a: [below])
+    assert run() == (0, 0)                                                              # 98 % is not yet "back below": no flapping
+    monkeypatch.setattr(notify.core, "latest", lambda conn, a: [dict(below, pct_of_bank=95.0, over_bank_cm=-30)])
+    assert run() == (1, 0)
+    assert "ลดลงต่ำกว่าตลิ่งแล้ว" in out[-1] and "95%" in out[-1] and "ไม่ได้แปลว่าปลอดภัย" in out[-1]
+    assert run() == (0, 0) and c.execute("SELECT was_over_bank FROM subscriptions").fetchone()[0] == 0   # once
+
+
+def test_drop_below_the_bank_is_held_in_quiet_hours_and_alert_only_users_still_get_it(tmp_path, monkeypatch):
+    over = _station(status="alert", pct_of_bank=108.0, trend=None, eta_to_bank_h=None, over_bank_cm=25)
+    low = dict(over, pct_of_bank=95.0, over_bank_cm=-30)
+    c, out, run = _run(tmp_path, monkeypatch, over, sub_sql="quiet=1")
+    run()
+    monkeypatch.setattr(notify.core, "latest", lambda conn, a: [low])
+    night = datetime(2026, 10, 1, 17, 30, tzinfo=timezone.utc)                          # 00:30 Thai
+    assert notify.run(c, night, {"stdout": lambda t, m: out.append(m)}) == (0, 0)
+    assert c.execute("SELECT was_over_bank FROM subscriptions").fetchone()[0] == 1       # kept for after the quiet hours
+    assert notify.run(c, night + timedelta(hours=7), {"stdout": lambda t, m: out.append(m)}) == (1, 0)
+    c, out, run = _run(tmp_path, monkeypatch, over, sub_sql="notify_level='alert'")
+    run()
+    monkeypatch.setattr(notify.core, "latest", lambda conn, a: [low])                  # still alert level: alert-only users hear it too
+    assert run() == (1, 0) and "ลดลงต่ำกว่าตลิ่งแล้ว" in out[-1]
+
+
+def test_drop_below_the_bank_with_a_status_change_sends_only_the_status_message(tmp_path, monkeypatch):
+    over = _station(status="alert", pct_of_bank=108.0, trend=None, eta_to_bank_h=None, over_bank_cm=25)
+    c, out, run = _run(tmp_path, monkeypatch, over)
+    run()
+    monkeypatch.setattr(notify.core, "latest", lambda conn, a: [dict(over, status="watch", pct_of_bank=80.0, over_bank_cm=-60)])
+    assert run() == (1, 0) and "ลดลงต่ำกว่าตลิ่งแล้ว" not in out[-1]
+    assert c.execute("SELECT was_over_bank FROM subscriptions").fetchone()[0] == 0
