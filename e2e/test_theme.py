@@ -4,7 +4,7 @@ import pytest
 import contrast
 from conftest import open_page, stub_outside_world, watch
 
-DARK_BG, LIGHT_BG = "rgb(10, 23, 29)", "rgb(243, 246, 248)"
+DARK_BG, LIGHT_BG = "rgb(10, 18, 32)", "rgb(238, 243, 249)"
 
 
 def make_page(browser, scheme):
@@ -46,9 +46,9 @@ def test_the_browser_colour_follows_the_choice(browser, site):
     ctx, page = make_page(browser, "light")
     open_page(page, site)
     choose(page, "dark")
-    assert page.evaluate("[...document.querySelectorAll('meta[name=theme-color]')].map(m => m.content)") == ["#0a171d", "#0a171d"]
+    assert page.evaluate("[...document.querySelectorAll('meta[name=theme-color]')].map(m => m.content)") == ["#0a1220", "#0a1220"]
     choose(page, "auto")
-    assert page.evaluate("[...document.querySelectorAll('meta[name=theme-color]')].map(m => m.content)") == ["#f3f6f8", "#0a171d"]   # the originals, per device mode
+    assert page.evaluate("[...document.querySelectorAll('meta[name=theme-color]')].map(m => m.content)") == ["#eef3f9", "#0a1220"]   # the originals, per device mode
     ctx.close()
 
 
