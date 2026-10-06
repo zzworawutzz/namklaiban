@@ -209,3 +209,26 @@ def test_over_bank_text():
     assert core.over_bank_text(80) == "สูงกว่าตลิ่งราว 80 ซม."
     assert core.over_bank_text(-35) == "ต่ำกว่าตลิ่งราว 35 ซม."
     assert core.over_bank_text(0) == "น้ำเสมอระดับตลิ่ง" and core.over_bank_text(None) == ""
+
+
+def test_bank_data_quality_sorts_stations_into_who_is_fine_and_who_is_doubtful():
+    def r(i, lv, bk, gd, pct, stale=False):
+        return {"id": i, "name": "s" + str(i), "province": "p", "water_level": lv, "bank_level": bk, "ground_level": gd, "pct_of_bank": pct, "stale": stale}
+    rows = [r(1, 3.57, 2.75, -6.0, 107.0),            # fine: 82 cm above
+            r(2, 6.9, 2.75, -6.0, 130.0),             # 4.15 m above the bank: too high
+            r(3, 3.5, 2.75, -6.0, 80.0),              # above the bank but the % says below: disagree
+            r(4, 3.0, 3.0, 3.5, 50.0),                # bank not above the river bed
+            r(5, 1.0, 2.75, -6.0, 40.0),              # far below the bank: normal
+            r(6, None, 2.75, 0.0, None),              # no level: missing
+            r(7, 9.0, 2.75, -6.0, 200.0, stale=True)] # old reading: not looked at
+    q = core.bank_data_quality(rows)
+    assert (q["fresh"], q["usable"], q["far_below"], q["missing"]) == (6, 1, 1, 1)   # 6 fresh = 1 usable + 1 far below + 1 missing + 3 doubtful
+    assert [i["id"] for i in q["too_high"]] == [2] and q["too_high"][0]["cm"] == 415
+    assert [i["id"] for i in q["disagree"]] == [3] and [i["id"] for i in q["bank_not_above_bed"]] == [4]
+    assert q["too_high_count"] == q["disagree_count"] == q["bank_not_above_bed_count"] == 1
+
+
+def test_bank_data_quality_lists_are_capped_but_counted():
+    rows = [{"id": i, "name": "s", "province": "p", "water_level": 9.0 + i, "bank_level": 2.0, "ground_level": -5.0, "pct_of_bank": 150.0, "stale": False} for i in range(25)]
+    q = core.bank_data_quality(rows)
+    assert q["too_high_count"] == 25 and len(q["too_high"]) == 10 and q["too_high"][0]["id"] == 24      # the worst first

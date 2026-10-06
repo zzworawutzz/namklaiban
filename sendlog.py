@@ -8,7 +8,7 @@ import core
 from ingest import TZ_TH
 
 KEEP_DAYS = 60
-KINDS = ("status", "early", "fast", "report", "digest", "admin")   # admin = the owner's own alerts (watchdog)
+KINDS = ("status", "early", "fast", "report", "digest", "stale", "admin")   # admin = the owner's own alerts (watchdog)
 
 
 def record(conn, at, kind, province, ok=True):

@@ -426,6 +426,7 @@ def cron_stats(days: int = Query(7, ge=1, le=60), authorization: Optional[str] =
         out["db_mb"] = round(watchdog.db_size_mb(c), 1)
         out["db_limit_mb"] = watchdog.db_limit_mb()
         out["silent_groups"] = watchdog.silent_groups(c, at)
+        out["bank_data"] = core.bank_data_quality(core.latest(c, at))
         out["watch_provinces"] = watchdog.watched_provinces()
         row = c.execute("SELECT ts FROM alert_state WHERE name=?", (watchdog.BACKUP_KEY,)).fetchone()
         if row and os.environ.get("BACKUP_REMIND", "1") != "0":

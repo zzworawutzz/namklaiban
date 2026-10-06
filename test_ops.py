@@ -218,3 +218,15 @@ def test_stats_endpoint_also_reports_what_the_admin_page_shows(tmp_path, monkeyp
     monkeypatch.setattr(notify, "line_quota", lambda: 1 / 0)
     j = client.get("/api/cron/stats", headers=auth).json()
     assert "error" in j["line_quota"] and j["budget"] is None
+
+
+def test_stats_endpoint_reports_the_quality_of_the_bank_data(tmp_path, monkeypatch):
+    monkeypatch.setenv("WATER_DB", str(tmp_path / "s3.db"))
+    monkeypatch.setenv("CRON_SECRET", "sekret")
+    monkeypatch.setattr(notify, "line_quota", lambda: (None, 0))
+    api._ready.clear()
+    client = TestClient(api.app)
+    j = client.get("/api/cron/stats", headers={"Authorization": "Bearer sekret"}).json()
+    bd = j["bank_data"]
+    assert set(bd) >= {"fresh", "usable", "far_below", "missing", "too_high", "disagree", "bank_not_above_bed", "too_high_count"}
+    assert bd["fresh"] == 0 and bd["too_high"] == []                                  # an empty database: nothing to be doubtful about

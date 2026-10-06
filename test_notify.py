@@ -86,14 +86,14 @@ def _station(**kw):
 _n = iter(range(1000))
 
 
-def _run(tmp_path, monkeypatch, station, sub_sql="", at=AT, reports=()):
+def _run(tmp_path, monkeypatch, station, sub_sql="", at=AT, reports=(), world=()):
     d = tmp_path / str(next(_n)); d.mkdir()          # a fresh database per scenario
     c = setup(d)
     if sub_sql:
         c.execute("UPDATE subscriptions SET " + sub_sql)
     c.execute("UPDATE subscriptions SET last_status=?", (station["status"],))   # status already known: no change message
     c.commit()
-    monkeypatch.setattr(notify.core, "latest", lambda conn, a: [station])
+    monkeypatch.setattr(notify.core, "latest", lambda conn, a: [station] + list(world))
     for who, lat, lng in reports:
         fr.add(c, lat, lng, 3, None, "web", who, at)
     out = []
@@ -232,3 +232,88 @@ def test_alert_message_and_card_say_how_far_above_the_bank_when_it_is_known():
     assert "สูงกว่าตลิ่งราว 80 ซม." in str(cards.station_card(None, st))
     st["over_bank_cm"] = None
     assert "ตลิ่งราว" not in notify.message({"label": None}, st) and "ตลิ่งราว" not in str(cards.station_card(None, st))
+
+
+# ---- the station nearest to someone has gone quiet while it was high ----
+
+def _background(status="alert"):
+    """Four reporting stations far away with the same status as the silent one (so the subscriber's substitute station brings no
+    status change of its own): the rest of the country is as it was, so one silent station is just that station."""
+    pct = {"alert": 105.0, "watch": 80.0, "normal": 30.0}[status]
+    return [_station(id=f"bg{i}", name=f"พื้นหลัง{i}", lat=17.0 + i, lng=100.0, status=status, pct_of_bank=pct, trend=None, eta_to_bank_h=None) for i in range(4)]
+
+
+def _silent(**kw):
+    base = dict(stale=True, age_min=8 * 60, status="alert", pct_of_bank=105.0, trend=None, trend_pct_per_hr=None, eta_to_bank_h=None)
+    base.update(kw)
+    return _station(**base)
+
+
+def test_silent_high_station_is_reported_once_then_forgotten_when_it_reports_again(tmp_path, monkeypatch):
+    c, out, run = _run(tmp_path, monkeypatch, _silent(), world=_background())
+    assert run() == (1, 0)
+    assert "ไม่ส่งข้อมูลใหม่มาแล้วราว 8 ชม." in out[0] and "105%" in out[0] and "ไม่ใช่ระดับน้ำตอนนี้" in out[0]
+    assert "แทน" in out[0] and "พื้นหลัง" in out[0] and "1784" in out[0]                # the nearest station that does report is named
+    assert c.execute("SELECT stale_notified FROM subscriptions").fetchone()[0] is not None
+    assert c.execute("SELECT kind FROM send_log").fetchone()[0] == "stale"
+    assert run() == (0, 0)                                                      # not again while it stays silent
+    monkeypatch.setattr(notify.core, "latest", lambda conn, a: [_station(status="alert", pct_of_bank=105.0, trend=None, eta_to_bank_h=None)] + _background())
+    notify.run(c, AT, {"stdout": lambda t, m: out.append(m)})
+    assert c.execute("SELECT stale_notified FROM subscriptions").fetchone()[0] is None   # reporting again: ready for the next outage
+
+
+def test_silent_station_says_which_reporting_station_is_used_instead(tmp_path, monkeypatch):
+    c, out, run = _run(tmp_path, monkeypatch, _silent(), world=_background())
+    far = _station(id="s2", name="สถานีสำรอง", lat=14.4, lng=99.0, status="alert", pct_of_bank=95.0, trend=None, eta_to_bank_h=None)
+    monkeypatch.setattr(notify.core, "latest", lambda conn, a: [_silent(), far] + _background())
+    c.execute("UPDATE subscriptions SET last_status='alert'"); c.commit()
+    assert notify.run(c, AT, {"stdout": lambda t, m: out.append(m)}) == (1, 0)
+    assert "สถานีสำรอง" in out[0] and "แทน" in out[0]
+
+
+def test_no_silent_notice_when_it_does_not_matter(tmp_path, monkeypatch):
+    for name, station, sql in (("normal when last seen", _silent(status="normal", pct_of_bank=40.0), ""),
+                               ("quiet only 3 h", _silent(age_min=3 * 60), ""),
+                               ("retired: silent over a week", _silent(age_min=8 * 24 * 60), ""),
+                               ("only alert-level wanted, last reading was watch", _silent(status="watch", pct_of_bank=80.0), "notify_level='alert'"),
+                               ("never reported", _silent(age_min=None), "")):
+        c, out, run = _run(tmp_path, monkeypatch, station, sql, world=_background(station["status"]))
+        assert run() == (0, 0), name
+        assert c.execute("SELECT stale_notified FROM subscriptions").fetchone()[0] is None, name
+
+
+def test_silent_notice_respects_snooze_but_alert_level_gets_through_and_is_sent_after(tmp_path, monkeypatch):
+    later = (AT + timedelta(hours=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    c, out, run = _run(tmp_path, monkeypatch, _silent(status="watch", pct_of_bank=80.0), f"snooze_until='{later}'", world=_background("watch"))
+    assert run() == (0, 0) and c.execute("SELECT stale_notified FROM subscriptions").fetchone()[0] is None   # held, not lost
+    assert notify.run(c, AT + timedelta(hours=4), {"stdout": lambda t, m: out.append(m)}) == (1, 0)           # snooze over: now
+    c2, out2, run2 = _run(tmp_path, monkeypatch, _silent(), f"snooze_until='{later}'", world=_background())                        # alert level: not held back
+    assert run2() == (1, 0)
+
+
+def test_silent_notice_and_a_status_change_for_the_same_person_become_one_message(tmp_path, monkeypatch):
+    c, out, run = _run(tmp_path, monkeypatch, _silent(), world=_background())
+    fresh = _station(id="s2", name="สถานีสำรอง", lat=14.3, lng=99.0, status="watch", pct_of_bank=80.0, trend=None, eta_to_bank_h=None)
+    monkeypatch.setattr(notify.core, "latest", lambda conn, a: [_silent(), fresh] + _background())
+    c.execute("UPDATE subscriptions SET last_status='normal'"); c.commit()                # the substitute's status is news too
+    assert notify.run(c, AT, {"stdout": lambda t, m, flex=None: out.append((m, flex))}) == (1, 0)
+    assert len(out) == 1 and "ไม่ส่งข้อมูลใหม่" in out[0][0] and "สถานีสำรอง" in out[0][0] and out[0][1]["type"] == "carousel"
+
+
+def test_no_silent_notice_when_most_stations_are_silent_at_once(tmp_path, monkeypatch):
+    """A fault in our ingest (or the source) makes every station old together; that is not one station going quiet, and
+    must not send everyone near a high station a message. The owner is told by the watchdog."""
+    c, out, run = _run(tmp_path, monkeypatch, _silent())
+    others = [_silent(id=f"o{i}", name=f"อื่น{i}", lat=15.0 + i, lng=100.0) for i in range(3)]
+    monkeypatch.setattr(notify.core, "latest", lambda conn, a: [_silent()] + others)
+    assert notify.run(c, AT, {"stdout": lambda t, m: out.append(m)}) == (0, 0) and out == []
+    assert c.execute("SELECT stale_notified FROM subscriptions").fetchone()[0] is None
+    fine = [_station(id=f"f{i}", name=f"ปกติ{i}", lat=15.0 + i, lng=100.0, status="normal", pct_of_bank=30.0, trend=None, eta_to_bank_h=None) for i in range(5)]
+    monkeypatch.setattr(notify.core, "latest", lambda conn, a: [_silent()] + fine)          # one of six silent: that one really is quiet
+    assert notify.run(c, AT, {"stdout": lambda t, m: out.append(m)}) == (1, 0)
+
+
+def test_silent_message_when_no_other_station_reports():
+    text = notify.stale_message({"label": "บ้าน"}, _silent(distance_km=1.2), None)
+    assert "(บ้าน)" in text and "ยังไม่มีสถานีอื่นใกล้เคียงที่ส่งข้อมูลมาแทน" in text and "ราว 8 ชม." in text
+    assert "ราว 3 วัน" in notify.stale_message({"label": None}, _silent(age_min=3 * 24 * 60, distance_km=1.2), None)    # days once it is long

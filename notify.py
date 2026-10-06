@@ -161,6 +161,9 @@ def message(sub, st):
     return "\n".join(lines)
 
 
+STALE_NOTICE_MAX_SHARE = 0.5  # when this share of ALL stations is silent the fault is ours (ingest or the source), not one station's: say nothing, the watchdog tells the owner
+STALE_NOTICE_MAX_H = 24 * 7   # ...but a station silent for over a week is more likely retired than broken: no message
+STALE_NOTICE_H = 6        # tell a subscriber when the station nearest to them has been silent this long while its last reading was high
 EARLY_WITHIN_H = 6        # warn when the nearest station is rising and should reach the bank within this many hours
 EARLY_COOLDOWN_H = 6      # at most one early warning per subscriber per this many hours
 FAST_RISE_M = 0.5         # also warn when the nearest station rose this many metres in the last 3 hours...
@@ -196,6 +199,23 @@ def fast_message(sub, st):
         f"ตอนนี้ {round(st['pct_of_bank'])}% ของตลิ่ง ({LABEL[st['status']]})",
         "ควรติดตามสถานการณ์ใกล้ชิด และเตรียมยกของขึ้นที่สูงหากยังขึ้นต่อ (ดูจากระดับน้ำจริง ไม่ใช่ประกาศทางการ)",
         FOOTER])
+
+
+def stale_message(sub, own, instead):
+    """The nearest station has not reported for hours and its last reading was watch/alert level: the figure on the page or in an
+    earlier message may no longer be the water level. `instead` is the nearest station that IS reporting, or None."""
+    where = f" ({sub['label']})" if sub["label"] else ""
+    hours = int(own["age_min"] // 60)
+    silent = f"{hours} ชม." if hours < 48 else f"{hours // 24} วัน"
+    pct = "-" if own["pct_of_bank"] is None else f"{round(own['pct_of_bank'])}%"
+    lines = [f"น้ำใกล้บ้านฉัน{where}",
+             f"สถานี {own['name']} {own['province'] or ''} (ห่าง {own['distance_km']} กม.) ไม่ส่งข้อมูลใหม่มาแล้วราว {silent}",
+             f"ค่าล่าสุดคือ {LABEL[own['status']]} {pct} ของตลิ่ง ซึ่งอาจไม่ใช่ระดับน้ำตอนนี้"]
+    if instead:
+        lines.append(f"ตอนนี้ระบบดูสถานี {instead['name']} (ห่าง {instead['distance_km']} กม.) แทน อาจไม่ตรงกับจุดของคุณ")
+    else:
+        lines.append("ยังไม่มีสถานีอื่นใกล้เคียงที่ส่งข้อมูลมาแทน")
+    return "\n".join(lines + ["ควรตรวจสถานการณ์จริงและประกาศ ปภ. (โทร 1784)", FOOTER])
 
 
 def report_alert_message(sub, rep, dist_km):
@@ -235,7 +255,7 @@ def in_quiet_hours(at):
     return h >= QUIET_FROM_H or h < QUIET_TO_H
 
 
-KIND_ORDER = ["status", "early", "fast", "report"]   # which kind a merged message is logged as (send_log): the most serious first
+KIND_ORDER = ["status", "early", "fast", "stale", "report"]   # which kind a merged message is logged as (send_log): the most serious first
 
 
 def merge_events(evs):
@@ -258,6 +278,7 @@ def run(conn, at=None, senders=SENDERS):
     sent = failed = 0
     reports = [r for r in floodreports.active(conn, at) if r["confirmed"] >= REPORT_MIN_CONFIRMED]
     bud = budget.Budget(conn, at)
+    outage = bool(rows) and sum(1 for r in rows if r["stale"]) / len(rows) >= STALE_NOTICE_MAX_SHARE   # everything old: not "this station went quiet"
     ok = lambda sub, urgent: sub["channel"] != "line" or bud.allow(urgent)   # quota nearly used up: only alert-level news goes out
     groups = {}   # (channel, target) -> alerts due this round; one person with several saved places gets ONE message
 
@@ -268,12 +289,23 @@ def run(conn, at=None, senders=SENDERS):
         if is_group(sub):
             continue
         near = core.nearest([dict(r) for r in rows], sub["lat"], sub["lng"], 1, fresh_only=True)
+        quiet_now = (bool(sub["quiet"]) and in_quiet_hours(at)) or snoozed(sub, at)   # alert level still gets through
+        # the station nearest to them (reporting or not) has gone quiet while it was high: say so once, and forget it when it reports again
+        own = (core.nearest([dict(r) for r in rows], sub["lat"], sub["lng"], 1) or [None])[0]
+        if own is not None and not own["stale"] and sub["stale_notified"]:
+            conn.execute("UPDATE subscriptions SET stale_notified=NULL WHERE id=?", (sub["id"],))
+        elif (not outage and own is not None and own["stale"] and own["age_min"] is not None and own["age_min"] >= STALE_NOTICE_H * 60
+              and own["age_min"] <= STALE_NOTICE_MAX_H * 60 and own["status"] in ("watch", "alert") and not sub["stale_notified"]):
+            urgent = own["status"] == "alert"
+            if ((sub["notify_level"] != "alert" or urgent) and not (quiet_now and not urgent) and ok(sub, urgent)):
+                instead = near[0] if near and near[0]["id"] != own["id"] else None
+                queue(sub, "stale", stale_message(sub, own, instead), None, own["province"],
+                      "UPDATE subscriptions SET stale_notified=? WHERE id=?", (_iso(at), sub["id"]))
         if not near:
             continue
         st = near[0]
         prev = sub["last_status"]
         changed = st["status"] != prev
-        quiet_now = (bool(sub["quiet"]) and in_quiet_hours(at)) or snoozed(sub, at)   # alert level still gets through
         if not changed:
             # 1) rising water that should reach the bank soon (the status itself has not changed yet)
             urgent = st["status"] == "alert"

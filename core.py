@@ -153,6 +153,40 @@ def over_bank_text(cm):
     return ("สูงกว่าตลิ่งราว " if cm > 0 else "ต่ำกว่าตลิ่งราว ") + f"{abs(cm)} ซม."
 
 
+def bank_data_quality(rows, limit=10):
+    """How trustworthy the bank figures are, for the owner (GET /api/cron/stats). Looks only at fresh readings and sorts each
+    station into one of: fine, missing a level or the bank, bank not above the river bed (so the % is meaningless), far above
+    the bank (> OVER_BANK_MAX_CM: probably a datum error in the source), % and cm disagreeing, or simply far below the bank
+    (normal, not a problem). over_bank_cm hides the last three problems from users; this says how many there are and which."""
+    out = {"fresh": 0, "usable": 0, "far_below": 0, "missing": 0,
+           "bank_not_above_bed": [], "too_high": [], "disagree": []}
+    for r in rows:
+        if r.get("stale") or r.get("water_level") is None and r.get("bank_level") is None:
+            continue
+        out["fresh"] += 1
+        lv, bk, gd, pct = r.get("water_level"), r.get("bank_level"), r.get("ground_level"), r.get("pct_of_bank")
+        item = {"id": r["id"], "name": r["name"], "province": r.get("province")}
+        if lv is None or bk is None:
+            out["missing"] += 1
+            continue
+        if gd is not None and bk <= gd:
+            out["bank_not_above_bed"].append(dict(item, bank=bk, bed=gd))
+            continue
+        cm = (lv - bk) * 100
+        if cm > OVER_BANK_MAX_CM:
+            out["too_high"].append(dict(item, cm=round(cm), pct=None if pct is None else round(pct)))
+        elif cm < -UNDER_BANK_MAX_CM:
+            out["far_below"] += 1
+        elif pct is not None and abs(cm) > 2 and (pct >= 100) != (cm >= 0):
+            out["disagree"].append(dict(item, cm=round(cm), pct=round(pct)))
+        else:
+            out["usable"] += 1
+    for k in ("bank_not_above_bed", "too_high", "disagree"):
+        out[k + "_count"] = len(out[k])
+        out[k] = sorted(out[k], key=lambda i: -abs(i.get("cm", 0)))[:limit]
+    return out
+
+
 def shape(r, at, points=None, levels=None):
     d = dict(r)
     d["watch_pct"] = d["watch_pct"] if d.get("watch_pct") is not None else WATCH_PCT

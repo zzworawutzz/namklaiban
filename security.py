@@ -9,8 +9,8 @@ change an inline script and that test prints the new line to paste here and into
 INLINE_SCRIPT_HASHES = (
     "'sha256-7wchnvNoATHBzoDEhK+1py6z2eoWOfr5hpTtWeVyz9o='",
     "'sha256-9Rovun6UTaZcNv14HvfHv15E7cVotAmR5cjGaDLEmvA='",
-    "'sha256-dphJhtjz0/ESdYbu32Ey95qRoNT19W1N9u0okF8Us7M='",
     "'sha256-oU3o0yiN53B17VqWDNnt2mA9d7m3h6+uG4nIov5DJqY='",
+    "'sha256-po0KKESTlf5p3+zhY08FSX0SPka2zgVYZlyaEzvGPVk='",
 )
 
 CSP = "; ".join([
