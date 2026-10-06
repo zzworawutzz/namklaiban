@@ -232,3 +232,11 @@ def test_bank_data_quality_lists_are_capped_but_counted():
     rows = [{"id": i, "name": "s", "province": "p", "water_level": 9.0 + i, "bank_level": 2.0, "ground_level": -5.0, "pct_of_bank": 150.0, "stale": False} for i in range(25)]
     q = core.bank_data_quality(rows)
     assert q["too_high_count"] == 25 and len(q["too_high"]) == 10 and q["too_high"][0]["id"] == 24      # the worst first
+
+
+def test_a_gauge_with_no_thresholds_recorded_gets_no_cm_and_counts_as_missing_not_doubtful():
+    d = {"stale": False, "water_level": 0.4, "bank_level": 0.0, "ground_level": 0.0, "pct_of_bank": None}      # bank 0 / bed 0, e.g. a reservoir gauge
+    assert core.over_bank_cm(d) is None                                                                         # would otherwise read "40 cm above the bank"
+    assert core.over_bank_cm(dict(d, bank_level=2.0, ground_level=2.5)) is None                                 # bank below the bed: nonsense
+    q = core.bank_data_quality([{"id": 1, "name": "a", "province": "p", **{k: d[k] for k in ("water_level", "bank_level", "ground_level", "pct_of_bank")}, "stale": False}])
+    assert q["missing"] == 1 and q["bank_not_above_bed_count"] == 0                                             # an empty record is not a data error

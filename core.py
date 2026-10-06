@@ -128,13 +128,20 @@ OVER_BANK_MAX_CM = 300    # more than 3 m above the bank is far more likely a da
 UNDER_BANK_MAX_CM = 100   # "below the bank" only matters when the water is within a metre of it
 
 
+def no_bank_figures(bank, ground):
+    """ThaiWater gives some gauges (reservoirs, forest-unit stations) bank 0 and bed 0: that is "no thresholds recorded", not a bank at sea level."""
+    return bank == 0 and not ground
+
+
 def over_bank_cm(d):
     """Water level minus bank level in cm (positive = above the bank), rounded to 5 cm, or None when it should not be shown:
     stale or missing figures, a number outside a believable range, or one that disagrees with the % of bank
     (the % is measured from the river bed, so the two only agree when the bed, the bank and the level are consistent).
     The bank is ThaiWater's lowest bank height at the station: a rough guide, not the depth of water at someone's house."""
-    lv, bk, pct = d.get("water_level"), d.get("bank_level"), d.get("pct_of_bank")
+    lv, bk, gd, pct = d.get("water_level"), d.get("bank_level"), d.get("ground_level"), d.get("pct_of_bank")
     if d.get("stale") or lv is None or bk is None:
+        return None
+    if no_bank_figures(bk, gd) or (gd is not None and bk <= gd):    # no thresholds recorded (0 / 0), or a bank not above the river bed
         return None
     cm = (lv - bk) * 100
     if cm > OVER_BANK_MAX_CM or cm < -UNDER_BANK_MAX_CM:
@@ -166,7 +173,7 @@ def bank_data_quality(rows, limit=10):
         out["fresh"] += 1
         lv, bk, gd, pct = r.get("water_level"), r.get("bank_level"), r.get("ground_level"), r.get("pct_of_bank")
         item = {"id": r["id"], "name": r["name"], "province": r.get("province")}
-        if lv is None or bk is None:
+        if lv is None or bk is None or no_bank_figures(bk, gd):
             out["missing"] += 1
             continue
         if gd is not None and bk <= gd:
