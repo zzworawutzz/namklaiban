@@ -500,3 +500,24 @@ def test_the_csp_blocks_an_injected_inline_script_and_an_inline_handler_but_not_
     assert page.evaluate("window.__pwned") is None and page.evaluate("window.__pwned2") is None
     assert sum("Content Security Policy" in e for e in errors) >= 2, errors                 # the browser reported both attempts
     errors.clear()
+
+
+def _health(page, **fields):
+    import json
+    body = json.dumps({"stations": 800, "stale": 5, "ingest_ok": True, "last_ingest_age_min": 5, "latest_reading_age_min": 10, "quiet_agencies": [], **fields})
+    page.route("**/health", lambda r: r.fulfill(status=200, content_type="application/json", body=body))
+
+
+def test_a_notice_names_an_agency_whose_stations_have_all_gone_quiet_while_the_rest_report(page, site):
+    _health(page, quiet_agencies=["FOP", "HII"])
+    open_page(page, site)
+    page.wait_for_selector("#delayBar:not([hidden])", timeout=15000)
+    text = page.inner_text("#delayBar")
+    assert "FOP, HII" in text and "ต้นทาง ThaiWater ไม่ใช่ระบบของเรา" in text and "หน่วยงานอื่นยังปกติ" in text and "1784" in text, text
+
+
+def test_no_notice_when_every_agency_reports(page, site):
+    _health(page)
+    open_page(page, site)
+    page.wait_for_timeout(1500)
+    assert page.is_hidden("#delayBar")
