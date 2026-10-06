@@ -3,8 +3,8 @@
 // Live data is never served from here: /stations, /health, /api and /reports always go to the network.
 // (The page keeps its own last-known station list and labels it with its age; see savedStations() in app.js.)
 // Bump the version below together with the ?v= on app.css / app.js in index.html: a test checks they match.
-const SHELL = "nkb-shell-v53";
-const FILES = ["./", "index.html", "app.css?v=53", "app.js?v=53", "report.html", "help.html", "privacy.html",
+const SHELL = "nkb-shell-v54";
+const FILES = ["./", "index.html", "app.css?v=54", "app.js?v=54", "report.html", "help.html", "privacy.html",
   "manifest.webmanifest", "icon.svg"];
 const LIVE = /^\/(stations|health|api|reports)/;
 

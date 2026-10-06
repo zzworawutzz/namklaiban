@@ -322,6 +322,7 @@ function showResults(title, list, extraFn){
    (a reading whose cm and % disagree is left out, and more than 3 m above the bank is taken for a datum error) */
 function cmOf(r, s){
   if(r.water_level==null || s.bank_level==null) return null;
+  if(s.ground_level!=null && s.bank_level<=s.ground_level) return null;   // bank 0 / bed 0 = no thresholds recorded; or a bank not above the river bed
   var cm = (r.water_level-s.bank_level)*100;
   if(cm>300 || cm<-100) return null;
   if(r.pct_of_bank!=null && Math.abs(cm)>2 && (r.pct_of_bank>=100)!==(cm>=0)) return null;
