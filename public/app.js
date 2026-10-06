@@ -628,16 +628,23 @@ function showProvince(fit){
 }
 var pendingNear = false;
 var resSort = "pct";   // "pct" highest % of bank, "fast" rising fastest in 3 h, "near" closest to the pinned place
-var SORTS = [["pct","สูงสุด"],["fast","น้ำขึ้นเร็ว"],["near","ใกล้ฉัน"]];
+var SORTS = [["pct","สูงสุด"],["over","ล้นตลิ่งมาก"],["fast","น้ำขึ้นเร็ว"],["near","ใกล้ฉัน"]];
 function drawProvList(list){
   if(resSort==="near" && !origin) resSort = "pct";
   var by = {
     pct:  function(a,b){ return (b.pct_of_bank==null?-1:b.pct_of_bank)-(a.pct_of_bank==null?-1:a.pct_of_bank); },
+    // cm above the bank, biggest first; a station with no believable cm (far below the bank, or doubtful figures) goes after those, by %
+    over: function(a,b){
+      var x = a.over_bank_cm, y = b.over_bank_cm;
+      if(x==null && y==null) return by.pct(a,b);
+      if(x==null) return 1; if(y==null) return -1;
+      return (y-x) || by.pct(a,b);
+    },
     fast: function(a,b){ return (b.rise_3h_m==null?-9:b.rise_3h_m)-(a.rise_3h_m==null?-9:a.rise_3h_m); },
     near: function(a,b){ return kmBetween(origin,a)-kmBetween(origin,b); }
   };
   list = list.slice().sort(by[resSort]);
-  var name = resSort==="fast" ? "น้ำขึ้นเร็วที่สุด" : resSort==="near" ? "ใกล้คุณที่สุด" : "น้ำสูงสุด";
+  var name = resSort==="over" ? "ล้นตลิ่งมากที่สุด" : resSort==="fast" ? "น้ำขึ้นเร็วที่สุด" : resSort==="near" ? "ใกล้คุณที่สุด" : "น้ำสูงสุด";
   var extra = resSort==="fast" ? function(s){ return s.rise_3h_m==null ? "ไม่มีข้อมูล 3 ชม." : (s.rise_3h_m>=0 ? "+" : "")+Math.round(s.rise_3h_m*100)+" ซม. ใน 3 ชม."; }
             : resSort==="near" ? function(s){ return kmBetween(origin,s).toFixed(1)+" กม."; } : null;
   showResults(name+"ใน จ."+province+(list.length>10 ? " (10 จาก "+list.length+" สถานี)" : " ("+list.length+" สถานี)"), list.slice(0,10), extra);

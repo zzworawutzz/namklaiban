@@ -70,6 +70,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
   <section id="quotaSec"><h2>โควตาข้อความ LINE เดือนนี้</h2><div id="quota"></div></section>
   <section id="dbSec"><h2>ฐานข้อมูลและผู้ติดตาม</h2><div id="db"></div></section>
   <section id="silentSec"><h2>สถานีที่เงียบ</h2><div id="silent"></div></section>
+  <section id="bankSec"><h2>คุณภาพข้อมูลตลิ่ง</h2><div id="bank"></div></section>
   <section id="daysSec"><h2>ข้อความที่ส่งแต่ละวัน</h2><div id="days"></div></section>
   <section id="provSec"><h2>จังหวัดที่ได้รับข้อความมากที่สุด</h2><div id="provs"></div></section>
   <section id="backupSec"><h2>การสำรองข้อมูล</h2><div id="backup"></div></section>
@@ -78,7 +79,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 <script>
 (function(){
   var KEY = "nkb-admin", $ = function(id){ return document.getElementById(id); };
-  var KIND = {status:"สถานะเปลี่ยน", early:"เตือนล่วงหน้า", fast:"น้ำขึ้นเร็ว", report:"รายงานน้ำท่วม", digest:"สรุป", admin:"ถึงเจ้าของ"};
+  var KIND = {status:"สถานะเปลี่ยน", early:"เตือนล่วงหน้า", fast:"น้ำขึ้นเร็ว", report:"รายงานน้ำท่วม", digest:"สรุป", stale:"สถานีเงียบ", admin:"ถึงเจ้าของ"};
   function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
   function getSecret(){ try { return sessionStorage.getItem(KEY) || ""; } catch(e){ return window.__nkbSecret || ""; } }
   function setSecret(v){ try { v ? sessionStorage.setItem(KEY, v) : sessionStorage.removeItem(KEY); } catch(e){} window.__nkbSecret = v; }
@@ -117,6 +118,19 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 
     var sg = st.silent_groups || [];
     $("silent").innerHTML = sg.length ? '<ul>'+sg.map(function(g){ return '<li>'+esc(g)+'</li>'; }).join("")+'</ul>' : '<p>'+pill("ok","ไม่มีกลุ่มสถานีที่เงียบเกิน 6 ชม.")+'</p>';
+
+    var bd = st.bank_data;
+    if(bd){
+      var bad = (bd.too_high_count||0) + (bd.disagree_count||0) + (bd.bank_not_above_bed_count||0), bh = '<p>'+(bad ? pill("warn", bad+" สถานีข้อมูลตลิ่งน่าสงสัย") : pill("ok","ไม่พบข้อมูลตลิ่งที่น่าสงสัย"))+
+        ' <span class="note">จาก '+esc(bd.fresh)+' สถานีที่ข้อมูลสด · ใช้ได้ '+esc(bd.usable)+' · ต่ำกว่าตลิ่งมาก '+esc(bd.far_below)+' · ขาดค่า '+esc(bd.missing)+'</span></p>';
+      [["too_high","สูงกว่าตลิ่งเกิน 3 เมตร (น่าจะเป็นความคลาดของต้นทาง ระบบไม่แสดง ซม. ให้ผู้ใช้)",function(i){ return i.cm+" ซม. · "+(i.pct==null?"-":i.pct+"%"); }],
+       ["disagree","ซม. กับ % ขัดกัน (ระบบไม่แสดง ซม.)",function(i){ return i.cm+" ซม. · "+i.pct+"%"; }],
+       ["bank_not_above_bed","ตลิ่งไม่สูงกว่าท้องน้ำ (% ใช้ไม่ได้)",function(i){ return "ตลิ่ง "+i.bank+" · ท้องน้ำ "+i.bed; }]].forEach(function(g){
+        var l = bd[g[0]] || []; if(!l.length) return;
+        bh += '<h3>'+esc(g[1])+' <span class="note">รวม '+esc(bd[g[0]+"_count"])+'</span></h3><ul>'+l.map(function(i){ return '<li>'+esc(i.name)+' <span class="note">'+esc(i.province||"")+' · '+esc(g[2](i))+'</span></li>'; }).join("")+'</ul>';
+      });
+      $("bank").innerHTML = bh;
+    }
 
     var days = (st.days || []).slice().reverse(), kinds = Object.keys(KIND);
     $("days").innerHTML = days.length ? '<div class="scroll"><table><thead><tr><th>วัน</th>'+kinds.map(function(k){ return '<th class="n">'+esc(KIND[k])+'</th>'; }).join("")+'<th class="n">รวม</th><th class="n">ส่งไม่สำเร็จ</th></tr></thead><tbody>'+
