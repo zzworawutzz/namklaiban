@@ -671,6 +671,9 @@ function checkHealth(){
           : "ระบบดึงข้อมูลจาก ThaiWater ไม่ได้มาแล้ว "+fmtAge(h.last_ingest_age_min).replace(/\s?ที่แล้ว$/,"");
     } else if(h.latest_reading_age_min!=null && h.latest_reading_age_min>DELAY_READING_MIN){
       msg = "ต้นทาง (ThaiWater) ยังไม่ส่งค่าใหม่มา "+fmtAge(h.latest_reading_age_min).replace(/\s?ที่แล้ว$/,"");
+    } else if(h.quiet_agencies && h.quiet_agencies.length){
+      /* the source is fine overall but one agency's stations have all gone silent (6 Oct 2026: HII and FOP) */
+      msg = "สถานีของหน่วยงาน "+h.quiet_agencies.join(", ")+" ส่งค่าใหม่มาไม่ครบเกิน "+(DELAY_READING_MIN/60)+" ชั่วโมง (ต้นทาง ThaiWater ไม่ใช่ระบบของเรา) สถานีของหน่วยงานอื่นยังปกติ";
     }
     if(!msg){ bar.hidden = true; bar.innerHTML = ""; return; }
     bar.innerHTML = "<b>ข้อมูลอาจล่าช้า</b>"+esc(msg)+" ตัวเลขที่เห็นอาจไม่ใช่ค่าปัจจุบัน ถ้าต้องตัดสินใจ โปรดตรวจกับ ปภ. โทร 1784";
