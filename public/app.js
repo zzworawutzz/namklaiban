@@ -184,6 +184,7 @@ function drawChips(){
   html += '<button type="button" class="chip" data-f="stale" aria-pressed="'+(filter==="stale")+'">'+shapeSvg("unknown",16,true)+'ข้อมูลค้าง '+k.stale+'</button>';
   $("chips").innerHTML = html;
 }
+function overBankText(cm){ return cm===0 ? "น้ำเสมอระดับตลิ่ง" : (cm>0 ? "สูงกว่าตลิ่งราว " : "ต่ำกว่าตลิ่งราว ")+Math.abs(cm)+" ซม."; }
 function pctHint(p){ return p>=100 ? "ล้นตลิ่งแล้ว" : p>=90 ? "ใกล้ล้นตลิ่ง" : p>=70 ? "น้ำสูงใกล้ตลิ่ง" : "ยังต่ำกว่าตลิ่ง"; }
 function fastRisers(list){   // water rising >= 30 cm in 3 h, even if still far below the bank; one per site
   var best = {};
@@ -398,7 +399,8 @@ function compareHtml(s, rs){
 function drawDetail(s, rs, rel){
   curRs = rs; curRel = rel;
   var h='<div class="head"><div><h2 style="margin:0;font-size:18px">'+esc(s.name)+'</h2><div class="note" style="margin:0">'+esc(s.province||"")+(s.source?" · "+esc(s.source):"")+'</div></div><span class="badge '+s.status+'">'+esc(statusText(s))+'</span></div>';
-  h+='<div class="big">'+pctText(s)+' <small>ของตลิ่ง</small></div>'+(s.pct_of_bank!=null ? '<div class="note" style="margin:2px 0 6px">'+pctHint(s.pct_of_bank)+' (100% = น้ำเสมอตลิ่ง)</div>' : '')+gaugeHtml(s);
+  h+='<div class="big">'+pctText(s)+' <small>ของตลิ่ง</small></div>'+(s.pct_of_bank!=null ? '<div class="note" style="margin:2px 0 6px">'+pctHint(s.pct_of_bank)+' (100% = น้ำเสมอตลิ่ง)</div>' : '')+
+    (s.over_bank_cm!=null ? '<div class="overbank'+(s.over_bank_cm>0 ? ' up' : '')+'"><b>'+overBankText(s.over_bank_cm)+'</b> <small>ประมาณจากระดับตลิ่งต่ำสุดของสถานี ไม่ใช่ความลึกน้ำที่บ้านคุณ</small></div>' : '')+gaugeHtml(s);
   h+='<details class="lvl"><summary>ตัวเลขระดับน้ำ (เมตร)</summary><p class="note" style="margin:0 0 6px">ระดับน้ำ '+(s.water_level==null?"-":s.water_level.toFixed(2))+' · ตลิ่ง '+(s.bank_level==null?"-":s.bank_level.toFixed(2))+' · ท้องน้ำ '+(s.ground_level==null?"-":s.ground_level.toFixed(2))+'<br>วัดเทียบระดับน้ำทะเลปานกลาง (ม.รทก.) ตลิ่ง 100% คือน้ำเสมอระดับตลิ่งนี้</p></details>';
   if(s.trend) h+='<p style="margin:6px 0 0">'+trendHtml(s)+'</p>';
   h+='<p class="note">อัปเดตล่าสุด '+esc(fmtTs(s.ts))+' ('+esc(fmtAge(s.age_min))+')</p>';
@@ -976,8 +978,9 @@ function drawShareCard(s, link, when){
   c.font = "400 44px "+F; c.fillStyle = "#0f2530";
   var t = TREND[s.trend];
   if(t && s.trend_pct_per_hr!=null){ c.fillStyle = s.trend==="rising" ? ink : "#4f6a77"; c.fillText(t[0]+" "+t[1]+" "+(s.trend_pct_per_hr>=0 ? "+" : "")+s.trend_pct_per_hr.toFixed(1)+"%/ชม.", 80, y); y += 62; }
+  if(s.over_bank_cm!=null){ c.fillStyle = s.over_bank_cm>0 ? ink : "#4f6a77"; c.fillText(overBankText(s.over_bank_cm), 80, y); y += 62; }
   if((s.rise_3h_m||0) >= 0.3){ c.fillStyle = ink; c.fillText("น้ำขึ้น +"+s.rise_3h_m.toFixed(2)+" ม. ใน 3 ชม.", 80, y); y += 62; }
-  if(s.water_level!=null){ c.fillStyle = "#4f6a77"; c.font = "400 38px "+F; c.fillText("ระดับน้ำ "+s.water_level.toFixed(2)+" ม.รทก."+(s.bank_level!=null ? " (ตลิ่ง "+(+s.bank_level).toFixed(2)+")" : ""), 80, y); y += 54; }
+  if(s.water_level!=null && s.over_bank_cm==null){ c.fillStyle = "#4f6a77"; c.font = "400 38px "+F; c.fillText("ระดับน้ำ "+s.water_level.toFixed(2)+" ม.รทก."+(s.bank_level!=null ? " (ตลิ่ง "+(+s.bank_level).toFixed(2)+")" : ""), 80, y); y += 54; }
   if(s.stale){ c.fillStyle = "#845900"; c.font = "700 40px "+F; c.fillText("⚠ สถานีนี้ข้อมูลไม่อัปเดต ใช้ประกอบอย่างระวัง", 80, y); }
   c.fillStyle = "#4f6a77"; c.font = "400 30px "+F;
   cardWrap(c, "ข้อมูลจาก ThaiWater ใช้ประกอบการตัดสินใจเท่านั้น ไม่ใช่ประกาศทางการ ให้ยึดประกาศ ปภ. (โทร 1784)", W-160).slice(0,3).forEach(function(l,i){ c.fillText(l, 80, 1112+i*40); });

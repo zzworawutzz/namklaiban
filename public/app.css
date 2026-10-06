@@ -357,3 +357,5 @@ svg.chart{width:100%;height:auto;display:block}
 .mepos .mering{position:absolute;left:0;top:0;width:22px;height:22px;border-radius:50%;background:#1a73e8;opacity:.5;animation:mepulse 1.8s ease-out infinite}
 @keyframes mepulse{0%{transform:scale(.6);opacity:.55}100%{transform:scale(3);opacity:0}}
 @media (prefers-reduced-motion:reduce){.mepos .mering{animation:none;opacity:.25;transform:scale(1.8)}}
+
+.overbank{margin:2px 0 6px;font-size:14px;color:var(--muted)}.overbank b{color:var(--ink)}.overbank.up b{color:var(--alert-ink)}.overbank small{display:block;font-size:12px}
