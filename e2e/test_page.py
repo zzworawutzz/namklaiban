@@ -420,3 +420,14 @@ def test_near_me_tab_asks_for_the_position_and_then_sorts_by_distance(context, s
     assert page.evaluate("document.querySelector('#resList .row').innerText.split('\\n')[0]") == "คลองหลวง"
     assert page.get_attribute("#resSort button[data-sort=near]", "aria-pressed") == "true"
     assert not errors
+
+
+def test_station_card_says_how_far_above_the_bank_and_only_when_it_is_known(page, site):
+    open_page(page, site, "/?station=A")
+    page.wait_for_selector(".overbank", timeout=15000)
+    txt = page.inner_text(".overbank")
+    assert ("ตลิ่งราว" in txt or "เสมอระดับตลิ่ง" in txt) and "ไม่ใช่ความลึกน้ำที่บ้านคุณ" in txt     # A is at the bank in the test data
+    page.goto(site + "/?station=B", wait_until="domcontentloaded")
+    page.wait_for_selector("#sumBody .verdict", timeout=30000)
+    page.wait_for_selector(".big", timeout=15000)
+    assert page.locator(".overbank").count() == 0                                                     # B is far below the bank: nothing to say
