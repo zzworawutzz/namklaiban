@@ -3,11 +3,32 @@ name = "nam-klai-baan-chan"
 version = "0.2.0"
 description = "Water level near my home (ThaiWater data)"
 requires-python = ">=3.9"
-# Keep in sync with requirements.txt (Docker/local use that file; Vercel installs from here).
+# Keep identical to requirements.txt (Docker/local use that file; Vercel installs from here); test_pages.py checks.
 dependencies = [
-  "fastapi>=0.115,<1",
-  "uvicorn>=0.30,<1",
-  "psycopg[binary]>=3.2,<4",
+  'annotated-doc==0.0.5',
+  'annotated-types==0.8.0; python_version >= "3.10"',
+  'annotated-types==0.7.0; python_version < "3.10"',
+  'anyio==4.15.1; python_version >= "3.10"',
+  'anyio==4.12.1; python_version < "3.10"',
+  'click==8.5.0; python_version >= "3.10"',
+  'click==8.1.8; python_version < "3.10"',
+  'exceptiongroup==1.3.1; python_version < "3.11"',
+  'fastapi==0.142.2; python_version >= "3.10"',
+  'fastapi==0.128.8; python_version < "3.10"',
+  'h11==0.16.0',
+  'idna==3.20',
+  'opentelemetry-api==1.45.0; python_version >= "3.10"',
+  'psycopg[binary]==3.3.6; python_version >= "3.10"',
+  'psycopg[binary]==3.2.13; python_version < "3.10"',
+  'pydantic==2.13.5',
+  'pydantic-core==2.46.5',
+  'starlette==1.7.0; python_version >= "3.10"',
+  'starlette==0.49.3; python_version < "3.10"',
+  'typing-extensions==4.16.0',
+  'typing-inspection==0.4.4; python_version >= "3.10"',
+  'typing-inspection==0.4.2; python_version < "3.10"',
+  'uvicorn==0.54.0; python_version >= "3.10"',
+  'uvicorn==0.39.0; python_version < "3.10"',
 ]
 
 # Tells Vercel where the FastAPI instance is (the file is api.py, not one of its default names).

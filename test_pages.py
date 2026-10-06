@@ -119,3 +119,30 @@ def test_every_workflow_limits_what_the_github_token_can_do():
 def test_robots_txt_keeps_the_admin_page_and_the_api_out_of_search():
     r = (ROOT / "public" / "robots.txt").read_text(encoding="utf-8")
     assert "User-agent: *" in r and "Disallow: /admin.html" in r and "Disallow: /api/" in r and "Disallow: /\n" not in r
+
+
+def _runtime_pins():
+    return [l.strip() for l in (ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines() if l.strip() and not l.startswith("#")]
+
+
+def test_runtime_libraries_are_pinned_exactly_and_pyproject_matches_requirements():
+    import re
+    pins = _runtime_pins()
+    assert pins, "requirements.txt lists nothing"
+    for l in pins:
+        assert re.match(r"^[A-Za-z0-9_.\-]+(\[[a-z]+\])?==\d[\w.]*(; python_version [<>]=? \"3\.\d+\")?$", l), f"not an exact pin: {l}"
+    toml = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    deps = toml.split("dependencies = [", 1)[1].split("\n]", 1)[0]
+    in_pyproject = [l.strip().rstrip(",").strip("'") for l in deps.splitlines() if l.strip().startswith("'")]
+    assert in_pyproject == pins, "pyproject.toml dependencies and requirements.txt differ: change both together"
+
+
+def test_pins_installed_here_are_the_pins_in_the_file():
+    """The .venv / the tests job really run the Python-3.9 set the file says (so a stale pin cannot hide behind a newer install)."""
+    from importlib import metadata
+    from packaging.requirements import Requirement
+    for l in _runtime_pins():
+        r = Requirement(l)
+        if r.marker is not None and not r.marker.evaluate():
+            continue
+        assert metadata.version(r.name) == next(iter(r.specifier)).version, r.name
