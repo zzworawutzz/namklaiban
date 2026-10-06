@@ -8,6 +8,12 @@ MUTED = "#587280"
 ARROW = {"rising": "▲ กำลังสูงขึ้น", "falling": "▼ กำลังลดลง", "steady": "■ ทรงตัว"}
 
 
+def over_bank_text(cm):
+    if cm == 0:
+        return "น้ำเสมอระดับตลิ่ง"
+    return ("สูงกว่าตลิ่งราว " if cm > 0 else "ต่ำกว่าตลิ่งราว ") + f"{abs(cm)} ซม."
+
+
 def _text(text, **kw):
     return {"type": "text", "text": text, "wrap": True, **kw}
 
@@ -52,6 +58,9 @@ def station_card(label, st, url=None):
             _text("-" if pct is None else f"{round(pct)}% ของตลิ่ง", weight="bold", size="xxl", color=color, margin="md")]
     if pct is not None:
         body.append(_gauge(pct, color))
+    if st.get("over_bank_cm") is not None:
+        obc = st["over_bank_cm"]
+        body.append(_text(over_bank_text(obc), size="sm", weight="bold", color=color if obc >= 0 else MUTED, margin="sm"))
     if st.get("trend") in ARROW:
         rate = st.get("trend_pct_per_hr")
         eta = f" · ถึงตลิ่งใน ~{st['eta_to_bank_h']} ชม." if st.get("eta_to_bank_h") else ""

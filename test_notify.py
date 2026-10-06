@@ -221,3 +221,14 @@ def test_a_report_alert_without_a_card_gets_a_small_card_inside_the_carousel():
     text, flex = notify.merge_events(evs)
     assert len(flex["contents"]) == 2 and flex["contents"][1]["type"] == "bubble"
     assert "มีผู้ใช้รายงานน้ำท่วม" in str(flex["contents"][1]) and "มีผู้ใช้รายงานน้ำท่วม" in text
+
+
+def test_alert_message_and_card_say_how_far_above_the_bank_when_it_is_known():
+    import cards
+    st = {"name": "ท่าช้าง", "province": "อยุธยา", "distance_km": 1.0, "status": "alert", "pct_of_bank": 107.0, "trend": None,
+          "trend_pct_per_hr": None, "eta_to_bank_h": None, "advice": "x", "over_bank_cm": 80, "rise_3h_m": None}
+    text = notify.message({"label": None}, st)
+    assert "สูงกว่าตลิ่งราว 80 ซม." in text and "ไม่ใช่ความลึกน้ำที่บ้าน" in text
+    assert "สูงกว่าตลิ่งราว 80 ซม." in str(cards.station_card(None, st))
+    st["over_bank_cm"] = None
+    assert "ตลิ่งราว" not in notify.message({"label": None}, st) and "ตลิ่งราว" not in str(cards.station_card(None, st))

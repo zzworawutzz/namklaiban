@@ -147,6 +147,8 @@ def message(sub, st):
     lines = [f"น้ำใกล้บ้านฉัน{where}",
              f"สถานี {st['name']} {st['province'] or ''} อยู่ห่าง {st['distance_km']} กม.",
              f"สถานะ: {LABEL[st['status']]} · {pct} ของตลิ่ง"]
+    if st.get("over_bank_cm") is not None:
+        lines.append(core.over_bank_text(st["over_bank_cm"]) + " (ประมาณจากตลิ่งต่ำสุดของสถานี ไม่ใช่ความลึกน้ำที่บ้าน)")
     if st["trend"] == "rising":
         eta = f" คาดถึงตลิ่งใน ~{st['eta_to_bank_h']} ชม." if st["eta_to_bank_h"] else ""
         lines.append(f"แนวโน้ม: กำลังสูงขึ้น {st['trend_pct_per_hr']:+.1f}%/ชม.{eta}")

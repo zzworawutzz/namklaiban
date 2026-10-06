@@ -124,6 +124,35 @@ def is_tidal(levels):
     return sum(lo <= (b[0] - a[0]).total_seconds() / 3600 <= hi for a, b in zip(tp, tp[1:])) >= TIDE_MIN_HALF_CYCLES
 
 
+OVER_BANK_MAX_CM = 300    # more than 3 m above the bank is far more likely a datum error in the source than a real flood: say nothing
+UNDER_BANK_MAX_CM = 100   # "below the bank" only matters when the water is within a metre of it
+
+
+def over_bank_cm(d):
+    """Water level minus bank level in cm (positive = above the bank), rounded to 5 cm, or None when it should not be shown:
+    stale or missing figures, a number outside a believable range, or one that disagrees with the % of bank
+    (the % is measured from the river bed, so the two only agree when the bed, the bank and the level are consistent).
+    The bank is ThaiWater's lowest bank height at the station: a rough guide, not the depth of water at someone's house."""
+    lv, bk, pct = d.get("water_level"), d.get("bank_level"), d.get("pct_of_bank")
+    if d.get("stale") or lv is None or bk is None:
+        return None
+    cm = (lv - bk) * 100
+    if cm > OVER_BANK_MAX_CM or cm < -UNDER_BANK_MAX_CM:
+        return None
+    if pct is not None and abs(cm) > 2 and (pct >= 100) != (cm >= 0):
+        return None
+    return int(round(cm / 5.0)) * 5
+
+
+def over_bank_text(cm):
+    """'สูงกว่าตลิ่งราว 80 ซม.' for a value from over_bank_cm; empty for None."""
+    if cm is None:
+        return ""
+    if cm == 0:
+        return "น้ำเสมอระดับตลิ่ง"
+    return ("สูงกว่าตลิ่งราว " if cm > 0 else "ต่ำกว่าตลิ่งราว ") + f"{abs(cm)} ซม."
+
+
 def shape(r, at, points=None, levels=None):
     d = dict(r)
     d["watch_pct"] = d["watch_pct"] if d.get("watch_pct") is not None else WATCH_PCT
@@ -136,6 +165,7 @@ def shape(r, at, points=None, levels=None):
     d["status"] = d["status"] or "unknown"
     d["trend"], d["trend_pct_per_hr"] = (None, None) if d["stale"] else trend_of(points or [])
     d["rise_3h_m"], d["rise_suspect"] = (None, False) if d["stale"] else rise_of(levels or [])
+    d["over_bank_cm"] = over_bank_cm(d)
     d["eta_to_bank_h"] = eta_to_bank_h(d["pct_of_bank"], d["trend_pct_per_hr"])
     d["advice"] = advice(d)
     return d

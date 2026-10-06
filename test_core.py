@@ -181,3 +181,31 @@ def test_latest_drops_the_rise_of_a_tidal_gauge_but_keeps_a_real_one(tmp_path):
     _store(c, wave)
     row = {r["id"]: r for r in core.latest(c, AT)}["505018"]
     assert row["rise_3h_m"] and row["rise_3h_m"] >= 0.5 and row["rise_tidal"] is False
+
+
+def _ob(**kw):
+    d = {"stale": False, "water_level": 5.5, "bank_level": 2.75, "pct_of_bank": 129.5}
+    d.update(kw)
+    return core.over_bank_cm(d)
+
+
+def test_over_bank_cm_is_level_minus_bank_in_cm_rounded_to_5():
+    assert _ob(water_level=3.57, bank_level=2.75, pct_of_bank=107.0) == 80       # 82 cm -> 80
+    assert _ob(water_level=3.58, bank_level=2.75, pct_of_bank=107.0) == 85       # 83 cm -> 85
+    assert _ob(water_level=2.40, bank_level=2.75, pct_of_bank=95.0) == -35        # 35 cm below the bank: within a metre, so shown
+    assert _ob(water_level=2.75, bank_level=2.75, pct_of_bank=100.0) == 0
+
+
+def test_over_bank_cm_is_none_when_it_should_not_be_trusted_or_shown():
+    assert _ob(stale=True) is None                                                # old reading
+    assert _ob(bank_level=None) is None and _ob(water_level=None) is None
+    assert _ob(water_level=6.5, bank_level=2.75) is None                          # 3.75 m above: probably a datum error
+    assert _ob(water_level=1.0, bank_level=2.75, pct_of_bank=40.0) is None        # far below the bank: not news
+    assert _ob(water_level=3.5, bank_level=2.75, pct_of_bank=80.0) is None        # above the bank but the % says below: figures disagree
+    assert _ob(water_level=2.0, bank_level=2.75, pct_of_bank=120.0) is None       # the other way round
+
+
+def test_over_bank_text():
+    assert core.over_bank_text(80) == "สูงกว่าตลิ่งราว 80 ซม."
+    assert core.over_bank_text(-35) == "ต่ำกว่าตลิ่งราว 35 ซม."
+    assert core.over_bank_text(0) == "น้ำเสมอระดับตลิ่ง" and core.over_bank_text(None) == ""
