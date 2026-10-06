@@ -64,6 +64,18 @@ function clusterIcon(c){
 /* ---------- map ---------- */
 var map = L.map("map",{zoomControl:false,attributionControl:true}).setView([13.5,101.0],6);
 L.control.zoom({position:"bottomright"}).addTo(map);
+/* A map whose box has no size (a hidden tab, a collapsed layout) cannot be fitted: Leaflet divides by the size and ends up at an
+   impossible zoom, and it never notices the box growing again. So fit only when there is a size, otherwise wait for it, and re-measure
+   whenever the box changes size (the window-resize handling in Leaflet does not see the box itself change). */
+var pendingFit = null;
+function hasSize(){ var c = map.getContainer(); return c.clientWidth > 0 && c.clientHeight > 0; }   // the live size: Leaflet's own getSize() is cached
+function fitMap(bounds, opts){ if(hasSize()){ pendingFit = null; map.fitBounds(bounds, opts); } else pendingFit = [bounds, opts]; }
+function onMapBox(){
+  if(!hasSize()) return;                           // hidden: keep the last good size and view, and wait
+  map.invalidateSize({animate:false, pan:false});  // no sliding of the view just because the box changed
+  if(pendingFit){ var p = pendingFit; pendingFit = null; map.fitBounds(p[0], p[1]); }
+}
+if(window.ResizeObserver) new ResizeObserver(onMapBox).observe(map.getContainer());
 map.attributionControl.setPrefix(false);
 // OpenStreetMap tiles (no API key). The "soft" look and the dark mode come from CSS filters on .basemap.
 var baseTiles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,className:"basemap",attribution:"© OpenStreetMap contributors"}).addTo(map);
@@ -165,7 +177,7 @@ function drawMarkers(){
   stations.forEach(function(s){
     if(!visible(s) && s.id!==sel) return;
     var v = (s);
-    var m = L.marker([s.lat,s.lng],{icon:icon(v,s.id===sel),keyboard:true,title:s.name+" "+statusText(v),status:v.status,zIndexOffset:(s.id===sel?1000:Z[v.status]||0)});
+    var m = L.marker([s.lat,s.lng],{icon:icon(v,s.id===sel),keyboard:true,title:s.name+" "+statusText(v)+(s.over_bank_cm!=null ? " · "+overBankText(s.over_bank_cm) : ""),status:v.status,zIndexOffset:(s.id===sel?1000:Z[v.status]||0)});
     m.on("click",function(){ select(s.id,false); });
     markers[s.id] = m; batch.push(m);
   });
@@ -299,29 +311,55 @@ fetch(API+"/api/gistda/status").then(function(r){ return r.ok ? r.json() : null;
 
 /* ---------- lists & detail ---------- */
 function rowHtml(s, extra){
-  return '<li><button class="row" type="button" data-id="'+esc(s.id)+'"><span>'+esc(s.name)+'<small>'+esc(s.province||"")+(extra?" · "+esc(extra):"")+(s.stale?" · ข้อมูลไม่อัปเดต":"")+(s.twin_conflict?" · ⚠ สองแหล่งขัดกัน":"")+(s.trend==="rising"?" · ▲ สูงขึ้น":s.trend==="falling"?" · ▼ ลดลง":"")+'</small></span><span class="badge '+s.status+'">'+esc(statusText(s))+" "+pctText(s)+'</span></button></li>';
+  return '<li><button class="row" type="button" data-id="'+esc(s.id)+'"><span>'+esc(s.name)+'<small>'+esc(s.province||"")+(extra?" · "+esc(extra):"")+(s.over_bank_cm!=null ? " · "+esc(overBankText(s.over_bank_cm)) : "")+(s.stale?" · ข้อมูลไม่อัปเดต":"")+(s.twin_conflict?" · ⚠ สองแหล่งขัดกัน":"")+(s.trend==="rising"?" · ▲ สูงขึ้น":s.trend==="falling"?" · ▼ ลดลง":"")+'</small></span><span class="badge '+s.status+'">'+esc(statusText(s))+" "+pctText(s)+'</span></button></li>';
 }
 function showResults(title, list, extraFn){
   $("resSort").hidden = true;   // only the province list (showProvince) offers sorting
   $("results").hidden = false; $("resTitle").textContent = title;
   $("resList").innerHTML = list.length ? list.map(function(s){return rowHtml(s, extraFn?extraFn(s):"");}).join("") : '<li class="note">ไม่พบสถานี</li>';
 }
-function chartSvg(rs){
+/* cm above (+) / below (-) the bank for one reading, or null: the same limits and the same consistency check as core.over_bank_cm
+   (a reading whose cm and % disagree is left out, and more than 3 m above the bank is taken for a datum error) */
+function cmOf(r, s){
+  if(r.water_level==null || s.bank_level==null) return null;
+  var cm = (r.water_level-s.bank_level)*100;
+  if(cm>300 || cm<-100) return null;
+  if(r.pct_of_bank!=null && Math.abs(cm)>2 && (r.pct_of_bank>=100)!==(cm>=0)) return null;
+  return Math.round(cm/5)*5;
+}
+function chartSvg(rs, st){
   var pts = rs.filter(function(r){return r.pct_of_bank!=null;});
   if(pts.length<2) return '<p class="note">กำลังสะสมข้อมูลย้อนหลัง จะแสดงกราฟเมื่อมีข้อมูลตั้งแต่ 2 รอบขึ้นไป</p>';
-  var W=340,H=150,pl=8,pr=8,pt=8,pb=22, maxP=Math.max(120,Math.max.apply(null,pts.map(function(p){return p.pct_of_bank;}))*1.05), minP=0;
+  // a right-hand axis in cm needs the bed and the bank: cm per 1 % of the bank = (bank - bed) in cm / 100
+  var cmPerPct = (st && st.bank_level!=null && st.ground_level!=null && st.bank_level>st.ground_level) ? (st.bank_level-st.ground_level) : 0;
+  var W=340,H=150,pl=8,pr=cmPerPct ? 44 : 8,pt=8,pb=22, maxP=Math.max(120,Math.max.apply(null,pts.map(function(p){return p.pct_of_bank;}))*1.05), minP=0;
   var t0=new Date(pts[0].ts).getTime(), t1=new Date(pts[pts.length-1].ts).getTime(), span=Math.max(t1-t0,1);
   function X(t){return pl+(new Date(t).getTime()-t0)/span*(W-pl-pr);}
   function Y(v){return pt+(maxP-v)/(maxP-minP)*(H-pt-pb);}
-  var s='<svg class="chart" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="กราฟเปอร์เซ็นต์ของตลิ่งย้อนหลัง">';
+  var s='<svg class="chart" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="กราฟเปอร์เซ็นต์ของตลิ่งย้อนหลัง'+(cmPerPct ? ' (แกนขวาเป็นเซนติเมตรเทียบตลิ่ง)' : '')+'">';
   s+='<rect x="'+pl+'" y="'+Y(maxP)+'" width="'+(W-pl-pr)+'" height="'+(Y(90)-Y(maxP))+'" fill="var(--alert-bg)" rx="4"/>';
   s+='<rect x="'+pl+'" y="'+Y(90)+'" width="'+(W-pl-pr)+'" height="'+(Y(70)-Y(90))+'" fill="var(--watch-bg)"/>';
   s+='<rect x="'+pl+'" y="'+Y(70)+'" width="'+(W-pl-pr)+'" height="'+(Y(0)-Y(70))+'" fill="var(--normal-bg)" rx="4"/>';
   s+='<line x1="'+pl+'" x2="'+(W-pr)+'" y1="'+Y(100)+'" y2="'+Y(100)+'" stroke="var(--alert)" stroke-dasharray="4 3"/><text x="'+(pl+3)+'" y="'+(Y(100)-3)+'" font-size="12" fill="var(--muted)">ตลิ่ง 100%</text>';
   s+='<path d="'+pts.map(function(p,i){return (i?"L":"M")+X(p.ts).toFixed(1)+" "+Y(p.pct_of_bank).toFixed(1);}).join(" ")+'" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>';
   var last=pts[pts.length-1]; s+='<circle cx="'+X(last.ts)+'" cy="'+Y(last.pct_of_bank)+'" r="4.5" fill="var(--ink)"/>';
+  var axis = "";
+  if(cmPerPct){   // ticks every 50 / 100 / 200 cm around the bank (0 cm = 100 %), only where they fit in the picture
+    var lo = (minP-100)*cmPerPct, hi = (maxP-100)*cmPerPct, step = (hi-lo)<=400 ? 50 : (hi-lo)<=1000 ? 100 : 200;
+    for(var c = Math.ceil(Math.max(lo,-400)/step)*step; c<=Math.min(hi,400); c+=step){
+      var y = Y(100+c/cmPerPct); if(y<pt+6 || y>H-pb-4) continue;
+      s+='<text x="'+(W-pr+4)+'" y="'+(y+4).toFixed(1)+'" font-size="11" fill="var(--muted)">'+(c>0?"+":"")+c+'</text>';
+    }
+    s+='<text x="'+(W-pr+4)+'" y="'+(H-6)+'" font-size="11" fill="var(--muted)">ซม.ตลิ่ง</text>';
+  }
   s+='<text x="'+pl+'" y="'+(H-6)+'" font-size="12" fill="var(--muted)">'+esc(fmtTs(pts[0].ts))+'</text><text x="'+(W-pr)+'" y="'+(H-6)+'" font-size="12" fill="var(--muted)" text-anchor="end">'+esc(fmtTs(last.ts))+'</text>';
-  return s+'</svg>';
+  s += '</svg>';
+  var cms = st ? pts.map(function(p){ var c = cmOf(p, st); return c==null ? null : {c:c, ts:p.ts}; }).filter(Boolean) : [];
+  if(cms.length){
+    var top = cms[0]; cms.forEach(function(p){ if(p.c>top.c) top = p; });
+    if(top.c>0) s += '<p class="note" style="margin:4px 0 0">สูงสุดใน 7 วัน: '+esc(overBankText(top.c))+' ('+esc(fmtTs(top.ts))+') · แกนขวา = ซม. เทียบตลิ่ง (ประมาณ)</p>';
+  }
+  return s;
 }
 function twinHtml(s){
   if(!s.twins || !s.twins.length) return "";
@@ -409,7 +447,7 @@ function drawDetail(s, rs, rel){
   h+='<div id="shBox">'+shelterBox(s)+'</div>';
   if(s.status==="unknown") h+='<div class="warn">สถานีนี้ไม่มีค่าตลิ่ง/ท้องน้ำให้คำนวณ จึงไม่แสดงสถานะ</div>';
   if(s.stale && s.status!=="unknown") h+='<div class="warn" role="alert">ข้อมูลของสถานีนี้ไม่ได้อัปเดตเกิน 2 ชั่วโมง ตัวเลขอาจไม่ตรงกับสถานการณ์จริง</div>';
-  h+='<h2 style="margin-top:14px">ย้อนหลัง 7 วัน</h2>'+(rs?chartSvg(rs):'<div class="skel" style="height:120px"></div>')+compareHtml(s, rs);
+  h+='<h2 style="margin-top:14px">ย้อนหลัง 7 วัน</h2>'+(rs?chartSvg(rs, s):'<div class="skel" style="height:120px"></div>')+compareHtml(s, rs);
   h+=relHtml(rel)+shareBar(s);
   var d=$("detail"); d.hidden=false; d.innerHTML=h;
 }
@@ -486,7 +524,7 @@ function setOrigin(o){
     }
     if(pick){ select(pick.id,false); drawNear(o, pick); $("sheetBody").scrollTo({top:0, behavior:"smooth"}); }
     var b = L.latLngBounds([[o.lat,o.lng]].concat(list.map(function(s){return [s.lat,s.lng];})));
-    map.fitBounds(b,Object.assign({maxZoom:12},fitPad()));
+    fitMap(b,Object.assign({maxZoom:12},fitPad()));
   }).catch(function(){ showErr("เรียกข้อมูลสถานีใกล้เคียงไม่ได้"); });
 }
 function drawNear(o, s0){
@@ -584,7 +622,7 @@ function drawProvinceSelect(){
 }
 function showProvince(fit){
   var list = stations.filter(inProv);
-  if(fit && list.length) map.fitBounds(L.latLngBounds(list.map(function(s){return [s.lat,s.lng];})),Object.assign({maxZoom:11},fitPad()));
+  if(fit && list.length) fitMap(L.latLngBounds(list.map(function(s){return [s.lat,s.lng];})),Object.assign({maxZoom:11},fitPad()));
   if(!province){ if(!origin) $("results").hidden = true; return; }
   drawProvList(list);
 }
@@ -1270,7 +1308,7 @@ function rtRun(a, b){
       if(j.code!=="Ok" || !j.routes.length) throw new Error("noroute");
       rtRoutes = j.routes.slice(0,3).map(rtEvaluate).sort(function(x,y){ return x.score-y.score || x.min-y.min; });
       rtSel = 0; rtDraw(); rtCard();
-      map.fitBounds(L.latLngBounds(rtRoutes[0].route.geometry.coordinates.map(function(c){return [c[1],c[0]];})), Object.assign({maxZoom:13}, fitPad()));
+      fitMap(L.latLngBounds(rtRoutes[0].route.geometry.coordinates.map(function(c){return [c[1],c[0]];})), Object.assign({maxZoom:13}, fitPad()));
       revealInSheet($("routeCard")); syncQuick();
     });
 }
@@ -1424,7 +1462,7 @@ $("dist").addEventListener("change", function(){
   if(this.value==="" || !areaCur){ arFill($("tam"), [], pre.t); updateBoundary(); refreshShelters(); return; }
   var d = areaCur.districts[+this.value];
   arFill($("tam"), d.tambons.map(function(t){return t.name;}), pre.t); updateBoundary(); refreshShelters();
-  map.fitBounds(L.latLngBounds(d.tambons.map(function(t){return [t.lat,t.lng];})), Object.assign({maxZoom:12}, fitPad()));
+  fitMap(L.latLngBounds(d.tambons.map(function(t){return [t.lat,t.lng];})), Object.assign({maxZoom:12}, fitPad()));
 });
 $("tam").addEventListener("change", function(){
   setTimeout(areaBtnText, 0);
