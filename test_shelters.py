@@ -6,6 +6,10 @@ import api, db, ingest as ig, line_webhook as lw, shelters
 from test_floodreports import AT, ev
 
 
+def test_line_text_says_how_old_the_source_is():
+    assert "พ.ค. 2567" in shelters.line_text(shelters.nearest(14.35, 100.57, 1, 50))
+
+
 def test_dataset_is_loaded_and_ayutthaya_has_shelters():
     assert len(shelters._all()) > 5000
     ay = shelters.by_province("พระนครศรีอยุธยา")
