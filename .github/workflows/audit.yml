@@ -1,10 +1,12 @@
-# Once a month (and on demand: Actions -> audit -> Run workflow) checks the libraries the app runs on against the
+# Once a month, whenever the pinned versions change, and on demand (Actions -> audit -> Run workflow) checks the libraries the app runs on against the
 # public vulnerability databases with pip-audit. A known hole in one of them makes this job fail, and GitHub then
 # e-mails the owner. Runs on Python 3.12 like the Vercel build (the tests job uses 3.9, which resolves older libraries). Only the runtime libraries (requirements.txt) are audited; the test tools never reach production.
 name: audit
 on:
   schedule:
     - cron: "0 3 5 * *"
+  push:
+    paths: ["requirements.txt", "pyproject.toml"]   # changing a pin re-checks it straight away, not a month later
   workflow_dispatch:
 permissions:
   contents: read
