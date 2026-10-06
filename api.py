@@ -9,6 +9,7 @@ import hmac
 import json
 import math
 import os
+import sys
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -44,7 +45,10 @@ import watchdog
 
 HEALTH_MAX_INGEST_AGE_MIN = 60  # ingest runs every ~20 min; this long means it is stuck
 
-app = FastAPI(title="น้ำใกล้บ้านฉัน API", version="0.2")
+# The interactive docs list every route, including the owner-only ones: off on the live site, on with ENABLE_DOCS=1 for local work.
+_DOCS = os.environ.get("ENABLE_DOCS") == "1"
+app = FastAPI(title="น้ำใกล้บ้านฉัน API", version="0.2",
+              docs_url="/docs" if _DOCS else None, redoc_url="/redoc" if _DOCS else None, openapi_url="/openapi.json" if _DOCS else None)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST"])
 
 
@@ -67,9 +71,16 @@ async def short_cache(request: Request, call_next):
     return resp
 
 
+def trust_proxy():
+    """x-forwarded-for is a header the client can write. Vercel replaces it with the real address, so it is believed there
+    (VERCEL is set by the platform) or when TRUST_PROXY=1 says a reverse proxy we run does the same. Anywhere else
+    (e.g. plain Docker) a visitor could invent an address per request and dodge the rate limit and the report spam guard."""
+    return os.environ.get("TRUST_PROXY") == "1" or bool(os.environ.get("VERCEL"))
+
+
 def request_ip(request):
-    """The visitor's address. Behind Vercel the first x-forwarded-for entry is the real client."""
-    fwd = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    """The visitor's address: the first x-forwarded-for entry behind a trusted proxy, otherwise the connection's own address."""
+    fwd = request.headers.get("x-forwarded-for", "").split(",")[0].strip() if trust_proxy() else ""
     return fwd or (request.client.host if request.client else "?")
 
 
@@ -161,8 +172,7 @@ class FloodReport(BaseModel):
 
 
 def client_id(request: Request):
-    fwd = request.headers.get("x-forwarded-for", "")
-    return floodreports.who(fwd.split(",")[0].strip() or (request.client.host if request.client else "?"))
+    return floodreports.who(request_ip(request))
 
 
 @app.get("/api/flood-reports")
@@ -279,6 +289,21 @@ def line_add_friend(response: Response):
 
 GISTDA_TILES = "https://api-gateway.gistda.or.th/api/2.0/resources/maps/flood/{period}/tms/{z}/{x}/{y}"
 GISTDA_PERIODS = ("1day", "3days", "7days", "30days")
+GISTDA_ZOOMS = (5, 15)                              # the map layer never asks for more (maxNativeZoom 15) or less than this over Thailand
+GISTDA_BOX = (5.4, 97.2, 20.7, 105.8)               # south, west, north, east: Thailand with a margin
+
+
+def tile_in_thailand(z, x, y):
+    """True when XYZ tile z/x/y overlaps GISTDA_BOX. The proxy spends our GISTDA quota, so it only answers for our own country."""
+    if not GISTDA_ZOOMS[0] <= z <= GISTDA_ZOOMS[1]:
+        return False
+    n = 2 ** z
+    s, w, nn, e = GISTDA_BOX
+    def col(lng): return int((lng + 180.0) / 360.0 * n)
+    def row(lat):
+        r = math.radians(lat)
+        return int((1.0 - math.log(math.tan(r) + 1.0 / math.cos(r)) / math.pi) / 2.0 * n)
+    return col(w) <= x <= col(e) and row(nn) <= y <= row(s)
 
 
 def gistda_key():
@@ -296,7 +321,7 @@ def gistda_status(response: Response):
 def gistda_flood_tile(period: str, z: int, x: int, y: int):
     """Proxy for GISTDA satellite flood-extent tiles, so the API key never reaches the browser."""
     key = gistda_key()
-    if not key or period not in GISTDA_PERIODS or not 0 <= z <= 22 or x < 0 or y < 0:
+    if not key or period not in GISTDA_PERIODS or not tile_in_thailand(z, x, y):
         raise HTTPException(404, "not available")
     url = GISTDA_TILES.format(period=period, z=z, x=x, y=y) + "?" + urllib.parse.urlencode({"api_key": key})
     try:
@@ -315,10 +340,15 @@ def gistda_flood_tile(period: str, z: int, x: int, y: int):
 @app.get("/api/ews/warnings", include_in_schema=False)
 def ews_warnings(response: Response):
     """Stations the DWR early-warning system currently flags (status 1-3), for the map layer."""
+    # Off unless EWS_ENABLED=1: the web page does not use it, DWR does not answer from outside Thailand (a call waits ~15 s
+    # and then fails), and anyone could keep serverless functions busy by calling it in a loop.
+    if os.environ.get("EWS_ENABLED") != "1":
+        raise HTTPException(404, "not available")
     try:
         data = ews.current()
-    except Exception as e:  # the type and message help tell a timeout from a blocked connection or a TLS problem
-        raise HTTPException(502, f"DWR early-warning data unavailable: {type(e).__name__}: {e}"[:300])
+    except Exception as e:
+        print(f"DWR early-warning fetch failed: {type(e).__name__}: {e}"[:300], file=sys.stderr)   # for the owner's logs, not for visitors
+        raise HTTPException(502, "DWR early-warning data unavailable")
     response.headers["Cache-Control"] = "public, max-age=300, s-maxage=600, stale-while-revalidate=3600"
     return data
 

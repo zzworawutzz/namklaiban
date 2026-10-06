@@ -107,3 +107,10 @@ def test_admin_page_is_private_read_only_and_never_keeps_the_secret_on_disk():
 def test_monthly_audit_workflow_exists_and_audits_the_runtime_requirements():
     wf = (ROOT / ".github" / "workflows" / "audit.yml").read_text(encoding="utf-8")
     assert "schedule:" in wf and "workflow_dispatch:" in wf and "pip-audit -r requirements.txt" in wf
+
+
+def test_every_workflow_limits_what_the_github_token_can_do():
+    for wf in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+        text = wf.read_text(encoding="utf-8")
+        assert "\npermissions:" in text, f"{wf.name} does not set permissions"
+        assert "write" not in text.split("\npermissions:")[1].split("\n\n")[0].split("jobs:")[0], f"{wf.name} asks for write access"

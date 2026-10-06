@@ -81,11 +81,70 @@ def test_gistda_tile_proxy_keeps_key_server_side(client, monkeypatch):
 
 def test_gistda_tile_rejects_bad_period_and_upstream_errors(client, monkeypatch):
     monkeypatch.setenv("GISTDA_API_KEY", "k")
-    assert client.get("/api/gistda/flood/1year/8/1/1").status_code == 404
+    assert client.get("/api/gistda/flood/1year/8/200/120").status_code == 404
     import urllib.error
     def boom(url, timeout=0): raise urllib.error.HTTPError(url, 403, "forbidden", {}, None)
     monkeypatch.setattr(api.urllib.request, "urlopen", boom)
-    assert client.get("/api/gistda/flood/7days/8/1/1").status_code == 502
+    assert client.get("/api/gistda/flood/7days/8/200/120").status_code == 502
     def html(url, timeout=0): return _FakeResp(b"<html>", "text/html")
     monkeypatch.setattr(api.urllib.request, "urlopen", html)
-    assert client.get("/api/gistda/flood/7days/8/1/1").status_code == 502
+    assert client.get("/api/gistda/flood/7days/8/200/120").status_code == 502
+
+
+def test_gistda_tiles_are_only_served_for_thailand(client, monkeypatch):
+    monkeypatch.setenv("GISTDA_API_KEY", "k")
+    calls = []
+    monkeypatch.setattr(api.urllib.request, "urlopen", lambda url, timeout=0: calls.append(url) or _FakeResp())
+    assert client.get("/api/gistda/flood/7days/8/200/120").status_code == 200        # around Bangkok
+    assert client.get("/api/gistda/flood/7days/6/50/30").status_code == 200          # a coarser tile that still covers Thailand
+    for path in ("7days/8/1/1",                                                      # open sea off Alaska
+                 "7days/8/200/150",                                                  # south of Thailand
+                 "7days/8/120/120",                                                  # western India
+                 "7days/3/5/3", "7days/16/52000/30000",                              # zoom outside what the layer uses
+                 "7days/22/4000000/2000000", "7days/-1/0/0"):
+        assert client.get("/api/gistda/flood/" + path).status_code in (404, 422), path
+    assert len(calls) == 2                                                           # nothing outside the box reached GISTDA
+
+
+def test_tile_in_thailand_edges():
+    assert api.tile_in_thailand(8, 200, 120) and not api.tile_in_thailand(8, 0, 0) and not api.tile_in_thailand(4, 12, 7)
+
+
+def test_docs_and_the_schema_are_off_unless_asked_for(client):
+    for p in ("/docs", "/redoc", "/openapi.json"):
+        assert client.get(p).status_code == 404, p
+
+
+def test_docs_can_be_switched_on_for_local_work(monkeypatch):
+    import importlib
+    monkeypatch.setenv("ENABLE_DOCS", "1")
+    app = importlib.reload(api).app
+    try:
+        from fastapi.testclient import TestClient
+        assert TestClient(app).get("/openapi.json").status_code == 200
+    finally:
+        monkeypatch.delenv("ENABLE_DOCS")
+        importlib.reload(api)
+
+
+def test_forwarded_for_is_only_believed_behind_a_trusted_proxy(monkeypatch):
+    class Req:
+        headers = {"x-forwarded-for": "9.9.9.9, 1.1.1.1"}
+        client = type("C", (), {"host": "10.0.0.5"})()
+    monkeypatch.delenv("TRUST_PROXY", raising=False)
+    monkeypatch.delenv("VERCEL", raising=False)
+    assert api.request_ip(Req) == "10.0.0.5"                                         # a plain deployment: the header is the visitor's to forge
+    monkeypatch.setenv("VERCEL", "1")
+    assert api.request_ip(Req) == "9.9.9.9"                                          # Vercel rewrites it
+    monkeypatch.delenv("VERCEL")
+    monkeypatch.setenv("TRUST_PROXY", "1")
+    assert api.request_ip(Req) == "9.9.9.9"
+
+
+def test_a_forged_forwarded_for_does_not_dodge_the_rate_limit_without_a_proxy(monkeypatch):
+    from fastapi.testclient import TestClient
+    monkeypatch.delenv("TRUST_PROXY", raising=False)
+    monkeypatch.setenv("RATE_LIMIT_PER_MIN", "3")
+    c = TestClient(api.app)
+    codes = [c.get("/stations", headers={"x-forwarded-for": f"7.7.7.{i}"}).status_code for i in range(5)]
+    assert codes[:3] == [200, 200, 200] and 429 in codes[3:]                         # a new invented address per request changes nothing

@@ -26,8 +26,9 @@ def real_rows():
 @pytest.fixture(autouse=True)
 def _no_ambient_database(monkeypatch):
     """Tests use SQLite unless they opt in; never touch a DATABASE_URL from the shell."""
-    for k in ("DATABASE_URL", "POSTGRES_URL", "CRON_SECRET", "VERCEL"):
+    for k in ("DATABASE_URL", "POSTGRES_URL", "CRON_SECRET", "VERCEL", "EWS_ENABLED", "ENABLE_DOCS"):
         monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("TRUST_PROXY", "1")   # most tests play a visitor behind a proxy by sending x-forwarded-for; the trust rule has its own tests
 
 
 @pytest.fixture(autouse=True)

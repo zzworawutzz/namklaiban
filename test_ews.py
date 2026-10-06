@@ -53,11 +53,13 @@ def test_current_caches_and_serves_last_good_copy_when_source_fails():
 
 
 def test_endpoint(monkeypatch):
+    monkeypatch.setenv("EWS_ENABLED", "1")
     ews._cache.update(at=0.0, data=None)
     monkeypatch.setattr(ews, "fetch", lambda: ROWS)
     r = TestClient(api.app).get("/api/ews/warnings")
     assert r.status_code == 200 and len(r.json()["stations"]) == 3 and "stale-while-revalidate" in r.headers["cache-control"]
     ews._cache.update(at=0.0, data=None)
     monkeypatch.setattr(ews, "fetch", lambda: (_ for _ in ()).throw(OSError("down")))
-    assert TestClient(api.app).get("/api/ews/warnings").status_code == 502
+    r = TestClient(api.app).get("/api/ews/warnings")
+    assert r.status_code == 502 and "down" not in r.text and "OSError" not in r.text      # nothing about the failure reaches visitors
     ews._cache.update(at=0.0, data=None)
