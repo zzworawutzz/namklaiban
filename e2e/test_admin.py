@@ -63,7 +63,11 @@ FULL = {"days": [{"day": "2026-10-05", "total": 14, "failed": 2, "by_kind": {"di
                  {"day": "2026-10-04", "total": 1, "failed": 0, "by_kind": {"digest": 1}}],
         "top_provinces": [{"province": "พระนครศรีอยุธยา", "messages": 12}], "subscriptions": 3, "db_mb": 450.5, "db_limit_mb": 512.0,
         "silent_groups": ["RID จ.กาญจนบุรี (11 สถานี)"], "watch_provinces": [], "backup": {"since": "2026-09-05T01:00:00Z", "days_left": 2},
-        "line_quota": {"limit": 300, "used": 292}, "budget": {"reserve": 15, "holding": True}}
+        "line_quota": {"limit": 300, "used": 292}, "budget": {"reserve": 15, "holding": True},
+        "bank_data": {"fresh": 700, "usable": 90, "far_below": 600, "missing": 4, "too_high_count": 2, "disagree_count": 1, "bank_not_above_bed_count": 1,
+                      "too_high": [{"id": "x1", "name": "สถานีสูงผิดปกติ", "province": "ตาก", "cm": 415, "pct": 130}, {"id": "x2", "name": "สถานีสูงสอง", "province": "ตาก", "cm": 310, "pct": None}],
+                      "disagree": [{"id": "x3", "name": "สถานีขัดกัน", "province": "ลำพูน", "cm": 40, "pct": 80}],
+                      "bank_not_above_bed": [{"id": "x4", "name": "สถานีตลิ่งต่ำ", "province": "น่าน", "bank": 3.0, "bed": 3.5}]}}
 
 
 @pytest.mark.parametrize("scheme", ["light", "dark"])
@@ -78,6 +82,8 @@ def test_dashboard_with_a_nearly_full_quota_says_so_and_stays_readable(browser, 
     assert "292" in text and "/ 300" in text and "เหลือ 8 ข้อความ" in text and "กำลังพักข้อความไม่เร่งด่วน" in text
     assert "RID จ.กาญจนบุรี (11 สถานี)" in text and "ถึงเจ้าของ" in text and "ทั้งประเทศ" in text
     assert "อีก 2 วัน" in text
+    assert "คุณภาพข้อมูลตลิ่ง" in text and "4 สถานีข้อมูลตลิ่งน่าสงสัย" in text and "จาก 700 สถานีที่ข้อมูลสด" in text
+    assert "สถานีสูงผิดปกติ" in text and "415 ซม. · 130%" in text and "สถานีขัดกัน" in text and "ตลิ่ง 3 · ท้องน้ำ 3.5" in text and "รวม 2" in text
     bad = contrast.audit(page)
     assert not bad, [f"{f['ratio']} (need {f['need']}) {f['el']} '{f['text']}'" for f in bad]
     ctx.close()

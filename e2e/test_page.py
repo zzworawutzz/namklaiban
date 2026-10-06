@@ -43,6 +43,10 @@ def test_province_list_sorts_by_level_and_by_fast_rise(page, site):
     assert rows()[0] == "ท่าช้าง" and "ซม. ใน 3 ชม." in page.inner_text("#resList .row")
     assert not page.is_disabled("#resSort button[data-sort=near]")                 # never a dead button
     assert page.get_attribute("#resSort button[data-sort=fast]", "aria-pressed") == "true"
+    page.click("#resSort button[data-sort=over]")
+    assert page.inner_text("#resTitle").startswith("ล้นตลิ่งมากที่สุดใน จ.ปทุมธานี")
+    assert rows()[0] == "ท่าช้าง"                                                   # the only station at the bank comes first, the ones far below follow by %
+    assert page.get_attribute("#resSort button[data-sort=over]", "aria-pressed") == "true"
 
 
 def test_alert_station_shows_nearest_shelter_with_a_working_phone_link(page, site):
@@ -484,3 +488,15 @@ def test_cm_over_the_bank_is_in_the_list_the_marker_title_and_the_chart_axis(pag
     labels = page.evaluate("Array.from(document.querySelectorAll('svg.chart text')).map(t => t.textContent)")
     assert "ซม.ตลิ่ง" in labels and "0" in labels and any(l.startswith("-") for l in labels), labels
     assert "แกนขวาเป็นเซนติเมตร" in page.get_attribute("svg.chart", "aria-label")
+
+
+def test_the_csp_blocks_an_injected_inline_script_and_an_inline_handler_but_not_our_own_scripts(context, site):
+    page = context.new_page()
+    errors = watch(page)
+    open_page(page, site)                                                                   # our own inline script (theme) and app.js ran: the map is up
+    page.evaluate("var s = document.createElement('script'); s.textContent = 'window.__pwned = 1'; document.head.appendChild(s)")
+    page.evaluate("var b = document.createElement('button'); b.id = 'evil'; b.setAttribute('onclick', 'window.__pwned2 = 1'); document.body.appendChild(b); b.click()")
+    page.wait_for_timeout(300)
+    assert page.evaluate("window.__pwned") is None and page.evaluate("window.__pwned2") is None
+    assert sum("Content Security Policy" in e for e in errors) >= 2, errors                 # the browser reported both attempts
+    errors.clear()
