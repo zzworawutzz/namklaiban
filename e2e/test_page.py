@@ -431,3 +431,56 @@ def test_station_card_says_how_far_above_the_bank_and_only_when_it_is_known(page
     page.wait_for_selector("#sumBody .verdict", timeout=30000)
     page.wait_for_selector(".big", timeout=15000)
     assert page.locator(".overbank").count() == 0                                                     # B is far below the bank: nothing to say
+
+
+STATION_D_JS = """(() => { const m = document.querySelector('.leaflet-marker-icon[title^="เมืองนนท์"]'), c = document.getElementById('map').getBoundingClientRect();
+    if (!m) return null; const r = m.getBoundingClientRect(); return {dx: (r.left + r.width / 2) - (c.left + c.width / 2), dy: (r.top + r.height / 2) - (c.top + c.height / 2)}; })()"""
+
+
+def assert_fitted_in_the_uncovered_area(page):
+    """A fit leaves the point in the middle of the part of the map the sheet and top bar do not cover: on a 1280 px desktop
+    that is 208 px right of and 36 px below the middle of the whole map (the paddings in fitPad())."""
+    box = page.evaluate(STATION_D_JS)
+    assert box is not None, "station D is not on the map"
+    assert abs(box["dx"] - 208) < 40 and abs(box["dy"] - 36) < 40, box
+
+
+def test_map_survives_losing_its_size_and_fits_when_it_comes_back(page, site):
+    open_page(page, site)
+    page.evaluate("document.getElementById('map').style.display = 'none'")             # e.g. a hidden tab or a layout that collapses the map
+    page.wait_for_timeout(300)
+    page.evaluate("var p = document.getElementById('prov'); p.value = 'นนทบุรี'; p.dispatchEvent(new Event('change'))")   # asks the map to fit that province
+    page.wait_for_timeout(300)
+    page.evaluate("document.getElementById('map').style.display = ''")
+    page.wait_for_timeout(1000)
+    assert "NaN" not in page.evaluate("document.querySelector('.leaflet-map-pane').style.transform")
+    assert_fitted_in_the_uncovered_area(page)
+
+
+def test_map_that_starts_with_no_size_fits_once_it_has_one(context, site):
+    context.add_init_script("""new MutationObserver((_, o) => { if (document.head) { const s = document.createElement('style'); s.id = 'nosize';
+        s.textContent = '#map{display:none !important}'; document.head.appendChild(s); o.disconnect(); } }).observe(document, {childList: true, subtree: true});""")   # in place before app.js builds the map
+    page = context.new_page()
+    errors = watch(page)
+    page.goto(site + "/nonthaburi", wait_until="domcontentloaded")
+    page.wait_for_selector("#sumBody .verdict", timeout=30000)                          # the data arrives while the map has no size, so the fit has to wait
+    page.wait_for_timeout(500)
+    page.evaluate("document.getElementById('nosize').remove()")
+    page.wait_for_selector(".leaflet-marker-icon", timeout=15000)
+    page.wait_for_timeout(1200)
+    assert "NaN" not in page.evaluate("document.querySelector('.leaflet-map-pane').style.transform")
+    assert_fitted_in_the_uncovered_area(page)
+    assert not errors
+
+
+def test_cm_over_the_bank_is_in_the_list_the_marker_title_and_the_chart_axis(page, site):
+    open_page(page, site)                                                                  # /pathumthani: A is at the bank, B and C far below it
+    first = page.inner_text("#resList .row")
+    assert first.startswith("ท่าช้าง") and "เสมอระดับตลิ่ง" in first, first               # the unit of the day: cm next to the %, in the list
+    assert "ตลิ่งราว" not in page.inner_text("#resList") and page.locator("#resList .row").count() >= 2   # stations far below the bank say nothing
+    assert page.evaluate("Array.from(document.querySelectorAll('.leaflet-marker-icon')).some(m => (m.title || '').includes('เสมอระดับตลิ่ง'))")
+    page.goto(site + "/?station=A", wait_until="domcontentloaded")
+    page.wait_for_selector("svg.chart", timeout=20000)
+    labels = page.evaluate("Array.from(document.querySelectorAll('svg.chart text')).map(t => t.textContent)")
+    assert "ซม.ตลิ่ง" in labels and "0" in labels and any(l.startswith("-") for l in labels), labels
+    assert "แกนขวาเป็นเซนติเมตร" in page.get_attribute("svg.chart", "aria-label")
