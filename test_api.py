@@ -162,3 +162,52 @@ def test_cross_site_writes_are_refused_but_our_own_pages_and_tools_can_post(clie
 def test_a_cross_site_preflight_for_a_post_is_not_granted(client):
     r = client.options("/api/flood-reports", headers={"origin": "https://evil.example", "access-control-request-method": "POST"})
     assert r.status_code == 400 or "POST" not in r.headers.get("access-control-allow-methods", "")
+
+
+def _ingest_ran(minutes_ago, ok=1, error=None):
+    from datetime import timedelta
+    with api.conn() as c:
+        c.execute("INSERT INTO ingest_runs(ts,ok,stations,readings,skipped,error) VALUES(?,?,?,?,?,?)",
+                  (api.core.iso(api.now() - timedelta(minutes=minutes_ago)), ok, 2, 2, 0, error))
+        c.commit()
+
+
+def test_health_monitor_is_503_until_ingest_has_run_and_200_when_data_flows(client):
+    r = client.get("/health/monitor")
+    assert r.status_code == 503 and r.json()["ok"] is False and "ingest has not succeeded recently" in r.json()["problems"][0]
+    assert r.headers["cache-control"] == "no-store"
+    assert client.get("/health").status_code == 200                                  # /health itself never fails: the page reads it
+    _ingest_ran(5)
+    r = client.get("/health/monitor")
+    assert r.status_code == 200 and r.json()["ok"] is True and r.json()["problems"] == [] and r.json()["stations"] == 2
+
+
+def test_health_monitor_says_why_it_fails(client):
+    _ingest_ran(300, ok=1)                                                           # last success five hours ago
+    r = client.get("/health/monitor")
+    assert r.status_code == 503 and "ingest has not succeeded recently" in r.json()["problems"][0]
+    _ingest_ran(1, ok=0, error="ConnectionError: boom")
+    assert "boom" in client.get("/health/monitor").json()["problems"][0]
+
+
+def test_health_monitor_fails_when_no_reading_is_newer_than_three_hours(client, monkeypatch):
+    from datetime import timedelta
+    _ingest_ran(5)
+    assert client.get("/health/monitor").status_code == 200
+    monkeypatch.setattr(api, "now", lambda: datetime(2026, 10, 1, 16, 30, tzinfo=timezone.utc) + timedelta(hours=4))
+    _ingest_ran(5)                                                                   # ingest keeps succeeding, the source has nothing new
+    r = client.get("/health/monitor")
+    assert r.status_code == 503 and any("newest reading is" in p for p in r.json()["problems"])
+
+
+def test_health_monitor_does_not_fail_just_because_many_stations_are_old(client):
+    _ingest_ran(5)
+    j = client.get("/health/monitor").json()
+    assert j["stale"] >= 1 and j["ok"] is True                                       # one of two stations is hours old: that is not an outage
+
+
+def test_health_monitor_with_an_empty_database_says_no_stations(tmp_path, monkeypatch):
+    monkeypatch.setenv("WATER_DB", str(tmp_path / "empty2.db"))
+    api._ready.clear()
+    r = TestClient(api.app).get("/health/monitor")
+    assert r.status_code == 503 and "no stations" in r.json()["problems"]

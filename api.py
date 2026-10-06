@@ -111,8 +111,7 @@ def conn():
     return c
 
 
-@app.get("/health")
-def health():
+def health_data():
     at = now()
     with conn() as c:
         rows = core.latest(c, at)
@@ -127,6 +126,32 @@ def health():
             "last_ingest_age_min": ingest_age,
             "last_ingest_error": run["error"] if run and not run["ok"] else None,
             "ingest_ok": healthy}
+
+
+@app.get("/health")
+def health():
+    return health_data()
+
+
+MONITOR_MAX_READING_AGE_MIN = 180   # no new reading at all for this long: the source (or our reading of it) has stopped
+
+
+@app.get("/health/monitor")
+def health_monitor():
+    """For an outside uptime monitor (cron-job.org, UptimeRobot...) that can only look at the HTTP status: 200 when data is
+    flowing, 503 with the reason when ingest has failed for over an hour, no station exists, or no reading at all is newer than
+    3 hours. /health itself always answers 200 (the web page reads it for its "data may be late" bar), so it cannot be used for this.
+    A share of stations being old is NOT a failure here: some agencies simply report less often."""
+    h = health_data()
+    problems = []
+    if not h["stations"]:
+        problems.append("no stations")
+    if not h["ingest_ok"]:
+        problems.append("ingest has not succeeded recently" + (f" ({h['last_ingest_error']})" if h["last_ingest_error"] else ""))
+    if h["latest_reading_age_min"] is not None and h["latest_reading_age_min"] > MONITOR_MAX_READING_AGE_MIN:
+        problems.append(f"newest reading is {h['latest_reading_age_min']} min old")
+    body = {"ok": not problems, "problems": problems, **h}
+    return JSONResponse(body, status_code=503 if problems else 200, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/stations")
