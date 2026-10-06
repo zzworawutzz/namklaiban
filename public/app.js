@@ -398,7 +398,7 @@ function shelterBox(s){
   var x = l[0], tel = firstPhone(x.phone);
   return '<div class="shbox"><h3>ศูนย์พักพิงที่ใกล้สถานีนี้ที่สุด</h3><div class="nm">'+esc(x.name)+'</div><small>ห่าง '+x.distance_km+' กม. · ต.'+esc(x.subdistrict)+' อ.'+esc(x.district)+(x.capacity?' · รองรับ ~'+x.capacity+' คน':'')+'</small>'+
     '<div class="acts">'+(tel?'<a href="'+esc(telHref(tel))+'">โทร '+esc(tel)+'</a>':'')+'<a target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination='+x.lat+','+x.lng+'">นำทาง</a></div>'+
-    '<div class="note" style="margin:6px 0 0">ข้อมูลจาก ปภ. อาจไม่เป็นปัจจุบัน โทรสอบถามก่อนเดินทาง (สายด่วน 1784)</div></div>';
+    '<div class="note" style="margin:6px 0 0">ข้อมูลจาก ปภ. (ปรับปรุงล่าสุด พ.ค. 2567) อาจไม่เป็นปัจจุบัน โทรสอบถามก่อนเดินทาง (สายด่วน 1784)</div></div>';
 }
 function loadStationShelter(s){
   if(!(s.status==="watch" || s.status==="alert") || nearShl[s.id]!==undefined) return;
@@ -814,7 +814,7 @@ function pickPlace(it){
   if(it.type==="สถานี" && it.id && byId[it.id]){ select(it.id, true); return; }
   if(it.type==="ศูนย์พักพิง"){
     flyToVisible([it.lat,it.lng], 15);
-    L.popup().setLatLng([it.lat,it.lng]).setContent('<div class="pp"><b>'+esc(it.name)+'</b><div class="note">ศูนย์พักพิงชั่วคราว (ข้อมูล ปภ.) โทรสอบถามก่อนเดินทาง</div></div>').openOn(map);
+    L.popup().setLatLng([it.lat,it.lng]).setContent('<div class="pp"><b>'+esc(it.name)+'</b><div class="note">ศูนย์พักพิงชั่วคราว (ข้อมูล ปภ. ปรับปรุงล่าสุด พ.ค. 2567) โทรสอบถามก่อนเดินทาง</div></div>').openOn(map);
     return;
   }
   if(!it.province){ goToPlace(L.latLng(it.lat, it.lng)); return; }
@@ -1078,7 +1078,7 @@ function shelterPopup(s){
     (s.capacity?'<div class="note">รองรับประมาณ '+s.capacity+' คน</div>':'')+
     (s.phone?'<div><a href="'+esc(telHref(s.phone))+'">โทร '+esc(firstPhone(s.phone))+'</a></div>':'')+
     '<div><a target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination='+s.lat+','+s.lng+'">นำทาง</a></div>'+
-    '<div class="note">ข้อมูลจาก ปภ. อาจไม่เป็นปัจจุบัน</div></div>';
+    '<div class="note">ข้อมูลจาก ปภ. (ปรับปรุงล่าสุด พ.ค. 2567) อาจไม่เป็นปัจจุบัน</div></div>';
 }
 function drawShelters(){
   shelterLayer.clearLayers();
