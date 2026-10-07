@@ -1,0 +1,24 @@
+# A second pair of eyes on /health/monitor, next to the cron-job.org job: that endpoint answers 503 (with the reasons in the body)
+# when ingest has failed for an hour, no station exists, no reading is newer than 3 hours, or a whole agency (HII, RID, FOP, EGAT)
+# has gone quiet. curl --fail turns a 503 into a failed run, and GitHub e-mails the owner about a failed run (the ingest
+# workflow's failure e-mails prove that path works). The reasons are printed in the run's log.
+# Needs the repo variable APP_URL (same one the ingest workflow uses). No secret: the endpoint is public.
+# Failures repeat every 30 minutes for as long as the problem lasts, one e-mail each. GitHub may delay scheduled runs.
+name: monitor
+on:
+  schedule:
+    - cron: "7,37 * * * *"
+  workflow_dispatch:
+concurrency: monitor
+permissions:
+  contents: read
+jobs:
+  monitor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Check /health/monitor
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+        run: |
+          curl --fail-with-body -sS --max-time 60 "${APP_URL}/health/monitor"
