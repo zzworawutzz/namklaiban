@@ -521,3 +521,15 @@ def test_no_notice_when_every_agency_reports(page, site):
     open_page(page, site)
     page.wait_for_timeout(1500)
     assert page.is_hidden("#delayBar")
+
+
+def test_report_page_shows_the_share_of_stations_by_status_as_a_ring_with_whole_percentages(page, site):
+    page.goto(site + "/report.html?province=ปทุมธานี", wait_until="domcontentloaded")
+    page.wait_for_selector(".ring svg", timeout=15000)
+    label = page.get_attribute(".ring svg", "aria-label")
+    assert label.startswith("สัดส่วนสถานีตามสถานะ"), label
+    rows = page.eval_on_selector_all(".ring li", "els => els.map(e => e.innerText.replace(/\\s+/g, ' ').trim())")
+    pcts = [int(r.split("%")[0].split()[-1]) for r in rows if "%" in r]
+    assert pcts and sum(pcts) == 100, rows                                     # the rounded shares always add up to exactly 100
+    assert page.locator(".ring svg text").first.text_content().strip().isdigit()                  # the total sits in the middle
+    assert page.locator(".ring circle[stroke-dasharray]").count() >= 1
