@@ -79,7 +79,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 <script>
 (function(){
   var KEY = "nkb-admin", $ = function(id){ return document.getElementById(id); };
-  var KIND = {status:"สถานะเปลี่ยน", early:"เตือนล่วงหน้า", fast:"น้ำขึ้นเร็ว", report:"รายงานน้ำท่วม", digest:"สรุป", stale:"สถานีเงียบ", admin:"ถึงเจ้าของ"};
+  var KIND = {status:"สถานะเปลี่ยน", early:"เตือนล่วงหน้า", fast:"น้ำขึ้นเร็ว", report:"รายงานน้ำท่วม", digest:"สรุป", rain:"ฝนหนักใน 3 ชม.", stale:"สถานีเงียบ", admin:"ถึงเจ้าของ"};
   function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
   function getSecret(){ try { return sessionStorage.getItem(KEY) || ""; } catch(e){ return window.__nkbSecret || ""; } }
   function setSecret(v){ try { v ? sessionStorage.setItem(KEY, v) : sessionStorage.removeItem(KEY); } catch(e){} window.__nkbSecret = v; }

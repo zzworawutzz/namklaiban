@@ -259,6 +259,39 @@ function fastHtml(list){
   }).join("")+'<div class="note" style="margin:6px 0 0">นับจากระดับน้ำจริงของสถานี ไม่นับค่าที่กระโดดผิดปกติ</div></div>';
 }
 $("sumBody").addEventListener("click",function(e){ var b = e.target.closest ? e.target.closest(".fastrow") : null; if(b) select(b.getAttribute("data-id"),true); });
+/* ---------- read the summary aloud: the browser's own speech, only when the device has a Thai voice (nothing is sent anywhere) ---------- */
+var speakBtn = $("btnSpeak"), thVoice = null;
+var TH_MONTHS = [["ม.ค.","มกราคม"],["ก.พ.","กุมภาพันธ์"],["มี.ค.","มีนาคม"],["เม.ย.","เมษายน"],["พ.ค.","พฤษภาคม"],["มิ.ย.","มิถุนายน"],["ก.ค.","กรกฎาคม"],["ส.ค.","สิงหาคม"],["ก.ย.","กันยายน"],["ต.ค.","ตุลาคม"],["พ.ย.","พฤศจิกายน"],["ธ.ค.","ธันวาคม"]];
+function speakable(t){   // symbols and abbreviations a voice would read letter by letter
+  t = t.replace(/[▲▼■]/g,"").replace(/(\d+(?:\.\d+)?)\s*%/g,"$1 เปอร์เซ็นต์").replace(/ซม\./g,"เซนติเมตร").replace(/มม\./g,"มิลลิเมตร")
+       .replace(/กม\./g,"กิโลเมตร").replace(/ชม\./g,"ชั่วโมง").replace(/จ\.(?=[ก-๙])/g,"จังหวัด").replace(/(\d{1,2}):(\d{2})\s*น\./g,"$1 นาฬิกา $2 นาที")
+       .replace(/·/g,",");
+  TH_MONTHS.forEach(function(m){ t = t.split(m[0]).join(m[1]); });
+  return t.replace(/\s+/g," ").trim();
+}
+function summaryText(){
+  var parts = [$("sumTitle").textContent, $("sumSub").textContent], v = $("sumBody").querySelector(".verdict");
+  if(v) Array.prototype.forEach.call(v.children, function(c){ if(!c.classList.contains("vn")) parts.push(c.textContent); });   // .vn is the small-print legend
+  var o = $("oneLine"); if(o && o.textContent) parts.push(o.textContent);
+  return speakable(parts.filter(Boolean).join(". "));
+}
+function setSpeaking(on){ speakBtn.setAttribute("aria-pressed", on ? "true" : "false"); speakBtn.textContent = on ? "⏹ หยุด" : "🔊 ฟัง"; }
+function syncSpeak(){
+  var ss = window.speechSynthesis, v = ss && ss.getVoices ? ss.getVoices().filter(function(x){ return /^th/i.test(x.lang||""); }) : [];
+  thVoice = v[0] || null; speakBtn.hidden = !thVoice;
+}
+if(window.speechSynthesis && window.SpeechSynthesisUtterance){
+  syncSpeak();
+  if(speechSynthesis.addEventListener) speechSynthesis.addEventListener("voiceschanged", syncSpeak); else speechSynthesis.onvoiceschanged = syncSpeak;
+  speakBtn.addEventListener("click", function(){
+    var ss = window.speechSynthesis;
+    if(ss.speaking){ ss.cancel(); setSpeaking(false); return; }
+    var u = new SpeechSynthesisUtterance(summaryText()); u.lang = "th-TH"; u.rate = .95; if(thVoice) u.voice = thVoice;
+    u.onend = u.onerror = function(){ setSpeaking(false); };
+    setSpeaking(true); ss.speak(u);
+  });
+  window.addEventListener("pagehide", function(){ speechSynthesis.cancel(); });
+}
 function redraw(){ drawMarkers(); drawChips(); drawSummary(); drawRivers(); if(typeof updateBoundary==="function") updateBoundary(); if(typeof refreshShelters==="function") refreshShelters(); if(typeof refreshRain==="function") refreshRain(); }
 
 /* ---------- river lines ---------- */
