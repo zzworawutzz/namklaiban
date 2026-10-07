@@ -146,3 +146,18 @@ def test_pins_installed_here_are_the_pins_in_the_file():
         if r.marker is not None and not r.marker.evaluate():
             continue
         assert metadata.version(r.name) == next(iter(r.specifier)).version, r.name
+
+
+def test_no_workflow_floats_on_ubuntu_latest():
+    """GitHub moves ubuntu-latest to Ubuntu 26 from 19 Oct 2026; every job names its image so a test run cannot change under us."""
+    for wf in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+        text = wf.read_text(encoding="utf-8")
+        assert "ubuntu-latest" not in text, f"{wf.name} floats on ubuntu-latest"
+        assert "runs-on: ubuntu-24.04" in text, f"{wf.name} does not name its runner"
+
+
+def test_monitor_workflow_fails_when_health_monitor_answers_503():
+    wf = (ROOT / ".github" / "workflows" / "monitor.yml").read_text(encoding="utf-8")
+    assert "schedule:" in wf and "workflow_dispatch:" in wf
+    assert "curl --fail-with-body" in wf and "/health/monitor" in wf and "${APP_URL}" in wf       # --fail: a 503 becomes a failed run, so GitHub e-mails
+    assert "secrets." not in wf                                                                     # the endpoint is public: no secret to leak or to get wrong
