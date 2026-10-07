@@ -101,3 +101,18 @@ def test_one_forecast_per_province_not_per_person(conn, monkeypatch):
     monkeypatch.setattr(rainalert, "fetch", f)
     assert notify.run_digest(conn, AT, {"stdout": lambda t, m, flex=None: None}) == (4, 0)
     assert len(calls) == 1 and all(14.3 < c[0] < 14.7 for c in calls)               # the middle of the province, not a home
+
+
+def test_next_three_hours_gives_the_total_the_peak_hour_and_a_label_only_when_heavy():
+    rows = [{"province": "ป", "lat": 14.0, "lng": 100.0}]
+    mk = lambda mm: (lambda lat, lng: {"hourly": {"time": ["2026-10-01T10:00", "2026-10-01T11:00", "2026-10-01T12:00"], "precipitation": mm}})
+    rainalert._soon_cache.clear()
+    r = rainalert.soon_for_province(rows, "ป", fetcher=mk([4.0, 30.0, 6.0]))
+    assert r["mm"] == 40.0 and r["peak_mm"] == 30.0 and r["peak_at"] == "11:00" and r["label"] == "ฝนหนัก" and r["hours"] == 3
+    rainalert._soon_cache.clear()
+    assert rainalert.soon_for_province(rows, "ป", fetcher=mk([2.0, 3.0, 4.0])) is None                       # 9 mm: not heavy
+    rainalert._soon_cache.clear()
+    assert rainalert.soon_for_province(rows, "ป", fetcher=mk([0.0, 55.0, 0.0]))["label"] == "ฝนหนักมาก"     # one violent hour
+    rainalert._soon_cache.clear()
+    assert rainalert.soon_for_province(rows, "ป", fetcher=lambda a, b: 1 / 0) is None                          # no forecast: no message
+    assert rainalert.soon_for_province(rows, "ไม่มี", fetcher=mk([50.0, 0, 0])) is None                       # a province with no station

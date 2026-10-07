@@ -376,3 +376,60 @@ def test_drop_below_the_bank_with_a_status_change_sends_only_the_status_message(
     monkeypatch.setattr(notify.core, "latest", lambda conn, a: [dict(over, status="watch", pct_of_bank=80.0, over_bank_cm=-60)])
     assert run() == (1, 0) and "ลดลงต่ำกว่าตลิ่งแล้ว" not in out[-1]
     assert c.execute("SELECT was_over_bank FROM subscriptions").fetchone()[0] == 0
+
+
+# ---- heads-up: heavy rain in the next hours (province-level, never the person's own place) ----
+
+import rainalert
+
+
+def _soon(monkeypatch, mm=(5.0, 22.0, 10.0), seen=None):
+    def fake(lat, lng):
+        if seen is not None:
+            seen.append((round(lat, 3), round(lng, 3)))
+        return {"hourly": {"time": ["2026-10-01T23:00", "2026-10-02T00:00", "2026-10-02T01:00"], "precipitation": list(mm)}}
+    monkeypatch.setattr(rainalert, "fetch_soon", fake)
+
+
+def test_heavy_rain_soon_sends_one_heads_up_then_waits_twelve_hours(tmp_path, monkeypatch):
+    seen = []
+    _soon(monkeypatch, seen=seen)                                   # 37 mm in 3 h, peak 22 mm at 00:00
+    c, out, run = _run(tmp_path, monkeypatch, _station(status="normal", pct_of_bank=30.0, trend=None, eta_to_bank_h=None))
+    assert run() == (1, 0)
+    assert "พยากรณ์ฝน 3 ชม." in out[0] and "~37 มม." in out[0] and "00:00 น." in out[0] and "ไม่ใช่ตำแหน่งบ้านคุณ" in out[0] and "อยุธยา" in out[0]
+    assert c.execute("SELECT kind FROM send_log").fetchone()[0] == "rain"
+    assert run() == (0, 0)                                          # cooldown
+    c.execute("UPDATE subscriptions SET last_rain_alert='2026-10-01T03:00:00Z'")   # 13.5 h ago
+    assert run() == (1, 0)
+
+
+def test_the_forecast_is_asked_for_at_the_province_centre_never_at_the_persons_saved_place(tmp_path, monkeypatch):
+    seen = []
+    _soon(monkeypatch, seen=seen)
+    st = _station(status="normal", pct_of_bank=30.0, trend=None, eta_to_bank_h=None, lat=14.9, lng=100.9)   # the province's only station is far from the person
+    c, out, run = _run(tmp_path, monkeypatch, st)
+    c.execute("UPDATE subscriptions SET lat=14.2, lng=99.0")                                                 # the person's own place
+    run()
+    assert seen == [(14.9, 100.9)], seen                                                                     # the middle of the province's stations, not (14.2, 99.0)
+
+
+def test_no_heads_up_when_the_rain_is_light_or_the_person_wants_quiet(tmp_path, monkeypatch):
+    base = dict(status="normal", pct_of_bank=30.0, trend=None, eta_to_bank_h=None)
+    _soon(monkeypatch, mm=(3.0, 5.0, 4.0))                          # 12 mm in 3 h: not heavy
+    c, out, run = _run(tmp_path, monkeypatch, _station(**base))
+    assert run() == (0, 0)
+    _soon(monkeypatch)
+    c, out, run = _run(tmp_path, monkeypatch, _station(**base), sub_sql="notify_level='alert'")              # alert-level news only
+    assert run() == (0, 0)
+    c, out, run = _run(tmp_path, monkeypatch, _station(**base), sub_sql="quiet=1", at=datetime(2026, 10, 1, 17, 30, tzinfo=timezone.utc))   # 00:30 Thai, quiet nights
+    assert run() == (0, 0)
+    c, out, run = _run(tmp_path, monkeypatch, _station(**base), sub_sql="snooze_until='2026-10-02T12:00:00Z'")
+    assert run() == (0, 0)
+
+
+def test_one_hour_of_very_heavy_rain_is_enough_and_two_places_in_one_province_get_one_message(tmp_path, monkeypatch):
+    seen = []
+    _soon(monkeypatch, mm=(0.0, 21.0, 0.0), seen=seen)               # only 21 mm in total, but 21 in a single hour
+    c, out, run = _run(tmp_path, monkeypatch, _station(status="normal", pct_of_bank=30.0, trend=None, eta_to_bank_h=None))
+    c.execute("INSERT INTO subscriptions(channel,target,lat,lng,label,last_status) VALUES('stdout','U1',14.21,99.01,'ที่ทำงาน','normal')")
+    assert run() == (1, 0) and len(out) == 1 and len(seen) == 1       # one person, one province: one message, one forecast

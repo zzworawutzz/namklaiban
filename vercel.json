@@ -20,7 +20,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'sha256-7wchnvNoATHBzoDEhK+1py6z2eoWOfr5hpTtWeVyz9o=' 'sha256-9Rovun6UTaZcNv14HvfHv15E7cVotAmR5cjGaDLEmvA=' 'sha256-S5QcSg5tMmajCAMss9GNujJpeuc0k0NsMXMFAu+CUqY=' 'sha256-po0KKESTlf5p3+zhY08FSX0SPka2zgVYZlyaEzvGPVk=' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://api.open-meteo.com https://api.rainviewer.com https://nominatim.openstreetmap.org https://router.project-osrm.org; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+          "value": "default-src 'self'; script-src 'self' 'sha256-7wchnvNoATHBzoDEhK+1py6z2eoWOfr5hpTtWeVyz9o=' 'sha256-9Rovun6UTaZcNv14HvfHv15E7cVotAmR5cjGaDLEmvA=' 'sha256-S5QcSg5tMmajCAMss9GNujJpeuc0k0NsMXMFAu+CUqY=' 'sha256-rCRpKNQRcmx1Fbd2m9fnDja0Ab3HgNmL4k8WK7iBFkE=' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://api.open-meteo.com https://api.rainviewer.com https://nominatim.openstreetmap.org https://router.project-osrm.org; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
         },
         {
           "key": "X-Content-Type-Options",

@@ -10,7 +10,7 @@ INLINE_SCRIPT_HASHES = (
     "'sha256-7wchnvNoATHBzoDEhK+1py6z2eoWOfr5hpTtWeVyz9o='",
     "'sha256-9Rovun6UTaZcNv14HvfHv15E7cVotAmR5cjGaDLEmvA='",
     "'sha256-S5QcSg5tMmajCAMss9GNujJpeuc0k0NsMXMFAu+CUqY='",
-    "'sha256-po0KKESTlf5p3+zhY08FSX0SPka2zgVYZlyaEzvGPVk='",
+    "'sha256-rCRpKNQRcmx1Fbd2m9fnDja0Ab3HgNmL4k8WK7iBFkE='",
 )
 
 CSP = "; ".join([

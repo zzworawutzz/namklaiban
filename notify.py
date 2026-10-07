@@ -222,6 +222,22 @@ def stale_message(sub, own, instead):
     return "\n".join(lines + ["ควรตรวจสถานการณ์จริงและประกาศ ปภ. (โทร 1784)", FOOTER])
 
 
+RAIN_SOON_COOLDOWN_H = 12   # one "heavy rain in the next hours" heads-up per person per this many hours
+
+
+def rain_soon_message(sub, prov, rain):
+    """Heavy rain is forecast for the province in the next few hours. It is the middle of the province, not the person's own
+    place (that is never sent anywhere), and a model forecast, so the text says both."""
+    where = f" ({sub['label']})" if sub["label"] else ""
+    peak = f" ฝนแรงสุดราว {rain['peak_at']} น. (~{round(rain['peak_mm'])} มม./ชม.)" if rain.get("peak_at") else ""
+    return "\n".join([
+        f"🌧 น้ำใกล้บ้านฉัน{where}",
+        f"พยากรณ์ฝน {rain['hours']} ชม. ข้างหน้าของจังหวัด{prov} ~{round(rain['mm'])} มม. ({rain['label']}){peak}",
+        "ฝนหนักอาจทำให้น้ำท่วมขังและระดับน้ำสูงขึ้น ระวังน้ำเพิ่ม และดูสถานะสถานีใกล้บ้านได้ที่คำสั่ง \"สถานะ\"",
+        "(ค่ากลางของทั้งจังหวัดจากแบบจำลอง Open-Meteo ไม่ใช่ตำแหน่งบ้านคุณ และไม่ใช่ประกาศของกรมอุตุนิยมวิทยา)",
+        FOOTER])
+
+
 def below_bank_message(sub, st):
     """The water at the nearest station was over the bank and has dropped back under it. The status may be unchanged (still alert
     level, which starts below 100 %), so no status message says this."""
@@ -272,7 +288,7 @@ def in_quiet_hours(at):
     return h >= QUIET_FROM_H or h < QUIET_TO_H
 
 
-KIND_ORDER = ["status", "early", "fast", "stale", "report"]   # which kind a merged message is logged as (send_log): the most serious first
+KIND_ORDER = ["status", "early", "fast", "stale", "report", "rain"]   # which kind a merged message is logged as (send_log): the most serious first
 
 
 def merge_events(evs):
@@ -299,6 +315,7 @@ def run(conn, at=None, senders=SENDERS):
     outage = bool(rows) and not any(a["stations"] >= STALE_NOTICE_HEALTHY_MIN_STATIONS and a["recent"] / a["stations"] >= STALE_NOTICE_HEALTHY_SHARE
                                     for a in shares.values())   # nobody is reporting: not "this station went quiet"
     ok = lambda sub, urgent: sub["channel"] != "line" or bud.allow(urgent)   # quota nearly used up: only alert-level news goes out
+    rain_by_prov, rain_told = {}, set()
     groups = {}   # (channel, target) -> alerts due this round; one person with several saved places gets ONE message
 
     def queue(sub, kind, text, flex, province, sql, params):
@@ -320,6 +337,15 @@ def run(conn, at=None, senders=SENDERS):
                 instead = near[0] if near and near[0]["id"] != own["id"] else None
                 queue(sub, "stale", stale_message(sub, own, instead), None, own["province"],
                       "UPDATE subscriptions SET stale_notified=? WHERE id=?", (_iso(at), sub["id"]))
+        rain_prov = (near[0] if near else own or {}).get("province")
+        if (rain_prov and sub["notify_level"] != "alert" and not quiet_now and _since(sub["last_rain_alert"], at, RAIN_SOON_COOLDOWN_H)
+                and (sub["channel"], sub["target"], rain_prov) not in rain_told and ok(sub, False)):
+            if rain_prov not in rain_by_prov:
+                rain_by_prov[rain_prov] = rainalert.soon_for_province(rows, rain_prov)    # one forecast per province per run, None unless heavy
+            if rain_by_prov[rain_prov]:
+                rain_told.add((sub["channel"], sub["target"], rain_prov))                  # several saved places in one province: one message
+                queue(sub, "rain", rain_soon_message(sub, rain_prov, rain_by_prov[rain_prov]), None, rain_prov,
+                      "UPDATE subscriptions SET last_rain_alert=? WHERE id=?", (_iso(at), sub["id"]))
         if not near:
             continue
         st = near[0]

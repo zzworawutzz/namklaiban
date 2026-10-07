@@ -60,10 +60,12 @@ def _no_real_dams(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _no_real_rain_forecast(monkeypatch):
-    """Tests never call Open-Meteo: dry forecast by default, and a fresh cache per test."""
+    """Tests never call Open-Meteo: dry forecast by default (next 24 h and next 3 h), and a fresh cache per test."""
     import rainalert
     rainalert._cache.clear()
+    rainalert._soon_cache.clear()
     monkeypatch.setattr(rainalert, "fetch", lambda lat, lng: {"hourly": {"precipitation": [0.0] * 24}})
+    monkeypatch.setattr(rainalert, "fetch_soon", lambda lat, lng: {"hourly": {"time": [], "precipitation": [0.0] * 3}})
 
 
 def pytest_ignore_collect(collection_path, config):
