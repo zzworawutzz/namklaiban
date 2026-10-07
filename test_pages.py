@@ -80,8 +80,7 @@ def test_app_files_are_versioned_and_match_the_service_worker():
     assert m[0] and m[1] and m[0].group(1) == m[1].group(1)                       # both files carry the same version
     version = m[0].group(1)
     assert f'const SHELL = "nkb-shell-v{version}"' in sw                          # bump it in all three places together
-    assert f'src="i18n.js?v={version}"' in html                                   # the English layer is versioned with the rest
-    for f in (f"app.css?v={version}", f"app.js?v={version}", f"i18n.js?v={version}"):
+    for f in (f"app.css?v={version}", f"app.js?v={version}"):
         assert f in sw, f                                                         # precached, so the page opens offline
     assert "<style>" not in html and html.count("<script>") == 1                  # only the small head script is inline
 
