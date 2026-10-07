@@ -533,3 +533,92 @@ def test_report_page_shows_the_share_of_stations_by_status_as_a_ring_with_whole_
     assert pcts and sum(pcts) == 100, rows                                     # the rounded shares always add up to exactly 100
     assert page.locator(".ring svg text").first.text_content().strip().isdigit()                  # the total sits in the middle
     assert page.locator(".ring circle[stroke-dasharray]").count() >= 1
+
+
+_FAKE_SPEECH = """
+(function(){
+  var voices = %s, spoken = [], speaking = false;
+  window.__spoken = spoken;
+  var ss = {getVoices: function(){ return voices; }, speak: function(u){ speaking = true; spoken.push(u.text); window.__utt = u; }, cancel: function(){ speaking = false; window.__cancelled = (window.__cancelled||0)+1; },
+            get speaking(){ return speaking; }, addEventListener: function(){}};
+  Object.defineProperty(window, "speechSynthesis", {value: ss, configurable: true});
+  window.SpeechSynthesisUtterance = function(t){ this.text = t; };
+})();
+"""
+
+
+def test_read_aloud_button_speaks_the_summary_in_words_and_stops_on_a_second_press(context, site):
+    page = context.new_page()
+    page.add_init_script(_FAKE_SPEECH % '[{lang: "th-TH", name: "Kanya"}]')
+    errors = watch(page)
+    open_page(page, site)
+    page.wait_for_selector("#btnSpeak:not([hidden])", timeout=15000)
+    page.click("#btnSpeak")
+    spoken = page.evaluate("window.__spoken")
+    assert len(spoken) == 1, spoken
+    t = spoken[0]
+    assert "เปอร์เซ็นต์" in t and "จังหวัด" in t and "%" not in t and "▲" not in t and "·" not in t and "จ." not in t, t   # numbers and symbols turned into words
+    assert "% ของตลิ่ง = ระดับน้ำ" not in t and "ระดับน้ำเทียบกับความสูงตลิ่ง" not in t                              # the small-print legend is not read
+    assert page.evaluate("window.__utt.lang") == "th-TH" and page.get_attribute("#btnSpeak", "aria-pressed") == "true"
+    page.click("#btnSpeak")                                                                                         # while it speaks, the same button stops it
+    assert page.evaluate("window.__cancelled") >= 1 and page.get_attribute("#btnSpeak", "aria-pressed") == "false"
+    assert not errors
+
+
+def test_read_aloud_button_stays_hidden_without_a_thai_voice(context, site):
+    page = context.new_page()
+    page.add_init_script(_FAKE_SPEECH % '[{lang: "en-US", name: "Samantha"}]')
+    errors = watch(page)
+    open_page(page, site)
+    page.wait_for_timeout(500)
+    assert page.is_hidden("#btnSpeak")
+    assert not errors
+
+
+def _english(context):
+    page = context.new_page()
+    page.add_init_script("try{localStorage.setItem('nkb-lang','en')}catch(e){}")
+    return page
+
+
+def test_english_menu_translates_the_screen_and_the_dynamic_parts_too(context, site):
+    page = _english(context)
+    errors = watch(page)
+    open_page(page, site)
+    assert page.evaluate("document.documentElement.lang") == "en"
+    body = page.inner_text("body")
+    for want in ("Report flooding", "Check a route", "Water situation", "Normal"):
+        assert want in body, want
+    assert "User guide" in page.text_content("#foot") and "Privacy policy" in page.text_content("#foot")
+    assert page.text_content("#emergency h2") == "Emergency numbers (free)"
+    pills = page.inner_text("#sumPills")
+    assert "Alert" in pills or "Watch" in pills or "Normal" in pills, pills
+    rows = page.inner_text("#sheetBody")
+    assert "ทั้งประเทศ" not in body and "All of Thailand" in body and "ปกติ 9%" not in rows and "Normal 9%" in rows, rows        # the chips and the % badges too, not just the static page
+    assert "▲ rising" in rows and "Pathum Thani" in rows                                                                         # the list lines "province · trend"
+    assert "Pathum Thani" in page.inner_text("#sumTitle"), page.inner_text("#sumTitle")                      # the province name, not "จ.ปทุมธานี"
+    assert page.get_attribute("#q", "placeholder") == "Search stations, places", page.get_attribute("#q", "placeholder")
+    page.click("#btnLayers")
+    layers = page.inner_text("#layers")
+    assert "Map layers" in page.get_attribute("#btnLayers", "aria-label") and page.inner_text("#btnLayers").strip() == "Layers"
+    assert "Rain radar" in layers and "Temporary shelters (DDPM)" in layers and "Colour mode" in layers
+    assert page.inner_text("#langSeg") == "ไทยEnglish" or "English" in page.inner_text("#langSeg")           # the language buttons stay as they are in both languages
+    assert page.get_attribute("#langSeg button[data-lang-set=en]", "aria-pressed") == "true"
+    assert not errors
+
+
+def test_thai_stays_the_default_and_the_language_buttons_switch_and_remember(context, site):
+    page = context.new_page()
+    errors = watch(page)
+    open_page(page, site)
+    assert page.evaluate("document.documentElement.lang") != "en" and "แจ้งจุดน้ำท่วม" in page.inner_text("body")
+    page.click("#btnLayers")
+    assert page.get_attribute("#langSeg button[data-lang-set=th]", "aria-pressed") == "true"
+    page.click("#langSeg button[data-lang-set=en]")                                   # reloads the page in English
+    page.wait_for_selector("#sumBody .verdict", timeout=30000)
+    assert page.evaluate("localStorage.getItem('nkb-lang')") == "en" and "Report flooding" in page.inner_text("body")
+    page.click("#btnLayers")
+    page.click("#langSeg button[data-lang-set=th]")                                   # and back
+    page.wait_for_selector("#sumBody .verdict", timeout=30000)
+    assert page.evaluate("localStorage.getItem('nkb-lang')") is None and "แจ้งจุดน้ำท่วม" in page.inner_text("body")
+    assert not errors
