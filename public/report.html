@@ -32,11 +32,14 @@ select{height:44px;padding:0 14px;border-radius:14px;border:1px solid var(--line
 .card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:16px 18px;margin-top:14px;box-shadow:var(--shadow)}
 h2{font-size:16px;margin:0 0 8px;font-weight:600}
 .sub{color:var(--muted);font-size:13px;margin:0}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
-.kpi{border-radius:14px;padding:12px 14px;border:0}
-.kpi b{display:block;font-size:32px;line-height:1.1;font-weight:700}
-.kpi small{color:var(--muted)}
-.kpi.alert{background:var(--alert-bg)}.kpi.watch{background:var(--watch-bg)}.kpi.normal{background:var(--normal-bg)}.kpi.unknown{background:var(--unknown-bg)}
+.ring{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.ring svg{flex:none;width:168px;height:168px}
+.ring ul{flex:1 1 220px;list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.ring li{display:grid;grid-template-columns:14px 1fr auto auto;gap:4px 10px;align-items:baseline;padding:8px 12px;border-radius:14px}
+.ring li i{width:12px;height:12px;border-radius:4px;align-self:center}
+.ring li b{font-size:22px;line-height:1.1}.ring li .pc{font-size:15px;font-weight:600;min-width:3.2em;text-align:right}
+.ring li small{grid-column:2/-1;color:var(--muted);font-size:12px;margin-top:-2px}
+.ring li.alert{background:var(--alert-bg)}.ring li.watch{background:var(--watch-bg)}.ring li.normal{background:var(--normal-bg)}.ring li.unknown{background:var(--unknown-bg)}
 .up{color:var(--alert-ink);font-weight:600}.down{color:var(--normal-ink);font-weight:600}
 table{width:100%;border-collapse:collapse;font-size:14px}
 th,td{text-align:left;padding:9px 4px;border-top:1px solid var(--line)}
@@ -90,8 +93,32 @@ function delta(n, label){
   var cls = n>0 ? "up" : n<0 ? "down" : "";
   return '<small class="'+cls+'">'+sign(n)+' จากเมื่อวาน</small>';
 }
-function kpi(cls, n, label, d){
-  return '<div class="kpi '+cls+'"><small>'+label+'</small><b>'+n+'</b>'+(d==null?"":delta(d))+'</div>';
+var RING_KEYS = ["alert","watch","normal","unknown"];
+/* Whole-number shares that add up to exactly 100 (largest remainder), so the figures beside the ring never read 99 or 101. */
+function shares(c){
+  var tot = 0; RING_KEYS.forEach(function(k){ tot += c[k]||0; });
+  if(!tot) return null;
+  var raw = RING_KEYS.map(function(k){ return (c[k]||0)*100/tot; }), fl = raw.map(Math.floor);
+  var left = 100 - fl.reduce(function(a,b){ return a+b; }, 0);
+  raw.map(function(v,i){ return {i:i, r:v-fl[i]}; }).sort(function(a,b){ return b.r-a.r; }).slice(0,left).forEach(function(o){ fl[o.i]++; });
+  return {tot:tot, items:RING_KEYS.map(function(k,i){ return {k:k, n:c[k]||0, pct:fl[i]}; })};
+}
+function ring(c, d){
+  var sh = shares(c); if(!sh) return '<p class="sub">ยังไม่มีสถานีในจังหวัดนี้</p>';
+  var R = 46, C = 2*Math.PI*R, shown = sh.items.filter(function(x){ return x.n>0; }), gap = shown.length>1 ? 2 : 0, at = 0;
+  var label = 'สัดส่วนสถานีตามสถานะ: '+shown.map(function(x){ return LABEL[x.k]+' '+x.n+' สถานี '+x.pct+'%'; }).join(', ');
+  var svg = '<svg viewBox="0 0 120 120" role="img" aria-label="'+esc(label)+'"><circle cx="60" cy="60" r="'+R+'" fill="none" stroke="var(--line)" stroke-width="16"/>';
+  shown.forEach(function(x){
+    var len = x.n/sh.tot*C;
+    svg += '<circle cx="60" cy="60" r="'+R+'" fill="none" stroke="var(--'+x.k+')" stroke-width="16" stroke-dasharray="'+Math.max(0.5,len-gap).toFixed(2)+' '+C.toFixed(2)+'" stroke-dashoffset="'+(-at).toFixed(2)+'" transform="rotate(-90 60 60)"><title>'+LABEL[x.k]+' '+x.n+' สถานี ('+x.pct+'%)</title></circle>';
+    at += len;
+  });
+  svg += '<text x="60" y="62" text-anchor="middle" font-size="26" font-weight="700" fill="var(--ink)">'+sh.tot+'</text><text x="60" y="78" text-anchor="middle" font-size="11" fill="var(--muted)">สถานี</text></svg>';
+  var rows = sh.items.filter(function(x){ return x.n>0 || x.k!=="unknown"; }).map(function(x){
+    var dd = d && d[x.k]!=null && (x.k==="alert"||x.k==="watch") ? delta(d[x.k]) : "";
+    return '<li class="'+x.k+'"><i style="background:var(--'+x.k+')"></i><span>'+LABEL[x.k]+'</span><b>'+x.n+'</b><span class="pc">'+x.pct+'%</span>'+dd+'</li>';
+  }).join("");
+  return '<div class="ring">'+svg+'<ul>'+rows+'</ul></div>';
 }
 
 function chart(series){
@@ -128,7 +155,7 @@ function render(rep){
   var c = rep.counts, d = rep.delta_24h;
   var h = '<div class="card"><p class="sub" style="margin-bottom:2px">จังหวัด</p><h2 style="font-size:22px;margin:0">'+esc(rep.province)+'</h2>'+
     '<p class="sub">'+rep.stations+' สถานี · อัปเดต '+new Date(rep.generated_at).toLocaleString("th-TH",{timeZone:"Asia/Bangkok",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})+' น.'+(rep.stale?' · ข้อมูลค้าง '+rep.stale+' สถานี':'')+'</p></div>';
-  h += '<div class="card"><div class="kpis">'+kpi("alert",c.alert,"เตือนภัย",d&&d.alert)+kpi("watch",c.watch,"เฝ้าระวัง",d&&d.watch)+kpi("normal",c.normal,"ปกติ")+(c.unknown?kpi("unknown",c.unknown,"ไม่มีเกณฑ์"):"")+'</div>';
+  h += '<div class="card"><h2>สัดส่วนสถานีตามสถานะตอนนี้</h2>'+ring(c, d);
   if(rep.over_bank) h += '<p style="margin:10px 0 0"><b class="up">ล้นตลิ่งแล้ว '+rep.over_bank+' สถานี</b>'+(rep.newly_over_bank.length?' · ล้นใหม่ใน 24 ชม.: '+rep.newly_over_bank.map(function(r){return esc(r.name);}).join(", "):'')+'</p>';
   if(!d) h += '<p class="sub" style="margin-top:8px">ยังเทียบกับเมื่อวานไม่ได้ (ระบบยังสะสมข้อมูลย้อนหลังไม่ครบ)</p>';
   h += '</div>';
