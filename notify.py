@@ -307,7 +307,10 @@ def run(conn, at=None, senders=SENDERS):
     Settings: notify_level 'alert' = only when entering/leaving the alert level;
     quiet = no pushes 22:00-06:00 Thai time unless the status is alert (held back, sent after 06:00)."""
     at = at or datetime.now(timezone.utc)
-    rows = core.latest(conn, at)
+    people = [s for s in conn.execute("SELECT channel, target, lat, lng FROM subscriptions").fetchall() if not is_group(s)]
+    if not people:
+        return 0, 0   # nobody to tell (groups only get the morning summary): do not read a megabyte of readings for nothing
+    rows = core.latest(conn, at, near=[(s["lat"], s["lng"]) for s in people])   # trends only around them: ~0.2 MB a run instead of ~1 MB
     sent = failed = 0
     reports = [r for r in floodreports.active(conn, at) if r["confirmed"] >= REPORT_MIN_CONFIRMED]
     bud = budget.Budget(conn, at)

@@ -93,7 +93,7 @@ def _run(tmp_path, monkeypatch, station, sub_sql="", at=AT, reports=(), world=()
         c.execute("UPDATE subscriptions SET " + sub_sql)
     c.execute("UPDATE subscriptions SET last_status=?", (station["status"],))   # status already known: no change message
     c.commit()
-    monkeypatch.setattr(notify.core, "latest", lambda conn, a: [station] + list(world))
+    monkeypatch.setattr(notify.core, "latest", lambda conn, a, **kw: [station] + list(world))
     for who, lat, lng in reports:
         fr.add(c, lat, lng, 3, None, "web", who, at)
     out = []
@@ -257,7 +257,7 @@ def test_silent_high_station_is_reported_once_then_forgotten_when_it_reports_aga
     assert c.execute("SELECT stale_notified FROM subscriptions").fetchone()[0] is not None
     assert c.execute("SELECT kind FROM send_log").fetchone()[0] == "stale"
     assert run() == (0, 0)                                                      # not again while it stays silent
-    monkeypatch.setattr(notify.core, "latest", lambda conn, a: [_station(status="alert", pct_of_bank=105.0, trend=None, eta_to_bank_h=None)] + _background())
+    monkeypatch.setattr(notify.core, "latest", lambda conn, a, **kw: [_station(status="alert", pct_of_bank=105.0, trend=None, eta_to_bank_h=None)] + _background())
     notify.run(c, AT, {"stdout": lambda t, m: out.append(m)})
     assert c.execute("SELECT stale_notified FROM subscriptions").fetchone()[0] is None   # reporting again: ready for the next outage
 
@@ -265,7 +265,7 @@ def test_silent_high_station_is_reported_once_then_forgotten_when_it_reports_aga
 def test_silent_station_says_which_reporting_station_is_used_instead(tmp_path, monkeypatch):
     c, out, run = _run(tmp_path, monkeypatch, _silent(), world=_background())
     far = _station(id="s2", name="สถานีสำรอง", lat=14.4, lng=99.0, status="alert", pct_of_bank=95.0, trend=None, eta_to_bank_h=None)
-    monkeypatch.setattr(notify.core, "latest", lambda conn, a: [_silent(), far] + _background())
+    monkeypatch.setattr(notify.core, "latest", lambda conn, a, **kw: [_silent(), far] + _background())
     c.execute("UPDATE subscriptions SET last_status='alert'"); c.commit()
     assert notify.run(c, AT, {"stdout": lambda t, m: out.append(m)}) == (1, 0)
     assert "สถานีสำรอง" in out[0] and "แทน" in out[0]
@@ -294,7 +294,7 @@ def test_silent_notice_respects_snooze_but_alert_level_gets_through_and_is_sent_
 def test_silent_notice_and_a_status_change_for_the_same_person_become_one_message(tmp_path, monkeypatch):
     c, out, run = _run(tmp_path, monkeypatch, _silent(), world=_background())
     fresh = _station(id="s2", name="สถานีสำรอง", lat=14.3, lng=99.0, status="watch", pct_of_bank=80.0, trend=None, eta_to_bank_h=None)
-    monkeypatch.setattr(notify.core, "latest", lambda conn, a: [_silent(), fresh] + _background())
+    monkeypatch.setattr(notify.core, "latest", lambda conn, a, **kw: [_silent(), fresh] + _background())
     c.execute("UPDATE subscriptions SET last_status='normal'"); c.commit()                # the substitute's status is news too
     assert notify.run(c, AT, {"stdout": lambda t, m, flex=None: out.append((m, flex))}) == (1, 0)
     assert len(out) == 1 and "ไม่ส่งข้อมูลใหม่" in out[0][0] and "สถานีสำรอง" in out[0][0] and out[0][1]["type"] == "carousel"
@@ -305,11 +305,11 @@ def test_no_silent_notice_when_most_stations_are_silent_at_once(tmp_path, monkey
     must not send everyone near a high station a message. The owner is told by the watchdog."""
     c, out, run = _run(tmp_path, monkeypatch, _silent())
     others = [_silent(id=f"o{i}", name=f"อื่น{i}", lat=15.0 + i, lng=100.0) for i in range(3)]
-    monkeypatch.setattr(notify.core, "latest", lambda conn, a: [_silent()] + others)
+    monkeypatch.setattr(notify.core, "latest", lambda conn, a, **kw: [_silent()] + others)
     assert notify.run(c, AT, {"stdout": lambda t, m: out.append(m)}) == (0, 0) and out == []
     assert c.execute("SELECT stale_notified FROM subscriptions").fetchone()[0] is None
     fine = [_station(id=f"f{i}", name=f"ปกติ{i}", lat=15.0 + i, lng=100.0, status="normal", pct_of_bank=30.0, trend=None, eta_to_bank_h=None) for i in range(5)]
-    monkeypatch.setattr(notify.core, "latest", lambda conn, a: [_silent()] + fine)          # one of six silent: that one really is quiet
+    monkeypatch.setattr(notify.core, "latest", lambda conn, a, **kw: [_silent()] + fine)          # one of six silent: that one really is quiet
     assert notify.run(c, AT, {"stdout": lambda t, m: out.append(m)}) == (1, 0)
 
 
@@ -325,7 +325,7 @@ def test_when_one_agency_goes_quiet_but_others_report_the_people_near_its_statio
     c, out, run = _run(tmp_path, monkeypatch, _silent(source="HII"))
     hii = [_silent(source="HII", id=f"h{i}", name=f"เอชไอไอ{i}", lat=15.0 + i, lng=100.0) for i in range(5)]
     rid = [_station(source="RID", id=f"r{i}", name=f"อาร์ไอดี{i}", lat=17.0 + i, lng=100.0, status="alert", pct_of_bank=105.0, trend=None, eta_to_bank_h=None) for i in range(6)]
-    monkeypatch.setattr(notify.core, "latest", lambda conn, a: [_silent(source="HII")] + hii + rid)
+    monkeypatch.setattr(notify.core, "latest", lambda conn, a, **kw: [_silent(source="HII")] + hii + rid)
     assert notify.run(c, AT, {"stdout": lambda t, m: out.append(m)}) == (1, 0)
     assert "ไม่ส่งข้อมูลใหม่" in out[0] and "อาร์ไอดี" in out[0]                                  # told, and which station is used instead
     assert notify.run(c, AT, {"stdout": lambda t, m: out.append(m)}) == (0, 0)                      # once
@@ -334,7 +334,7 @@ def test_when_one_agency_goes_quiet_but_others_report_the_people_near_its_statio
 def test_when_every_agency_is_quiet_nobody_is_told(tmp_path, monkeypatch):
     c, out, run = _run(tmp_path, monkeypatch, _silent(source="HII"))
     everyone = [_silent(source=s, id=f"{s}{i}", name=f"{s}{i}", lat=15.0 + i, lng=100.0) for s in ("HII", "RID") for i in range(6)]
-    monkeypatch.setattr(notify.core, "latest", lambda conn, a: [_silent(source="HII")] + everyone)
+    monkeypatch.setattr(notify.core, "latest", lambda conn, a, **kw: [_silent(source="HII")] + everyone)
     assert notify.run(c, AT, {"stdout": lambda t, m: out.append(m)}) == (0, 0) and out == []        # our ingest, or the whole source: the watchdog's job
 
 
@@ -345,9 +345,9 @@ def test_drop_back_below_the_bank_is_told_once_even_when_the_status_is_unchanged
     assert c.execute("SELECT was_over_bank FROM subscriptions").fetchone()[0] == 1       # remembered
     n = len(out)
     below = _station(status="alert", pct_of_bank=98.0, trend=None, eta_to_bank_h=None, over_bank_cm=-5)
-    monkeypatch.setattr(notify.core, "latest", lambda conn, a: [below])
+    monkeypatch.setattr(notify.core, "latest", lambda conn, a, **kw: [below])
     assert run() == (0, 0)                                                              # 98 % is not yet "back below": no flapping
-    monkeypatch.setattr(notify.core, "latest", lambda conn, a: [dict(below, pct_of_bank=95.0, over_bank_cm=-30)])
+    monkeypatch.setattr(notify.core, "latest", lambda conn, a, **kw: [dict(below, pct_of_bank=95.0, over_bank_cm=-30)])
     assert run() == (1, 0)
     assert "ลดลงต่ำกว่าตลิ่งแล้ว" in out[-1] and "95%" in out[-1] and "ไม่ได้แปลว่าปลอดภัย" in out[-1]
     assert run() == (0, 0) and c.execute("SELECT was_over_bank FROM subscriptions").fetchone()[0] == 0   # once
@@ -358,14 +358,14 @@ def test_drop_below_the_bank_is_held_in_quiet_hours_and_alert_only_users_still_g
     low = dict(over, pct_of_bank=95.0, over_bank_cm=-30)
     c, out, run = _run(tmp_path, monkeypatch, over, sub_sql="quiet=1")
     run()
-    monkeypatch.setattr(notify.core, "latest", lambda conn, a: [low])
+    monkeypatch.setattr(notify.core, "latest", lambda conn, a, **kw: [low])
     night = datetime(2026, 10, 1, 17, 30, tzinfo=timezone.utc)                          # 00:30 Thai
     assert notify.run(c, night, {"stdout": lambda t, m: out.append(m)}) == (0, 0)
     assert c.execute("SELECT was_over_bank FROM subscriptions").fetchone()[0] == 1       # kept for after the quiet hours
     assert notify.run(c, night + timedelta(hours=7), {"stdout": lambda t, m: out.append(m)}) == (1, 0)
     c, out, run = _run(tmp_path, monkeypatch, over, sub_sql="notify_level='alert'")
     run()
-    monkeypatch.setattr(notify.core, "latest", lambda conn, a: [low])                  # still alert level: alert-only users hear it too
+    monkeypatch.setattr(notify.core, "latest", lambda conn, a, **kw: [low])                  # still alert level: alert-only users hear it too
     assert run() == (1, 0) and "ลดลงต่ำกว่าตลิ่งแล้ว" in out[-1]
 
 
@@ -373,7 +373,7 @@ def test_drop_below_the_bank_with_a_status_change_sends_only_the_status_message(
     over = _station(status="alert", pct_of_bank=108.0, trend=None, eta_to_bank_h=None, over_bank_cm=25)
     c, out, run = _run(tmp_path, monkeypatch, over)
     run()
-    monkeypatch.setattr(notify.core, "latest", lambda conn, a: [dict(over, status="watch", pct_of_bank=80.0, over_bank_cm=-60)])
+    monkeypatch.setattr(notify.core, "latest", lambda conn, a, **kw: [dict(over, status="watch", pct_of_bank=80.0, over_bank_cm=-60)])
     assert run() == (1, 0) and "ลดลงต่ำกว่าตลิ่งแล้ว" not in out[-1]
     assert c.execute("SELECT was_over_bank FROM subscriptions").fetchone()[0] == 0
 
@@ -433,3 +433,15 @@ def test_one_hour_of_very_heavy_rain_is_enough_and_two_places_in_one_province_ge
     c, out, run = _run(tmp_path, monkeypatch, _station(status="normal", pct_of_bank=30.0, trend=None, eta_to_bank_h=None))
     c.execute("INSERT INTO subscriptions(channel,target,lat,lng,label,last_status) VALUES('stdout','U1',14.21,99.01,'ที่ทำงาน','normal')")
     assert run() == (1, 0) and len(out) == 1 and len(seen) == 1       # one person, one province: one message, one forecast
+
+
+def test_no_readings_are_read_when_nobody_but_groups_are_subscribed(tmp_path, monkeypatch):
+    c = setup(tmp_path)
+    c.execute("DELETE FROM subscriptions")
+    c.execute("INSERT INTO subscriptions(channel,target,lat,lng,label) VALUES('line','Cgroup1',14.2,99.0,'จ.พระนครศรีอยุธยา')")   # a LINE group (id starts with C)
+    c.commit()
+    monkeypatch.setattr(notify.core, "latest", lambda *a, **k: 1 / 0)               # reading the stations here would be the bug
+    assert notify.run(c, AT, {"line": lambda t, m, **kw: 1 / 0}) == (0, 0)
+    c.execute("DELETE FROM subscriptions")
+    c.commit()
+    assert notify.run(c, AT, {"line": lambda t, m, **kw: 1 / 0}) == (0, 0)           # nobody at all

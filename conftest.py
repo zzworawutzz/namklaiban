@@ -28,6 +28,7 @@ def _no_ambient_database(monkeypatch):
     """Tests use SQLite unless they opt in; never touch a DATABASE_URL from the shell."""
     for k in ("DATABASE_URL", "POSTGRES_URL", "CRON_SECRET", "VERCEL", "EWS_ENABLED", "ENABLE_DOCS"):
         monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("INGEST_MIN_GAP_MIN", "0")   # the "skip a second scheduler call within minutes" rule has its own tests; most tests run ingest twice in a row
     monkeypatch.setenv("TRUST_PROXY", "1")   # most tests play a visitor behind a proxy by sending x-forwarded-for; the trust rule has its own tests
 
 

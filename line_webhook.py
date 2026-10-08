@@ -94,7 +94,7 @@ def _in_thailand(lat, lng):
 
 
 def _nearest(conn, lat, lng, at):
-    near = core.nearest(core.latest(conn, at), lat, lng, 1, fresh_only=True)
+    near = core.nearest(core.latest(conn, at, near=[(lat, lng)]), lat, lng, 1, fresh_only=True)   # trends only around this place
     return near[0] if near else None
 
 
@@ -195,7 +195,7 @@ def handle_event(conn, ev, at, reply):
             return _reply(reply, token, "\n\n".join(message(p, st) if st else f"{p['label']}: ยังไม่มีสถานีใกล้ที่ข้อมูลล่าสุด"
                                                     for p, st in found), quick=cards.quick(MENU))
         if text in REPORT:
-            prov = province_of(core.latest(conn, at), sub["lat"], sub["lng"])
+            prov = province_of(core.latest(conn, at, near=[]), sub["lat"], sub["lng"])   # only the province is needed: no trends
             return _send_report(conn, reply, token, prov, at)
         if text in SETTINGS:
             return _settings(reply, token, sub, at=at)
@@ -224,7 +224,7 @@ def _lookup(conn, user, token, text, at, reply):
     Returns False when the text matches nothing, so the caller can fall back to the instructions."""
     if len(suggest.norm(text)) < LOOKUP_MIN_CHARS:   # "น้ำ" or "ok" is chatter, not a place
         return False
-    rows = core.latest(conn, at)
+    rows = core.latest(conn, at, near=[])   # names only: no trends
     found = [m for m in suggest.search(text, stations=rows, limit=LOOKUP_CHOICES * 2) if m["type"] != "ศูนย์พักพิง"][:LOOKUP_CHOICES]
     if not found:
         return False
@@ -499,7 +499,7 @@ def _handle_group(conn, gid, ev, at, reply):
 
 
 def _group_follow(conn, gid, token, query, at, reply):
-    rows = core.latest(conn, at)
+    rows = core.latest(conn, at, near=[])   # province names only: no trends
     provinces = sorted({r["province"] for r in rows if r["province"]})
     if not query:
         return _reply(reply, token, "พิมพ์ชื่อจังหวัดต่อท้าย เช่น ติดตาม อยุธยา")

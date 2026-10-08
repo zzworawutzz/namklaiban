@@ -226,7 +226,7 @@ def _fake_rows(agencies, now_ts="2026-10-01T16:00:00Z"):
 
 def test_health_monitor_fails_when_a_whole_agency_goes_quiet_while_others_report(client, monkeypatch):
     _ingest_ran(5)
-    monkeypatch.setattr(api.core, "latest", lambda c, at, *a, **k: _fake_rows({"HII": (330, 6), "FOP": (89, 2), "RID": (314, 300), "EGAT": (72, 70)}))
+    monkeypatch.setattr(api.core, "freshness", lambda c, at, *a, **k: _fake_rows({"HII": (330, 6), "FOP": (89, 2), "RID": (314, 300), "EGAT": (72, 70)}))
     r = client.get("/health/monitor")
     assert r.status_code == 503 and r.json()["ok"] is False
     probs = " | ".join(r.json()["problems"])
@@ -237,13 +237,43 @@ def test_health_monitor_fails_when_a_whole_agency_goes_quiet_while_others_report
 
 def test_health_monitor_tolerates_the_normal_share_of_dead_stations_and_small_agencies(client, monkeypatch):
     _ingest_ran(5)
-    monkeypatch.setattr(api.core, "latest", lambda c, at, *a, **k: _fake_rows({"HII": (330, 295), "FOP": (89, 88), "RID": (314, 295), "EGAT": (72, 69), "TINY": (6, 0)}))
+    monkeypatch.setattr(api.core, "freshness", lambda c, at, *a, **k: _fake_rows({"HII": (330, 295), "FOP": (89, 88), "RID": (314, 295), "EGAT": (72, 69), "TINY": (6, 0)}))
     r = client.get("/health/monitor")
     assert r.status_code == 200 and r.json()["problems"] == []                                       # ~11 % dead HII stations are normal; a 6-station agency is too small to judge
 
 
 def test_health_lists_agencies_that_have_gone_quiet_for_the_web_notice(client, monkeypatch):
-    monkeypatch.setattr(api.core, "latest", lambda c, at, *a, **k: _fake_rows({"HII": (330, 6), "RID": (314, 300), "TINY": (6, 0)}))
+    monkeypatch.setattr(api.core, "freshness", lambda c, at, *a, **k: _fake_rows({"HII": (330, 6), "RID": (314, 300), "TINY": (6, 0)}))
     assert client.get("/health").json()["quiet_agencies"] == ["HII"]                  # too-small agencies are not judged
-    monkeypatch.setattr(api.core, "latest", lambda c, at, *a, **k: _fake_rows({"HII": (330, 295), "RID": (314, 300)}))
+    monkeypatch.setattr(api.core, "freshness", lambda c, at, *a, **k: _fake_rows({"HII": (330, 295), "RID": (314, 300)}))
     assert client.get("/health").json()["quiet_agencies"] == []
+
+
+def test_a_second_scheduler_call_within_minutes_of_a_good_ingest_is_skipped_but_still_needs_the_secret(client, monkeypatch):
+    monkeypatch.setenv("CRON_SECRET", "s3cret-s3cret-s3cret")
+    monkeypatch.setenv("INGEST_MIN_GAP_MIN", "8")
+    H = {"Authorization": "Bearer s3cret-s3cret-s3cret"}
+    ran = []
+    monkeypatch.setattr(api.ingest, "run_ingest", lambda c, thresholds=None: ran.append(1) or (2, 2, 0, 0))
+    _ingest_ran(3)                                                               # a good ingest 3 minutes ago (helper from the monitor tests)
+    r = client.get("/api/cron/ingest", headers=H)
+    skipped = lambda j: isinstance(j.get("skipped"), str)                         # a real run also has "skipped": a count of readings
+    assert r.status_code == 200 and skipped(r.json()) and "3 min ago" in r.json()["skipped"] and ran == []
+    assert client.get("/api/cron/ingest", headers={"Authorization": "Bearer wrong"}).status_code == 401           # the secret is still checked first
+    with api.conn() as c:
+        c.execute("DELETE FROM ingest_runs"); c.commit()
+    _ingest_ran(12)                                                              # ...but 12 minutes ago is long enough: it runs
+    monkeypatch.setattr(api.notify, "run", lambda c, at: (0, 0))
+    monkeypatch.setattr(api.notify, "run_digest", lambda c, at: (0, 0))
+    r = client.get("/api/cron/ingest", headers=H)
+    assert r.status_code == 200 and not skipped(r.json()) and ran == [1], r.json()
+    monkeypatch.setenv("INGEST_MIN_GAP_MIN", "0")
+    _ingest_ran(1)
+    assert not skipped(client.get("/api/cron/ingest", headers=H).json()) and ran == [1, 1]                      # 0 turns the rule off
+
+
+def test_nearby_still_gives_trends_for_the_nearest_stations_but_a_long_list_falls_back_to_the_full_read(client):
+    short = client.get("/stations/nearby", params={"lat": 14.35, "lng": 100.57, "limit": 2}).json()
+    assert len(short) == 2 and all("trend" in s for s in short)
+    long_ = client.get("/stations/nearby", params={"lat": 14.35, "lng": 100.57, "limit": 20}).json()
+    assert len(long_) >= 2 and [s["id"] for s in long_[:2]] == [s["id"] for s in short]

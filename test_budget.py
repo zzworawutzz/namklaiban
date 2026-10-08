@@ -58,7 +58,7 @@ def _line_run(conn, monkeypatch, used, status, prev, at=AT):
           "distance_km": 1.0, "advice": "x", "trend": None, "trend_pct_per_hr": None, "eta_to_bank_h": None,
           "stale": False, "age_min": 5, "twin_conflict": False, "twins": [], "rise_3h_m": None, "lat": 14.2, "lng": 99.0,
           "water_level": 1.0, "source": "RID"}
-    monkeypatch.setattr(notify.core, "latest", lambda c, a: [st])
+    monkeypatch.setattr(notify.core, "latest", lambda c, a, **kw: [st])
     conn.execute("INSERT INTO subscriptions(channel,target,lat,lng,label,last_status) VALUES('line','U1',14.2,99.0,'บ้าน',?)", (prev,))
     conn.commit()
     out = []

@@ -240,3 +240,65 @@ def test_a_gauge_with_no_thresholds_recorded_gets_no_cm_and_counts_as_missing_no
     assert core.over_bank_cm(dict(d, bank_level=2.0, ground_level=2.5)) is None                                 # bank below the bed: nonsense
     q = core.bank_data_quality([{"id": 1, "name": "a", "province": "p", **{k: d[k] for k in ("water_level", "bank_level", "ground_level", "pct_of_bank")}, "stale": False}])
     assert q["missing"] == 1 and q["bank_not_above_bed_count"] == 0                                             # an empty record is not a data error
+
+
+def test_one_scan_of_recent_readings_gives_exactly_what_the_two_separate_scans_gave(tmp_path):
+    import sqlite3, ingest as ig
+    c = sqlite3.connect(tmp_path / "s.db"); c.row_factory = sqlite3.Row; ig.init_db(c)
+    for sid in ("A", "B", "C"):
+        c.execute("INSERT INTO stations(id,name,source,lat,lng) VALUES(?,?,?,?,?)", (sid, sid, "HII", 14.0, 100.0))
+    for k in range(40):                                              # every 15 minutes for 10 hours: some before the 6 h window, some inside the 3 h one
+        ts = (AT - timedelta(minutes=15 * k)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        c.execute("INSERT INTO readings(station_id,ts,water_level,pct_of_bank,status) VALUES('A',?,?,?,'normal')", (ts, 1.0 + k / 10, 50.0 + k))
+        c.execute("INSERT INTO readings(station_id,ts,water_level,pct_of_bank,status) VALUES('B',?,?,?,'normal')", (ts, None if k % 3 == 0 else 2.0, 60.0 if k % 2 else None))   # gaps in either column
+        c.execute("INSERT INTO readings(station_id,ts,water_level,pct_of_bank,status) VALUES('C',?,?,?,'unknown')", (ts, None, None))                                        # nothing usable
+    c.commit()
+    pts, lv = core.recent_series(c, AT)
+    assert pts == core.recent_points(c, AT) and lv == core.recent_levels(c, AT)
+    assert pts and lv and "C" not in pts and "C" not in lv and len(pts["A"]) == 25 and len(lv["A"]) == 13       # 6 h / 3 h of 15-minute readings, both ends included
+
+
+def test_freshness_agrees_with_latest_about_age_and_staleness(tmp_path):
+    import sqlite3, ingest as ig
+    from conftest import real_rows
+    c = sqlite3.connect(tmp_path / "f.db"); c.row_factory = sqlite3.Row; ig.init_db(c); ig.save(c, real_rows())
+    full = {r["id"]: r for r in core.latest(c, AT)}
+    light = {r["id"]: r for r in core.freshness(c, AT)}
+    assert set(full) == set(light) and light
+    for i, r in light.items():
+        assert (r["age_min"], r["stale"], r["source"], r["ts"]) == (full[i]["age_min"], full[i]["stale"], full[i]["source"], full[i]["ts"])
+
+
+def test_latest_near_computes_trends_only_around_the_given_places_and_agrees_with_the_full_answer_there(tmp_path):
+    import sqlite3, ingest as ig
+    c = sqlite3.connect(tmp_path / "n.db"); c.row_factory = sqlite3.Row; ig.init_db(c)
+    for i in range(30):                                                          # 30 stations on a line, one degree of longitude apart
+        sid = f"S{i}"
+        c.execute("INSERT INTO stations(id,name,source,province,lat,lng,bank_level,ground_level) VALUES(?,?,?,?,?,?,?,?)", (sid, sid, "HII", "ป", 14.0, 90.0 + i * 0.1, 5.0, 1.0))
+        for k in range(24):                                                      # every 15 min for 6 hours, rising
+            ts = (AT - timedelta(minutes=15 * k)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            c.execute("INSERT INTO readings(station_id,ts,water_level,pct_of_bank,status) VALUES(?,?,?,?,'normal')", (sid, ts, 2.0 - k * 0.02, round((1.0 - k * 0.02) / 4 * 100, 1)))
+    c.commit()
+    full = {r["id"]: r for r in core.latest(c, AT)}
+    near = {r["id"]: r for r in core.latest(c, AT, near=[(14.0, 90.0)])}       # a person right at the first station
+    assert set(near) == set(full) and len(near) == 30                            # still every station, so counts and agency shares stay right
+    for sid in ("S0", "S1", "S7"):                                               # the nearest eight: identical to the full computation
+        for k in ("trend", "trend_pct_per_hr", "rise_3h_m", "eta_to_bank_h", "status", "pct_of_bank", "age_min", "stale"):
+            assert near[sid][k] == full[sid][k], (sid, k)
+    assert full["S20"]["trend"] == "rising" and near["S20"]["trend"] is None     # far away: nobody asked, so it is left empty
+    assert near["S20"]["status"] == full["S20"]["status"] and near["S20"]["pct_of_bank"] == full["S20"]["pct_of_bank"]
+
+
+def test_the_nearest_fresh_station_gets_its_trend_even_when_the_nearest_ones_are_stale(tmp_path):
+    import sqlite3, ingest as ig
+    c = sqlite3.connect(tmp_path / "m.db"); c.row_factory = sqlite3.Row; ig.init_db(c)
+    for i in range(12):
+        sid = f"S{i}"
+        c.execute("INSERT INTO stations(id,name,source,province,lat,lng,bank_level,ground_level) VALUES(?,?,?,?,?,?,?,?)", (sid, sid, "HII", "ป", 14.0, 90.0 + i * 0.1, 5.0, 1.0))
+        newest = AT - timedelta(hours=9 if i < 10 else 0)                        # the ten nearest are silent, the eleventh reports
+        for k in range(24):
+            ts = (newest - timedelta(minutes=15 * k)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            c.execute("INSERT INTO readings(station_id,ts,water_level,pct_of_bank,status) VALUES(?,?,?,?,'normal')", (sid, ts, 2.0 - k * 0.02, round((1.0 - k * 0.02) / 4 * 100, 1)))
+    c.commit()
+    near = {r["id"]: r for r in core.latest(c, AT, near=[(14.0, 90.0)])}
+    assert near["S10"]["stale"] is False and near["S10"]["trend"] == "rising"

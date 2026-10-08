@@ -234,6 +234,69 @@ def recent_points(conn, at, hours=TREND_HOURS):
     return out
 
 
+NEAR_STATIONS = 8      # latest(near=...): per saved place, this many nearest stations (and this many nearest fresh ones) get trends
+MAX_SERIES_IDS = 300   # more than this and the whole scan is simpler (and the parameter list stays small)
+
+
+def ids_near(raw, at, places):
+    """Ids of the stations worth computing trends for when only a few places matter: for each place the NEAR_STATIONS nearest
+    stations, and the NEAR_STATIONS nearest ones that are not stale (the nearest fresh one can be far down the plain list)."""
+    cut = iso(at - timedelta(minutes=STALE_MIN))
+    pts = [(r["id"], r["lat"], r["lng"], bool(r["ts"] and r["ts"] >= cut)) for r in raw if r["lat"] is not None and r["lng"] is not None]
+    ids = set()
+    for lat, lng in places:
+        by = sorted(pts, key=lambda p: km(lat, lng, p[1], p[2]))
+        ids.update(p[0] for p in by[:NEAR_STATIONS])
+        ids.update([p[0] for p in by if p[3]][:NEAR_STATIONS])
+    return ids
+
+
+def recent_series(conn, at, ids=None):
+    """(points, levels) in ONE pass over the last TREND_HOURS of readings, instead of two separate scans (recent_points + recent_levels):
+    about a third fewer rows leave the database. Every row is ~60 bytes on the wire and ~18,000 rows were being read for each call
+    (6 Oct 2026: 812 stations, HII/FOP about every 15 min, RID/EGAT hourly), which is what ate Neon's 5 GB monthly transfer."""
+    since, since_levels = iso(at - timedelta(hours=TREND_HOURS)), iso(at - timedelta(hours=FAST_HOURS))
+    pts, lv = {}, {}
+    only, args = "", [since]
+    if ids is not None and len(ids) <= MAX_SERIES_IDS:
+        if not ids:
+            return pts, lv
+        only, args = f" AND station_id IN ({','.join('?' * len(ids))})", [since, *sorted(ids)]
+    for r in conn.execute(
+            "SELECT station_id, ts, pct_of_bank, water_level FROM readings "
+            "WHERE ts >= ? AND (pct_of_bank IS NOT NULL OR water_level IS NOT NULL)" + only + " ORDER BY station_id, ts", args):
+        t = None
+        if r["pct_of_bank"] is not None:
+            t = parse(r["ts"])
+            pts.setdefault(r["station_id"], []).append((t, r["pct_of_bank"]))
+        if r["water_level"] is not None and r["ts"] >= since_levels:
+            lv.setdefault(r["station_id"], []).append((t or parse(r["ts"]), r["water_level"]))
+    return pts, lv
+
+
+FRESH = """
+SELECT s.id, s.source, r.ts
+FROM stations s
+LEFT JOIN readings r ON r.station_id = s.id
+ AND r.ts = (SELECT MAX(ts) FROM readings WHERE station_id = s.id)
+"""
+
+
+def freshness(conn, at):
+    """[{id, source, ts, age_min, stale}] for every station: only what the health checks need (how old is each station's newest
+    reading, and which agency is it), without the trend and tide scans of latest(). About 40 KB instead of over a megabyte."""
+    out = []
+    for r in conn.execute(FRESH):
+        d = {"id": r["id"], "source": r["source"], "ts": r["ts"]}
+        if r["ts"]:
+            age = int((at - parse(r["ts"])).total_seconds() // 60)
+            d["age_min"], d["stale"] = max(age, 0), age > STALE_MIN
+        else:
+            d["age_min"], d["stale"] = None, True
+        out.append(d)
+    return out
+
+
 def recent_levels(conn, at, hours=FAST_HOURS):
     since = iso(at - timedelta(hours=hours))
     out = {}
@@ -257,7 +320,10 @@ def fast_risers(rows, limit=5):
     return sorted(best.values(), key=lambda r: -r["rise_3h_m"])[:limit]
 
 
-def latest(conn, at, province=None, status=None):
+def latest(conn, at, province=None, status=None, near=None):
+    """Every station with its newest reading. `near=[(lat, lng), ...]`: compute trends only for the stations around those places
+    (the notifier needs nothing else; the other rows come back with trend/rise left empty). This is the difference between reading
+    a few hundred readings and about twelve thousand from the database."""
     sql, args, where = LATEST, [], []
     if province:
         where.append("s.province LIKE ?")
@@ -267,8 +333,9 @@ def latest(conn, at, province=None, status=None):
         args.append(status)
     if where:
         sql += " WHERE " + " AND ".join(where)
-    pts, lv = recent_points(conn, at), recent_levels(conn, at)
-    rows = [shape(r, at, pts.get(r["id"]), lv.get(r["id"])) for r in conn.execute(sql, args)]
+    raw = conn.execute(sql, args).fetchall()
+    pts, lv = recent_series(conn, at, None if near is None else ids_near(raw, at, near))
+    rows = [shape(r, at, pts.get(r["id"]), lv.get(r["id"])) for r in raw]
     mark_tidal(conn, rows, at)
     return attach_twins(rows)
 

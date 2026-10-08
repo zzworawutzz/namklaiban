@@ -76,9 +76,15 @@ async def short_cache(request: Request, call_next):
     resp = await call_next(request)
     for k, v in security.HEADERS.items():
         resp.headers.setdefault(k, v)
-    if request.url.path.startswith(("/stations", "/reports")):
-        # data refreshes every ~20 min; stale-while-revalidate lets the CDN and browsers answer at once and refresh in the background
-        resp.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=300"
+    if request.url.path.startswith("/stations"):
+        # data refreshes every ~15-20 min; stale-while-revalidate lets the CDN and browsers answer at once and refresh in the background.
+        # s-maxage is what makes Vercel's CDN keep the answer: with max-age alone every visitor ran the function and read the database.
+        resp.headers["Cache-Control"] = "public, max-age=60, s-maxage=300, stale-while-revalidate=600"
+    elif request.url.path.startswith("/reports"):
+        # a report reads up to 15 days of history for a province (about a megabyte): the CDN keeps it longer than the station list
+        resp.headers["Cache-Control"] = "public, max-age=60, s-maxage=300, stale-while-revalidate=600"
+    elif request.url.path == "/health":
+        resp.headers["Cache-Control"] = "public, max-age=0, s-maxage=30, stale-while-revalidate=60"
     return resp
 
 
@@ -114,7 +120,7 @@ def conn():
 def health_data():
     at = now()
     with conn() as c:
-        rows = core.latest(c, at)
+        rows = core.freshness(c, at)          # not core.latest: every page view and every monitor ping lands here
         run = c.execute("SELECT ts, ok, error FROM ingest_runs ORDER BY id DESC LIMIT 1").fetchone()
         ok_run = c.execute("SELECT MAX(ts) AS m FROM ingest_runs WHERE ok=1").fetchone()["m"]
     last = max((r["ts"] for r in rows if r["ts"]), default=None)
@@ -150,7 +156,7 @@ def health_monitor():
     A few stations being old is NOT a failure: every agency has some dead ones."""
     h = health_data()
     with conn() as c:
-        agencies = core.agency_shares(core.latest(c, now()), MONITOR_MAX_READING_AGE_MIN)
+        agencies = core.agency_shares(core.freshness(c, now()), MONITOR_MAX_READING_AGE_MIN)
     problems = []
     if not h["stations"]:
         problems.append("no stations")
@@ -177,7 +183,7 @@ def stations(province: Optional[str] = None,
 def nearby(lat: float = Query(..., ge=-90, le=90), lng: float = Query(..., ge=-180, le=180),
            limit: int = Query(3, ge=1, le=20), fresh_only: bool = False):
     with conn() as c:
-        rows = core.latest(c, now())
+        rows = core.latest(c, now(), near=[(lat, lng)] if limit <= core.NEAR_STATIONS else None)   # trends only around the point: ~0.2 MB a call instead of ~1 MB
     return core.nearest(rows, lat, lng, limit, fresh_only)
 
 
@@ -418,6 +424,15 @@ def _cron_authorized(authorization):
     return any(s and hmac.compare_digest(given, f"Bearer {s}".encode()) for s in secrets)
 
 
+def ingest_min_gap_min():
+    """A cron call that arrives less than this many minutes after a successful ingest is answered "skipped" (env INGEST_MIN_GAP_MIN,
+    default 8, 0 = always run). The schedulers run every 15 and 20 minutes; ThaiWater itself updates about every 10-15 minutes."""
+    try:
+        return max(0, int(os.environ.get("INGEST_MIN_GAP_MIN", "8")))
+    except ValueError:
+        return 8
+
+
 @app.get("/api/cron/ingest", include_in_schema=False)
 def cron_ingest(authorization: Optional[str] = Header(None)):
     """Fetch new readings, then send notifications. Called by Vercel Cron or any scheduler
@@ -427,6 +442,12 @@ def cron_ingest(authorization: Optional[str] = Header(None)):
     if not _cron_authorized(authorization):
         raise HTTPException(401, "unauthorized")
     with conn() as c:
+        gap = ingest_min_gap_min()
+        last_ok = c.execute("SELECT MAX(ts) AS m FROM ingest_runs WHERE ok=1").fetchone()["m"] if gap else None
+        if last_ok and (now() - core.parse(last_ok)).total_seconds() < gap * 60:
+            # two schedulers (cron-job.org and GitHub) both call this: the second call a few minutes after the first adds nothing
+            # but a megabyte of reads from Neon for the notification pass, so it is answered without doing the work
+            return {"skipped": f"an ingest finished {int((now() - core.parse(last_ok)).total_seconds() // 60)} min ago"}
         if not ingest.try_lock(c, "cron"):
             return {"skipped": "another run is in progress"}
         try:
