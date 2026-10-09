@@ -242,20 +242,36 @@ def test_a_gauge_with_no_thresholds_recorded_gets_no_cm_and_counts_as_missing_no
     assert q["missing"] == 1 and q["bank_not_above_bed_count"] == 0                                             # an empty record is not a data error
 
 
-def test_one_scan_of_recent_readings_gives_exactly_what_the_two_separate_scans_gave(tmp_path):
+def test_the_database_side_summary_gives_the_same_trend_and_rise_as_going_through_every_reading(tmp_path):
+    """recent_series() sends two numbers per station instead of every reading; trend_of and rise_of must not notice."""
     import sqlite3, ingest as ig
     c = sqlite3.connect(tmp_path / "s.db"); c.row_factory = sqlite3.Row; ig.init_db(c)
-    for sid in ("A", "B", "C"):
+    def put(sid, minutes_ago, level, pct):
+        ts = (AT - timedelta(minutes=minutes_ago)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        c.execute("INSERT INTO readings(station_id,ts,water_level,pct_of_bank,status) VALUES(?,?,?,?,'normal')", (sid, ts, level, pct))
+    for sid in "ABCDEFGH":
         c.execute("INSERT INTO stations(id,name,source,lat,lng) VALUES(?,?,?,?,?)", (sid, sid, "HII", 14.0, 100.0))
-    for k in range(40):                                              # every 15 minutes for 10 hours: some before the 6 h window, some inside the 3 h one
-        ts = (AT - timedelta(minutes=15 * k)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        c.execute("INSERT INTO readings(station_id,ts,water_level,pct_of_bank,status) VALUES('A',?,?,?,'normal')", (ts, 1.0 + k / 10, 50.0 + k))
-        c.execute("INSERT INTO readings(station_id,ts,water_level,pct_of_bank,status) VALUES('B',?,?,?,'normal')", (ts, None if k % 3 == 0 else 2.0, 60.0 if k % 2 else None))   # gaps in either column
-        c.execute("INSERT INTO readings(station_id,ts,water_level,pct_of_bank,status) VALUES('C',?,?,?,'unknown')", (ts, None, None))                                        # nothing usable
+    for k in range(40):                                                          # 10 hours, every 15 minutes: some before the 6 h window, some inside the 3 h one
+        put("A", 15 * k, 1.0 + k / 10, 50.0 + k)                                 # smooth, falling towards now
+        put("B", 15 * k, None if k % 3 == 0 else 2.0, 60.0 if k % 2 else None)   # gaps in either column
+        put("C", 15 * k, None, None)                                             # nothing usable
+        put("D", 15 * k, 1.0 if k > 5 else 3.5, 40.0)                            # one 2.5 m jump 90 minutes ago: a faulty sensor
+    for k, m in enumerate((150, 100, 50, 0)):
+        put("E", m, 1.0 + k * 1.2, 20.0 + k)                                     # steps of 1.2 m that add up to 3.6 m: no spike step, but over the total limit
+    put("F", 10, 2.0, 70.0)                                                      # a single reading
+    put("G", 30, 2.0, 70.0); put("G", 0, 2.4, 71.0)                              # two readings, too close together for a trend or a rise
+    put("H", 170, 2.0, 70.0); put("H", 90, 2.2, 71.0); put("H", 0, 2.5, 72.0)    # three readings spread over almost 3 h
     c.commit()
+    old_pts, old_lv = core.recent_points(c, AT), core.recent_levels(c, AT)
     pts, lv = core.recent_series(c, AT)
-    assert pts == core.recent_points(c, AT) and lv == core.recent_levels(c, AT)
-    assert pts and lv and "C" not in pts and "C" not in lv and len(pts["A"]) == 25 and len(lv["A"]) == 13       # 6 h / 3 h of 15-minute readings, both ends included
+    assert set(pts) == set(old_pts) and set(lv) == set(old_lv)
+    for sid in old_pts:
+        assert core.trend_of(pts[sid]) == core.trend_of(old_pts[sid]), sid
+    for sid in old_lv:
+        assert core.rise_of(lv[sid]) == core.rise_of(old_lv[sid]), sid
+    assert core.rise_of(lv["D"]) == (None, True) and core.rise_of(lv["E"]) == (None, True)   # the glitch rules survived the move
+    assert core.rise_of(lv["A"])[0] is not None and core.trend_of(pts["A"])[0] == "falling"   # (k counts back in time, so the older the higher)
+    assert "C" not in pts and "C" not in lv and len(pts["A"]) == 2                           # two entries a station at most
 
 
 def test_freshness_agrees_with_latest_about_age_and_staleness(tmp_path):

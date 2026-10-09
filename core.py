@@ -91,6 +91,13 @@ def advice(d):
 def rise_of(levels):
     """levels: [(datetime, metres)] oldest first -> (rise_m, suspect). rise_m is None when there is too
     little data; suspect is True when the series jumps like a faulty sensor (rise_m is then None too)."""
+    if isinstance(levels, dict):   # the summary recent_series() builds in the database (see there): same rules, no list of readings
+        if levels["n"] < FAST_MIN_POINTS or (levels["t1"] - levels["t0"]).total_seconds() / 3600 < FAST_MIN_SPAN_H:
+            return None, False
+        total = levels["l1"] - levels["l0"]
+        if (levels["max_step"] is not None and levels["max_step"] > SPIKE_STEP_M) or abs(total) > SPIKE_TOTAL_M:
+            return None, True
+        return round(total, 2), False
     if len(levels) < FAST_MIN_POINTS or (levels[-1][0] - levels[0][0]).total_seconds() / 3600 < FAST_MIN_SPAN_H:
         return None, False
     steps = [b[1] - a[1] for a, b in zip(levels, levels[1:])]
@@ -252,25 +259,35 @@ def ids_near(raw, at, places):
 
 
 def recent_series(conn, at, ids=None):
-    """(points, levels) in ONE pass over the last TREND_HOURS of readings, instead of two separate scans (recent_points + recent_levels):
-    about a third fewer rows leave the database. Every row is ~60 bytes on the wire and ~18,000 rows were being read for each call
-    (6 Oct 2026: 812 stations, HII/FOP about every 15 min, RID/EGAT hourly), which is what ate Neon's 5 GB monthly transfer."""
+    """(points, levels) per station, summarised INSIDE the database so that two numbers per station leave it instead of every reading.
+    trend_of() only ever looks at the first and the last reading of the window, and rise_of() at their count, their span, the first and
+    last level and the largest step between neighbours (a spike means a faulty sensor): all of that is one GROUP BY plus a LAG().
+    Before this, about 12,000 rows (every reading of the last 6 h of 812 stations) crossed the wire for every call (Neon's 5 GB monthly
+    transfer ran low on 8 Oct 2026); now it is about 1,600 rows. points[station] = [(t0, p0), (t1, p1)] (one entry when there is one
+    reading); levels[station] = {n, t0, t1, l0, l1, max_step}, which rise_of() understands next to the plain list form."""
     since, since_levels = iso(at - timedelta(hours=TREND_HOURS)), iso(at - timedelta(hours=FAST_HOURS))
-    pts, lv = {}, {}
-    only, args = "", [since]
+    only, extra = "", []
     if ids is not None and len(ids) <= MAX_SERIES_IDS:
         if not ids:
-            return pts, lv
-        only, args = f" AND station_id IN ({','.join('?' * len(ids))})", [since, *sorted(ids)]
+            return {}, {}
+        only, extra = f" AND station_id IN ({','.join('?' * len(ids))})", sorted(ids)
+    pts, lv = {}, {}
     for r in conn.execute(
-            "SELECT station_id, ts, pct_of_bank, water_level FROM readings "
-            "WHERE ts >= ? AND (pct_of_bank IS NOT NULL OR water_level IS NOT NULL)" + only + " ORDER BY station_id, ts", args):
-        t = None
-        if r["pct_of_bank"] is not None:
-            t = parse(r["ts"])
-            pts.setdefault(r["station_id"], []).append((t, r["pct_of_bank"]))
-        if r["water_level"] is not None and r["ts"] >= since_levels:
-            lv.setdefault(r["station_id"], []).append((t or parse(r["ts"]), r["water_level"]))
+            "SELECT a.station_id, a.n, a.t0, a.t1, r0.pct_of_bank AS p0, r1.pct_of_bank AS p1 FROM ("
+            " SELECT station_id, COUNT(*) AS n, MIN(ts) AS t0, MAX(ts) AS t1 FROM readings"
+            " WHERE ts >= ? AND pct_of_bank IS NOT NULL" + only + " GROUP BY station_id) a"
+            " JOIN readings r0 ON r0.station_id = a.station_id AND r0.ts = a.t0"
+            " JOIN readings r1 ON r1.station_id = a.station_id AND r1.ts = a.t1", [since, *extra]):
+        first = (parse(r["t0"]), r["p0"])
+        pts[r["station_id"]] = [first] if r["n"] < 2 else [first, (parse(r["t1"]), r["p1"])]
+    for r in conn.execute(
+            "SELECT a.station_id, a.n, a.t0, a.t1, a.max_step, r0.water_level AS l0, r1.water_level AS l1 FROM ("
+            " SELECT station_id, COUNT(*) AS n, MIN(ts) AS t0, MAX(ts) AS t1, MAX(ABS(step)) AS max_step FROM ("
+            "  SELECT station_id, ts, water_level - LAG(water_level) OVER (PARTITION BY station_id ORDER BY ts) AS step FROM readings"
+            "  WHERE ts >= ? AND water_level IS NOT NULL" + only + ") x GROUP BY station_id) a"
+            " JOIN readings r0 ON r0.station_id = a.station_id AND r0.ts = a.t0"
+            " JOIN readings r1 ON r1.station_id = a.station_id AND r1.ts = a.t1", [since_levels, *extra]):
+        lv[r["station_id"]] = {"n": r["n"], "t0": parse(r["t0"]), "t1": parse(r["t1"]), "l0": r["l0"], "l1": r["l1"], "max_step": r["max_step"]}
     return pts, lv
 
 

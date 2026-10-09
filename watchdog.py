@@ -218,26 +218,29 @@ def watched_provinces():
 
 
 def silent_groups(conn, at):
-    """Labels of groups that stopped reporting: every station of one agency in one province, or at least a quarter of an agency."""
+    """Labels of groups that stopped reporting: every station of one agency in one province, or at least a quarter of an agency.
+    The counting is done in the database (about 250 rows leave it instead of one per station)."""
     cut = core.iso(at - timedelta(hours=SILENT_H))
-    rows = conn.execute("SELECT s.source, s.province, MAX(r.ts) AS ts FROM stations s "
-                        "LEFT JOIN readings r ON r.station_id = s.id GROUP BY s.id, s.source, s.province").fetchall()
+    rows = conn.execute(
+        "SELECT source, province, COUNT(*) AS n, SUM(CASE WHEN ts IS NULL OR ts < ? THEN 1 ELSE 0 END) AS quiet FROM ("
+        " SELECT s.source AS source, s.province AS province, MAX(r.ts) AS ts FROM stations s"
+        " LEFT JOIN readings r ON r.station_id = s.id GROUP BY s.id, s.source, s.province) t GROUP BY source, province", (cut,)).fetchall()
     mine = watched_provinces()
     if mine:   # only the owner's own provinces; the agency-wide share is then measured inside them too
         rows = [r for r in rows if r["province"] and any(p in r["province"] for p in mine)]
     by_agency, by_prov = {}, {}
     for r in rows:
-        quiet = r["ts"] is None or r["ts"] < cut
-        for table, key in ((by_agency, r["source"]), (by_prov, (r["source"], r["province"]))):
-            if key and (key[0] if isinstance(key, tuple) else key):
-                table.setdefault(key, []).append(quiet)
+        n, quiet = int(r["n"]), int(r["quiet"] or 0)
+        if r["source"]:
+            t = by_agency.setdefault(r["source"], [0, 0]); t[0] += n; t[1] += quiet
+            p = by_prov.setdefault((r["source"], r["province"]), [0, 0]); p[0] += n; p[1] += quiet
     out = []
-    for src, v in by_agency.items():
-        if len(v) >= AGENCY_MIN_STATIONS and sum(v) / len(v) >= AGENCY_SILENT_SHARE:
-            out.append(f"หน่วยงาน {src} ({sum(v)} จาก {len(v)} สถานี)")
-    for (src, prov), v in by_prov.items():
-        if prov and len(v) >= SILENT_MIN_STATIONS and all(v):
-            out.append(f"{src} จ.{prov} ({len(v)} สถานี)")
+    for src, (n, quiet) in by_agency.items():
+        if n >= AGENCY_MIN_STATIONS and quiet / n >= AGENCY_SILENT_SHARE:
+            out.append(f"หน่วยงาน {src} ({quiet} จาก {n} สถานี)")
+    for (src, prov), (n, quiet) in by_prov.items():
+        if prov and n >= SILENT_MIN_STATIONS and quiet == n:
+            out.append(f"{src} จ.{prov} ({n} สถานี)")
     return sorted(out)
 
 
