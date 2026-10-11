@@ -33,6 +33,44 @@ LEFT JOIN readings r ON r.station_id = s.id
 """
 
 
+STATION_COLS = "id, name, source, province, lat, lng, bank_level, ground_level, river, basin, watch_pct, alert_pct"
+# A station's descriptive columns almost never change, yet every full listing used to read them again (~110 KB of the ~160 KB).
+# They are kept in memory and re-read only when this one-row fingerprint of the stations table changes.
+STATION_SIG = ("SELECT COUNT(*) AS n, MAX(updated_at) AS u, MIN(id) AS lo, MAX(id) AS hi, "
+               "SUM(COALESCE(lat,0) + COALESCE(lng,0) + COALESCE(bank_level,0) + COALESCE(ground_level,0) "
+               "+ COALESCE(watch_pct,0) + COALESCE(alert_pct,0) + LENGTH(COALESCE(name,'')) "
+               "+ LENGTH(COALESCE(province,'')) + LENGTH(COALESCE(river,'')) + LENGTH(COALESCE(basin,'')) "
+               "+ LENGTH(COALESCE(source,''))) AS chk FROM stations")
+LATEST_DYN = """
+SELECT s.id, r.ts, r.water_level, r.pct_of_bank, r.status
+FROM stations s
+LEFT JOIN readings r ON r.station_id = s.id
+ AND r.ts = (SELECT MAX(ts) FROM readings WHERE station_id = s.id)
+"""
+_station_cache = {"sig": None, "rows": None}
+
+
+def _station_rows(conn):
+    sig = conn.execute(STATION_SIG).fetchone()
+    sig = tuple(sig[k] for k in ("n", "u", "lo", "hi", "chk"))
+    if _station_cache["sig"] != sig:
+        rows = [dict(r) for r in conn.execute(f"SELECT {STATION_COLS} FROM stations")]
+        _station_cache.update(sig=sig, rows=rows)
+    return _station_cache["rows"]
+
+
+def _latest_rows(conn):
+    """Same rows as LATEST, but the unchanging station columns come from memory."""
+    dyn = {r["id"]: r for r in conn.execute(LATEST_DYN)}
+    out = []
+    for st in _station_rows(conn):
+        d = dyn.get(st["id"])
+        if d is None:     # station added between the two reads: the next call picks it up
+            continue
+        out.append({**st, "ts": d["ts"], "water_level": d["water_level"], "pct_of_bank": d["pct_of_bank"], "status": d["status"]})
+    return out
+
+
 def iso(dt):
     return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -350,7 +388,7 @@ def latest(conn, at, province=None, status=None, near=None):
         args.append(status)
     if where:
         sql += " WHERE " + " AND ".join(where)
-    raw = conn.execute(sql, args).fetchall()
+    raw = _latest_rows(conn) if not where else conn.execute(sql, args).fetchall()
     pts, lv = recent_series(conn, at, None if near is None else ids_near(raw, at, near))
     rows = [shape(r, at, pts.get(r["id"]), lv.get(r["id"])) for r in raw]
     mark_tidal(conn, rows, at)

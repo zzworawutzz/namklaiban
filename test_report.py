@@ -189,3 +189,51 @@ def test_sensor_glitch_is_not_reported_as_fast_rise(conn):
     row = {r["id"]: r for r in core.latest(conn, AT)}["B"]
     assert row["rise_3h_m"] is None and row["rise_suspect"] is True
     assert "B" not in [r["id"] for r in report.build(conn, PROV, AT)["fast"]]
+
+
+def _old_history(conn, province, at, days):
+    """The way report._history read the database before it was summarised in SQL: every reading of the province."""
+    since = core.iso(at - timedelta(days=days + 1))
+    out = {}
+    for r in conn.execute(
+            "SELECT r.station_id, r.ts, r.pct_of_bank FROM readings r JOIN stations s ON s.id = r.station_id "
+            "WHERE s.province = ? AND r.ts >= ? AND r.pct_of_bank IS NOT NULL ORDER BY r.station_id, r.ts",
+            (province, since)):
+        out.setdefault(r["station_id"], []).append((core.parse(r["ts"]), r["pct_of_bank"]))
+    return out
+
+
+def test_sql_history_gives_the_same_numbers_as_reading_every_point(conn):
+    # off-the-hour readings, a null pct and a gap, so the hourly buckets and the 24 h cutoff are exercised
+    for sid, mins, pct in [("B", 23 * 60 + 40, 91.0), ("B", 24 * 60 + 5, 60.0), ("C", 5 * 60 + 12, None), ("C", 24 * 60 + 25, 44.0),
+                           ("A", 30 * 60 + 17, 150.0)]:
+        conn.execute("INSERT OR REPLACE INTO readings VALUES(?,?,?,?,?)",
+                     (sid, core.iso(AT - timedelta(minutes=mins)), 1.0, pct, ig.status_of(pct) if pct is not None else "unknown"))
+    conn.commit()
+    hourly, before = report._history(conn, PROV, AT, 14)
+    old = _old_history(conn, PROV, AT, 14)
+    cutoff = AT - timedelta(hours=24)
+    for sid, pts in old.items():
+        prior = [p for t, p in pts if t <= cutoff]
+        assert before.get(sid) == (prior[-1] if prior else None)
+        by_day = {}
+        for t, p in pts:
+            d = t.astimezone(ig.TZ_TH).date()
+            by_day[d] = max(by_day.get(d, p), p)
+        new_by_day = {}
+        for t, p in hourly.get(sid, []):
+            d = t.astimezone(ig.TZ_TH).date()
+            new_by_day[d] = max(new_by_day.get(d, p), p)
+        assert new_by_day == by_day
+
+
+def test_station_columns_cache_follows_changes(conn):
+    core._station_cache.update(sig=None, rows=None)
+    first = {r["id"]: r for r in core.latest(conn, AT)}
+    assert first["B"]["bank_level"] is None
+    conn.execute("UPDATE stations SET bank_level = 7.5, name = 'บางบาลใหม่' WHERE id = 'B'")
+    conn.execute("INSERT INTO stations(id,name,province,lat,lng) VALUES('Z','ใหม่',?,14.0,100.0)", (PROV,))
+    conn.commit()
+    again = {r["id"]: r for r in core.latest(conn, AT)}
+    assert again["B"]["bank_level"] == 7.5 and again["B"]["name"] == "บางบาลใหม่"
+    assert again["Z"]["status"] == "unknown"

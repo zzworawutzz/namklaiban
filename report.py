@@ -46,23 +46,26 @@ def _status(row, pct):
 
 
 def _history(conn, province, at, days):
+    """Per station: `hourly` = [(hour start, highest pct that hour)] and `before` = the last pct at or before 24 h ago.
+    Summarised in SQL by UTC hour (a Thai day is a whole number of hours, so daily peaks come out exact) instead of
+    pulling every 15-minute reading."""
     since = core.iso(at - timedelta(days=days + 1))
-    out = {}
+    cutoff = core.iso(at - timedelta(hours=24))
+    hourly, before = {}, {}
     for r in conn.execute(
-            "SELECT r.station_id, r.ts, r.pct_of_bank FROM readings r JOIN stations s ON s.id = r.station_id "
-            "WHERE s.province = ? AND r.ts >= ? AND r.pct_of_bank IS NOT NULL ORDER BY r.station_id, r.ts",
+            "SELECT r.station_id, SUBSTR(r.ts, 1, 13) AS h, MAX(r.pct_of_bank) AS p FROM readings r "
+            "JOIN stations s ON s.id = r.station_id "
+            "WHERE s.province = ? AND r.ts >= ? AND r.pct_of_bank IS NOT NULL GROUP BY r.station_id, SUBSTR(r.ts, 1, 13)",
             (province, since)):
-        out.setdefault(r["station_id"], []).append((core.parse(r["ts"]), r["pct_of_bank"]))
-    return out
-
-
-def _at_or_before(points, when):
-    last = None
-    for t, pct in points:
-        if t > when:
-            break
-        last = pct
-    return last
+        hourly.setdefault(r["station_id"], []).append((core.parse(r["h"] + ":00:00Z"), r["p"]))
+    for r in conn.execute(
+            "SELECT r.station_id, r.pct_of_bank AS p FROM readings r "
+            "JOIN (SELECT m.station_id, MAX(m.ts) AS mts FROM readings m JOIN stations s ON s.id = m.station_id "
+            "      WHERE s.province = ? AND m.ts >= ? AND m.ts <= ? AND m.pct_of_bank IS NOT NULL GROUP BY m.station_id) x "
+            "ON x.station_id = r.station_id AND x.mts = r.ts",
+            (province, since, cutoff)):
+        before[r["station_id"]] = r["p"]
+    return hourly, before
 
 
 def _brief(r):
@@ -79,12 +82,12 @@ def build(conn, province, at, days=14, rows=None):
     counts = {k: 0 for k in ("alert", "watch", "normal", "unknown")}
     for r in prov:
         counts[r["status"]] += 1
-    hist = _history(conn, province, at, days)
+    hourly, before_24h = _history(conn, province, at, days)
 
     # change vs 24 h ago, only over stations that already reported back then
     ago, now_c, comparable, newly_over = {"alert": 0, "watch": 0}, {"alert": 0, "watch": 0}, 0, []
     for r in prov:
-        before = _at_or_before(hist.get(r["id"], []), at - timedelta(hours=24))
+        before = before_24h.get(r["id"])
         if before is None or r["pct_of_bank"] is None or r["stale"]:
             continue
         comparable += 1
@@ -103,7 +106,7 @@ def build(conn, province, at, days=14, rows=None):
         day = today - timedelta(days=i)
         c = {"alert": 0, "watch": 0, "normal": 0}
         for r in prov:
-            peaks = [p for t, p in hist.get(r["id"], []) if t.astimezone(TZ_TH).date() == day]
+            peaks = [p for t, p in hourly.get(r["id"], []) if t.astimezone(TZ_TH).date() == day]
             if peaks:
                 c[_status(r, max(peaks))] += 1
         series.append({"day": day.isoformat(), **c, "reporting": sum(c.values())})
