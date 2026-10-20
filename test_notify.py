@@ -445,3 +445,9 @@ def test_no_readings_are_read_when_nobody_but_groups_are_subscribed(tmp_path, mo
     c.execute("DELETE FROM subscriptions")
     c.commit()
     assert notify.run(c, AT, {"line": lambda t, m, **kw: 1 / 0}) == (0, 0)           # nobody at all
+
+
+def test_no_silent_notice_for_a_station_that_only_reports_once_a_day(tmp_path, monkeypatch):
+    station = _silent(sparse=True)       # last reading 8 h ago was high, but this gauge is read once a day: nothing went wrong
+    c, out, run = _run(tmp_path, monkeypatch, station, world=_background())
+    assert run() == (0, 0) and c.execute("SELECT stale_notified FROM subscriptions").fetchone()[0] is None

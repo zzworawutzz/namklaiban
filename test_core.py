@@ -318,3 +318,34 @@ def test_the_nearest_fresh_station_gets_its_trend_even_when_the_nearest_ones_are
     c.commit()
     near = {r["id"]: r for r in core.latest(c, AT, near=[(14.0, 90.0)])}
     assert near["S10"]["stale"] is False and near["S10"]["trend"] == "rising"
+
+
+def _seed_cadence(tmp_path, daily=60):
+    """RID with 25 stations that report every 10 minutes and `daily` that report once a day (as in Oct 2026), HII with 25 frequent ones."""
+    c = sqlite3.connect(tmp_path / "c.db"); c.row_factory = sqlite3.Row; ig.init_db(c)
+    for src, n, daily_n in (("RID", 25, daily), ("HII", 25, 0)):
+        for i in range(n + daily_n):
+            sid = f"{src}{i}"
+            c.execute("INSERT INTO stations(id,name,source,province,lat,lng) VALUES(?,?,?,?,?,?)", (sid, sid, src, "ลพบุรี", 15.0, 100.0))
+            if i < n:
+                for k in range(0, 24 * 60, 10):
+                    c.execute("INSERT INTO readings VALUES(?,?,?,?,?)", (sid, core.iso(AT - timedelta(minutes=10 + k)), 1.0, 50.0, "normal"))
+            else:
+                c.execute("INSERT INTO readings VALUES(?,?,?,?,?)", (sid, core.iso(AT - timedelta(hours=17)), 1.0, 50.0, "normal"))
+    c.commit()
+    return c
+
+
+def test_daily_reporting_stations_do_not_make_an_agency_look_quiet(tmp_path):
+    c = _seed_cadence(tmp_path)
+    s = core.health_summary(c, AT, 180)
+    assert s["stations"] == 110 and s["stale"] == 60 and s["agencies"] == {"RID": {"stations": 25, "recent": 25}, "HII": {"stations": 25, "recent": 25}}
+    rows = {r["id"]: r for r in core.latest(c, AT)}
+    assert rows["RID0"]["sparse"] is False and rows["RID30"]["sparse"] is True and rows["RID30"]["stale"] is True
+    assert core.agency_shares(list(rows.values()), 180)["RID"] == {"stations": 25, "recent": 25}    # same answer from the rows the web gets
+
+
+def test_an_agency_that_really_stops_still_shows_as_quiet_even_with_many_daily_stations(tmp_path):
+    c = _seed_cadence(tmp_path)
+    s = core.health_summary(c, AT + timedelta(hours=5), 180)      # five hours later nothing new came in: the frequent ones are 5 h old
+    assert s["agencies"]["RID"] == {"stations": 25, "recent": 0}

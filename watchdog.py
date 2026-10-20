@@ -221,10 +221,15 @@ def silent_groups(conn, at):
     """Labels of groups that stopped reporting: every station of one agency in one province, or at least a quarter of an agency.
     The counting is done in the database (about 250 rows leave it instead of one per station)."""
     cut = core.iso(at - timedelta(hours=SILENT_H))
+    since = core.iso(at - timedelta(hours=24))
+    # only stations that normally report often can "go quiet": one that reports once a day (about 600 of RID's since Oct 2026) is
+    # hours old most of the day by design
     rows = conn.execute(
         "SELECT source, province, COUNT(*) AS n, SUM(CASE WHEN ts IS NULL OR ts < ? THEN 1 ELSE 0 END) AS quiet FROM ("
-        " SELECT s.source AS source, s.province AS province, MAX(r.ts) AS ts FROM stations s"
-        " LEFT JOIN readings r ON r.station_id = s.id GROUP BY s.id, s.source, s.province) t GROUP BY source, province", (cut,)).fetchall()
+        " SELECT s.source AS source, s.province AS province, "
+        "  (SELECT MAX(ts) FROM readings WHERE station_id = s.id) AS ts, "
+        "  (SELECT COUNT(*) FROM readings WHERE station_id = s.id AND ts >= ?) AS n24 "
+        " FROM stations s) t WHERE n24 >= ? GROUP BY source, province", (cut, since, core.FREQUENT_MIN_24H)).fetchall()
     mine = watched_provinces()
     if mine:   # only the owner's own provinces; the agency-wide share is then measured inside them too
         rows = [r for r in rows if r["province"] and any(p in r["province"] for p in mine)]

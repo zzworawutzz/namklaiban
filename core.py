@@ -210,6 +210,8 @@ def agency_shares(rows, max_age_min):
     (HII, RID, FOP, EGAT) publish independently, so one can go quiet while the rest, and our own ingest, are fine."""
     out = {}
     for r in rows:
+        if r.get("sparse"):      # reports a few times a day at most: being 3 h old is normal for it, so it says nothing about the agency
+            continue
         a = out.setdefault(r.get("source") or "?", {"stations": 0, "recent": 0})
         a["stations"] += 1
         if r.get("age_min") is not None and r["age_min"] <= max_age_min:
@@ -352,6 +354,40 @@ def freshness(conn, at):
     return out
 
 
+FREQUENT_MIN_24H = 8   # a station that gave fewer readings than this in the last 24 h reports a few times a day at most (a manual or daily gauge)
+
+
+def health_summary(conn, at, recent_min):
+    """What /health and /health/monitor need, counted in the database (a few rows leave it instead of one per station):
+    {"stations", "stale", "latest", "agencies": {source: {"stations", "recent"}}}. The agency figures count only stations that
+    normally report often (FREQUENT_MIN_24H readings in the last 24 h). In Oct 2026 RID added about 600 stations that report once
+    a day; counted as "should have reported in the last 3 h" they made RID look dead and the monitor answered 503 around the clock."""
+    stale_cut, recent_cut, since = iso(at - timedelta(minutes=STALE_MIN)), iso(at - timedelta(minutes=recent_min)), iso(at - timedelta(hours=24))
+    rows = conn.execute(
+        "SELECT source, COUNT(*) AS n, SUM(CASE WHEN ts IS NULL OR ts < ? THEN 1 ELSE 0 END) AS stale, MAX(ts) AS latest, "
+        "SUM(CASE WHEN n24 >= ? THEN 1 ELSE 0 END) AS freq, SUM(CASE WHEN n24 >= ? AND ts >= ? THEN 1 ELSE 0 END) AS recent FROM ("
+        " SELECT s.source AS source, "
+        "  (SELECT MAX(ts) FROM readings WHERE station_id = s.id) AS ts, "
+        "  (SELECT COUNT(*) FROM readings WHERE station_id = s.id AND ts >= ?) AS n24 "
+        " FROM stations s) t GROUP BY source",
+        (stale_cut, FREQUENT_MIN_24H, FREQUENT_MIN_24H, recent_cut, since)).fetchall()
+    out = {"stations": 0, "stale": 0, "latest": None, "agencies": {}}
+    for r in rows:
+        out["stations"] += int(r["n"])
+        out["stale"] += int(r["stale"] or 0)
+        if r["latest"] and (out["latest"] is None or r["latest"] > out["latest"]):
+            out["latest"] = r["latest"]
+        out["agencies"][r["source"] or "?"] = {"stations": int(r["freq"] or 0), "recent": int(r["recent"] or 0)}
+    return out
+
+
+def frequent_ids(conn, at):
+    """Ids of the stations that gave at least FREQUENT_MIN_24H readings in the last 24 h."""
+    return {r["station_id"] for r in conn.execute(
+        "SELECT station_id FROM readings WHERE ts >= ? GROUP BY station_id HAVING COUNT(*) >= ?",
+        (iso(at - timedelta(hours=24)), FREQUENT_MIN_24H))}
+
+
 def recent_levels(conn, at, hours=FAST_HOURS):
     since = iso(at - timedelta(hours=hours))
     out = {}
@@ -391,6 +427,9 @@ def latest(conn, at, province=None, status=None, near=None):
     raw = _latest_rows(conn) if not where else conn.execute(sql, args).fetchall()
     pts, lv = recent_series(conn, at, None if near is None else ids_near(raw, at, near))
     rows = [shape(r, at, pts.get(r["id"]), lv.get(r["id"])) for r in raw]
+    often = frequent_ids(conn, at)
+    for r in rows:
+        r["sparse"] = r["id"] not in often
     mark_tidal(conn, rows, at)
     return attach_twins(rows)
 

@@ -120,25 +120,27 @@ def conn():
 def health_data():
     at = now()
     with conn() as c:
-        rows = core.freshness(c, at)          # not core.latest: every page view and every monitor ping lands here
+        summ = core.health_summary(c, at, MONITOR_MAX_READING_AGE_MIN)   # counted in the database: not core.latest, not one row per station
         run = c.execute("SELECT ts, ok, error FROM ingest_runs ORDER BY id DESC LIMIT 1").fetchone()
         ok_run = c.execute("SELECT MAX(ts) AS m FROM ingest_runs WHERE ok=1").fetchone()["m"]
-    last = max((r["ts"] for r in rows if r["ts"]), default=None)
+    last = summ["latest"]
     ingest_age = int((at - core.parse(ok_run)).total_seconds() // 60) if ok_run else None
     reading_age = int((at - core.parse(last)).total_seconds() // 60) if last else None
     healthy = ingest_age is not None and ingest_age <= HEALTH_MAX_INGEST_AGE_MIN
-    quiet = sorted(n for n, a in core.agency_shares(rows, MONITOR_MAX_READING_AGE_MIN).items()
+    quiet = sorted(n for n, a in summ["agencies"].items()
                    if a["stations"] >= MONITOR_AGENCY_MIN_STATIONS and a["recent"] / a["stations"] < MONITOR_AGENCY_MIN_RECENT)
-    return {"stations": len(rows), "stale": sum(r["stale"] for r in rows), "latest_reading": last,
+    return {"stations": summ["stations"], "stale": summ["stale"], "latest_reading": last,
             "latest_reading_age_min": reading_age, "quiet_agencies": quiet,   # same test as /health/monitor; the page turns it into a notice
             "last_ingest_age_min": ingest_age,
             "last_ingest_error": run["error"] if run and not run["ok"] else None,
-            "ingest_ok": healthy}
+            "ingest_ok": healthy, "_agencies": summ["agencies"]}
 
 
 @app.get("/health")
 def health():
-    return health_data()
+    h = health_data()
+    h.pop("_agencies")
+    return h
 
 
 MONITOR_MAX_READING_AGE_MIN = 180   # no new reading at all for this long: the source (or our reading of it) has stopped
@@ -153,10 +155,10 @@ def health_monitor():
     3 hours. /health itself always answers 200 (the web page reads it for its "data may be late" bar), so it cannot be used for this.
     Also 503 when one whole agency (HII, RID, FOP, EGAT...) has gone quiet while the others still report: the newest-reading
     test alone would pass that (6 Oct 2026: HII and FOP, 421 stations, stopped at the source while RID and EGAT kept going).
-    A few stations being old is NOT a failure: every agency has some dead ones."""
+    A few stations being old is NOT a failure: every agency has some dead ones. Stations that report only a few times a day
+    (about 600 of RID's since Oct 2026) are left out of the agency count: being hours old is normal for them."""
     h = health_data()
-    with conn() as c:
-        agencies = core.agency_shares(core.freshness(c, now()), MONITOR_MAX_READING_AGE_MIN)
+    agencies = h.pop("_agencies")
     problems = []
     if not h["stations"]:
         problems.append("no stations")

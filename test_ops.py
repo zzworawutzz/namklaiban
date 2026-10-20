@@ -28,8 +28,9 @@ def make(tmp_path, admin="UADMIN", monkeypatch=None):
 
 def add_station(c, sid, src, prov, age_h):
     c.execute("INSERT INTO stations(id,name,source,province,lat,lng) VALUES(?,?,?,?,?,?)", (sid, sid, src, prov, 14.0, 100.0))
-    if age_h is not None:
-        c.execute("INSERT INTO readings VALUES(?,?,?,?,?)", (sid, core.iso(AT - timedelta(hours=age_h)), 1.0, 50.0, "normal"))
+    if age_h is not None:   # a station that reports often: a reading every 10 minutes up to the newest one, `age_h` hours old
+        for k in range(core.FREQUENT_MIN_24H):
+            c.execute("INSERT INTO readings VALUES(?,?,?,?,?)", (sid, core.iso(AT - timedelta(hours=age_h, minutes=10 * k)), 1.0, 50.0, "normal"))
     c.commit()
 
 
@@ -248,3 +249,13 @@ def test_shelter_reminder_can_be_turned_off(tmp_path, monkeypatch):
     monkeypatch.setenv("SHELTER_REMIND", "0")
     assert watchdog.check_shelter_reminder(c, AT, lambda t, m: 1 / 0) is None
     assert watchdog.check_shelter_reminder(c, AT + timedelta(days=200), lambda t, m: 1 / 0) is None
+
+
+def test_stations_that_report_once_a_day_are_never_a_silent_group(tmp_path):
+    c = make(tmp_path)
+    for i in range(20):                                         # a daily gauge: one reading, 17 h old
+        c.execute("INSERT INTO stations(id,name,source,province,lat,lng) VALUES(?,?,?,?,?,?)", (f"d{i}", f"d{i}", "RID", "ลพบุรี", 14.0, 100.0))
+        c.execute("INSERT INTO readings VALUES(?,?,?,?,?)", (f"d{i}", core.iso(AT - timedelta(hours=17)), 1.0, 50.0, "normal"))
+    for i in range(4):
+        add_station(c, f"f{i}", "RID", "ลพบุรี", 1)             # frequent ones, reporting
+    assert watchdog.silent_groups(c, AT) == []

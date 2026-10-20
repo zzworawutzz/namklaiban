@@ -213,6 +213,13 @@ def test_health_monitor_with_an_empty_database_says_no_stations(tmp_path, monkey
     assert r.status_code == 503 and "no stations" in r.json()["problems"]
 
 
+def _summary(rows):
+    """What core.health_summary returns, built from fake rows (see _fake_rows)."""
+    ag = api.core.agency_shares(rows, 180)
+    last = max(r["ts"] for r in rows)
+    return {"stations": len(rows), "stale": sum(r["stale"] for r in rows), "latest": last, "agencies": ag}
+
+
 def _fake_rows(agencies, now_ts="2026-10-01T16:00:00Z"):
     """agencies: {name: (stations, how many of them have a reading 10 min old; the rest are 5 h old)}"""
     rows = []
@@ -226,7 +233,7 @@ def _fake_rows(agencies, now_ts="2026-10-01T16:00:00Z"):
 
 def test_health_monitor_fails_when_a_whole_agency_goes_quiet_while_others_report(client, monkeypatch):
     _ingest_ran(5)
-    monkeypatch.setattr(api.core, "freshness", lambda c, at, *a, **k: _fake_rows({"HII": (330, 6), "FOP": (89, 2), "RID": (314, 300), "EGAT": (72, 70)}))
+    monkeypatch.setattr(api.core, "health_summary", lambda c, at, m: _summary(_fake_rows({"HII": (330, 6), "FOP": (89, 2), "RID": (314, 300), "EGAT": (72, 70)})))
     r = client.get("/health/monitor")
     assert r.status_code == 503 and r.json()["ok"] is False
     probs = " | ".join(r.json()["problems"])
@@ -237,15 +244,15 @@ def test_health_monitor_fails_when_a_whole_agency_goes_quiet_while_others_report
 
 def test_health_monitor_tolerates_the_normal_share_of_dead_stations_and_small_agencies(client, monkeypatch):
     _ingest_ran(5)
-    monkeypatch.setattr(api.core, "freshness", lambda c, at, *a, **k: _fake_rows({"HII": (330, 295), "FOP": (89, 88), "RID": (314, 295), "EGAT": (72, 69), "TINY": (6, 0)}))
+    monkeypatch.setattr(api.core, "health_summary", lambda c, at, m: _summary(_fake_rows({"HII": (330, 295), "FOP": (89, 88), "RID": (314, 295), "EGAT": (72, 69), "TINY": (6, 0)})))
     r = client.get("/health/monitor")
     assert r.status_code == 200 and r.json()["problems"] == []                                       # ~11 % dead HII stations are normal; a 6-station agency is too small to judge
 
 
 def test_health_lists_agencies_that_have_gone_quiet_for_the_web_notice(client, monkeypatch):
-    monkeypatch.setattr(api.core, "freshness", lambda c, at, *a, **k: _fake_rows({"HII": (330, 6), "RID": (314, 300), "TINY": (6, 0)}))
+    monkeypatch.setattr(api.core, "health_summary", lambda c, at, m: _summary(_fake_rows({"HII": (330, 6), "RID": (314, 300), "TINY": (6, 0)})))
     assert client.get("/health").json()["quiet_agencies"] == ["HII"]                  # too-small agencies are not judged
-    monkeypatch.setattr(api.core, "freshness", lambda c, at, *a, **k: _fake_rows({"HII": (330, 295), "RID": (314, 300)}))
+    monkeypatch.setattr(api.core, "health_summary", lambda c, at, m: _summary(_fake_rows({"HII": (330, 295), "RID": (314, 300)})))
     assert client.get("/health").json()["quiet_agencies"] == []
 
 

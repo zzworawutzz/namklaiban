@@ -333,7 +333,7 @@ def run(conn, at=None, senders=SENDERS):
         own = (core.nearest([dict(r) for r in rows], sub["lat"], sub["lng"], 1) or [None])[0]
         if own is not None and not own["stale"] and sub["stale_notified"]:
             conn.execute("UPDATE subscriptions SET stale_notified=NULL WHERE id=?", (sub["id"],))
-        elif (not outage and own is not None and own["stale"] and own["age_min"] is not None and own["age_min"] >= STALE_NOTICE_H * 60
+        elif (not outage and own is not None and not own.get("sparse") and own["stale"] and own["age_min"] is not None and own["age_min"] >= STALE_NOTICE_H * 60
               and own["age_min"] <= STALE_NOTICE_MAX_H * 60 and own["status"] in ("watch", "alert") and not sub["stale_notified"]):
             urgent = own["status"] == "alert"
             if ((sub["notify_level"] != "alert" or urgent) and not (quiet_now and not urgent) and ok(sub, urgent)):
