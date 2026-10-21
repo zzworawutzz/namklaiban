@@ -51,7 +51,7 @@ def test_stations_are_cacheable_with_stale_while_revalidate(tmp_path, monkeypatc
     api._ready.clear()
     r = TestClient(api.app).get("/stations")
     cc = r.headers["cache-control"]
-    assert "max-age=60" in cc and "s-maxage=300" in cc and "stale-while-revalidate=600" in cc
+    assert "max-age=60" in cc and "s-maxage=600" in cc and "stale-while-revalidate=600" in cc
 
 
 def _public(name):
@@ -169,8 +169,8 @@ def test_cdn_caching_headers_let_vercel_keep_the_big_answers(tmp_path, monkeypat
     monkeypatch.setenv("WATER_DB", str(tmp_path / "c.db"))
     api._ready.clear()
     c = TestClient(api.app)
-    assert "s-maxage=300" in c.get("/stations").headers["cache-control"]
-    assert "s-maxage=300" in c.get("/reports/ไม่มี").headers["cache-control"]
+    assert "s-maxage=600" in c.get("/stations").headers["cache-control"]
+    assert "s-maxage=600" in c.get("/reports/ไม่มี").headers["cache-control"]
     h = c.get("/health").headers["cache-control"]
     assert "s-maxage=30" in h and "no-store" not in h
     assert c.get("/health/monitor").headers["cache-control"] == "no-store"          # the monitors must see the live state

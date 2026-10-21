@@ -79,10 +79,10 @@ async def short_cache(request: Request, call_next):
     if request.url.path.startswith("/stations"):
         # data refreshes every ~15-20 min; stale-while-revalidate lets the CDN and browsers answer at once and refresh in the background.
         # s-maxage is what makes Vercel's CDN keep the answer: with max-age alone every visitor ran the function and read the database.
-        resp.headers["Cache-Control"] = "public, max-age=60, s-maxage=300, stale-while-revalidate=600"
+        resp.headers["Cache-Control"] = "public, max-age=60, s-maxage=600, stale-while-revalidate=600"
     elif request.url.path.startswith("/reports"):
         # a report reads up to 15 days of history for a province (about a megabyte): the CDN keeps it longer than the station list
-        resp.headers["Cache-Control"] = "public, max-age=60, s-maxage=300, stale-while-revalidate=600"
+        resp.headers["Cache-Control"] = "public, max-age=60, s-maxage=600, stale-while-revalidate=600"
     elif request.url.path == "/health":
         resp.headers["Cache-Control"] = "public, max-age=0, s-maxage=30, stale-while-revalidate=60"
     return resp
