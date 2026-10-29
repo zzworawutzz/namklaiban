@@ -533,3 +533,39 @@ def test_report_page_shows_the_share_of_stations_by_status_as_a_ring_with_whole_
     assert pcts and sum(pcts) == 100, rows                                     # the rounded shares always add up to exactly 100
     assert page.locator(".ring svg text").first.text_content().strip().isdigit()                  # the total sits in the middle
     assert page.locator(".ring circle[stroke-dasharray]").count() >= 1
+
+
+def _station_c_as(page, **fields):
+    """Answer /stations as usual but with station C changed (it reported once, long ago, and is a once-a-day gauge or not)."""
+    import json
+
+    def handler(route):
+        rows = json.loads(route.fetch().text())
+        for r in rows:
+            if r["id"] == "C":
+                r.update(fields)
+        route.fulfill(status=200, content_type="application/json", body=json.dumps(rows))
+    page.route("**/stations", handler)
+
+
+def test_a_gauge_read_once_a_day_is_described_as_such_not_as_stuck(page, site):
+    _station_c_as(page, sparse=True, stale=True, age_min=600)
+    open_page(page, site, "/?station=C")
+    page.wait_for_selector("#detail .warn", timeout=15000)
+    text = page.inner_text("#detail .warn")
+    assert "อ่านค่าวันละครั้ง" in text and "10 ชม." in text and "ไม่ใช่ระดับน้ำตอนนี้" in text, text
+    assert "ไม่ได้อัปเดตเกิน 2 ชั่วโมง" not in page.inner_text("#detail")
+
+
+def test_a_frequent_station_that_went_old_still_gets_the_stale_warning(page, site):
+    _station_c_as(page, sparse=False, stale=True, age_min=600)
+    open_page(page, site, "/?station=C")
+    page.wait_for_selector("#detail .warn", timeout=15000)
+    assert "ไม่ได้อัปเดตเกิน 2 ชั่วโมง" in page.inner_text("#detail .warn")
+
+
+def test_a_once_a_day_gauge_silent_for_over_a_day_and_a_half_is_stale_again(page, site):
+    _station_c_as(page, sparse=True, stale=True, age_min=40 * 60)
+    open_page(page, site, "/?station=C")
+    page.wait_for_selector("#detail .warn", timeout=15000)
+    assert "ไม่ได้อัปเดตเกิน 2 ชั่วโมง" in page.inner_text("#detail .warn")
