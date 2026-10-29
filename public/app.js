@@ -106,7 +106,7 @@ function probe(latlng){
     if(probeMark!==m) return;
     list.forEach(function(s){ byId[s.id]=Object.assign(byId[s.id]||{},s); });
     m.setPopupContent('<div class="pp"><b>สถานีใกล้จุดที่เลือก</b>'+list.map(function(s){
-      return '<button type="button" class="pprow" data-id="'+esc(s.id)+'"><span>'+esc(s.name)+'<small>'+esc(s.province||"")+' · '+s.distance_km+' กม.'+(s.stale?' · ข้อมูลไม่อัปเดต':'')+'</small></span><strong style="color:'+(COLOR[s.status]||COLOR.unknown)+'">'+esc(statusText(s))+' '+pctText(s)+'</strong></button>';
+      return '<button type="button" class="pprow" data-id="'+esc(s.id)+'"><span>'+esc(s.name)+'<small>'+esc(s.province||"")+' · '+s.distance_km+' กม.'+(s.stale?(dailyStn(s)?' · อ่านวันละครั้ง':' · ข้อมูลไม่อัปเดต'):'')+'</small></span><strong style="color:'+(COLOR[s.status]||COLOR.unknown)+'">'+esc(statusText(s))+' '+pctText(s)+'</strong></button>';
     }).join("")+'<small style="color:var(--muted)">กดชื่อสถานีเพื่อดูรายละเอียด</small></div>');
   }).catch(function(){ if(probeMark===m) m.setPopupContent('<div class="pp">เรียกข้อมูลสถานีใกล้เคียงไม่ได้ ลองใหม่อีกครั้ง</div>'); });
 }
@@ -162,12 +162,17 @@ function revealInSheet(el){
   var body = $("sheetBody"); body.scrollTo({top:Math.max(0, el.offsetTop-8), behavior:"smooth"});
 }
 
+// A gauge that reports about once a day (about 700 of ThaiWater's stations since Oct 2026) is hours old by design: say so instead of "no update".
+// Past DAILY_MAX_H without a new reading it is treated as stuck like any other station.
+var DAILY_MAX_H = 36;
+function dailyStn(s){ return !!(s.sparse && s.stale && s.age_min!=null && s.age_min <= DAILY_MAX_H*60); }
+function dailyNote(s){ return "สถานีนี้อ่านค่าวันละครั้ง (อ่านล่าสุด "+agoText(s.age_min)+") ตัวเลขจึงไม่ใช่ระดับน้ำตอนนี้ ใช้ดูภาพกว้างเท่านั้น"; }
 function inProv(s){ return !province || s.province===province; }
 function visible(s){
   if(!inProv(s)) return false;
   if(!filter) return true;
   var v = (s);
-  return filter==="stale" ? v.stale : v.status===filter;
+  return filter==="stale" ? (v.stale && !dailyStn(v)) : v.status===filter;
 }
 
 /* ---------- drawing ---------- */
@@ -185,7 +190,7 @@ function drawMarkers(){
 }
 function counts(){
   var list = stations.filter(inProv), c = {alert:0,watch:0,normal:0,unknown:0}, stale = 0, latest = 0;
-  list.forEach(function(s0){ var s = (s0); c[s.status]++; if(s.stale) stale++; var t = s0.ts ? Date.parse(s0.ts) : 0; if(t>latest) latest = t; });
+  list.forEach(function(s0){ var s = (s0); c[s.status]++; if(s.stale && !dailyStn(s)) stale++; var t = s0.ts ? Date.parse(s0.ts) : 0; if(t>latest) latest = t; });
   return {c:c, n:list.length, stale:stale, latest:latest};
 }
 function drawChips(){
@@ -447,7 +452,8 @@ function drawDetail(s, rs, rel){
   if(s.advice) h+='<div class="advice">'+esc(s.advice)+'</div>';
   h+='<div id="shBox">'+shelterBox(s)+'</div>';
   if(s.status==="unknown") h+='<div class="warn">สถานีนี้ไม่มีค่าตลิ่ง/ท้องน้ำให้คำนวณ จึงไม่แสดงสถานะ</div>';
-  if(s.stale && s.status!=="unknown") h+='<div class="warn" role="alert">ข้อมูลของสถานีนี้ไม่ได้อัปเดตเกิน 2 ชั่วโมง ตัวเลขอาจไม่ตรงกับสถานการณ์จริง</div>';
+  if(dailyStn(s) && s.status!=="unknown") h+='<div class="warn">'+esc(dailyNote(s))+'</div>';
+  else if(s.stale && s.status!=="unknown") h+='<div class="warn" role="alert">ข้อมูลของสถานีนี้ไม่ได้อัปเดตเกิน 2 ชั่วโมง ตัวเลขอาจไม่ตรงกับสถานการณ์จริง</div>';
   h+='<h2 style="margin-top:14px">ย้อนหลัง 7 วัน</h2>'+(rs?chartSvg(rs, s):'<div class="skel" style="height:120px"></div>')+compareHtml(s, rs);
   h+=relHtml(rel)+shareBar(s);
   var d=$("detail"); d.hidden=false; d.innerHTML=h;
@@ -541,7 +547,7 @@ function drawNear(o, s0){
   el.innerHTML = '<div class="eyebrow">สถานีที่ใกล้'+(o.kind==="area" ? ' ' : '')+esc(who)+(o.kind==="area" ? ' ' : '')+'ที่สุด</div>'+
     '<button type="button" class="nearbtn" data-id="'+esc(s.id)+'"><div class="nh"><span>'+esc(s.name)+'</span><span class="badge '+s.status+'">'+esc(statusText(s))+'</span></div>'+
     '<div class="nn">ห่างประมาณ '+(d<10 ? d.toFixed(1) : Math.round(d))+' กม.'+(s.province ? ' · จ.'+esc(s.province) : '')+'</div>'+line+
-    (s.stale ? '<div class="nn" style="color:var(--watch-ink)">⚠ สถานีนี้ข้อมูลไม่อัปเดต ใช้ประกอบอย่างระวัง</div>' : '')+
+    (dailyStn(s) ? '<div class="nn" style="color:var(--watch-ink)">'+esc(dailyNote(s))+'</div>' : s.stale ? '<div class="nn" style="color:var(--watch-ink)">⚠ สถานีนี้ข้อมูลไม่อัปเดต ใช้ประกอบอย่างระวัง</div>' : '')+
     '<div class="nn">แตะเพื่อดูรายละเอียดและกราฟ →</div></button>'+(o.kind==="area" ? "" : '<div class="elev" id="elevBox"></div>')+
     '<div class="sharept"><button type="button" class="linkbtn" id="btnSharePt">แชร์ลิงก์จุดนี้</button> <span class="note" id="sharePtMsg"></span></div>';
   el.hidden = false;
@@ -1030,7 +1036,7 @@ function drawShareCard(s, link, when){
   if(s.over_bank_cm!=null){ c.fillStyle = s.over_bank_cm>0 ? ink : "#51677a"; c.fillText(overBankText(s.over_bank_cm), 80, y); y += 62; }
   if((s.rise_3h_m||0) >= 0.3){ c.fillStyle = ink; c.fillText("น้ำขึ้น +"+s.rise_3h_m.toFixed(2)+" ม. ใน 3 ชม.", 80, y); y += 62; }
   if(s.water_level!=null && s.over_bank_cm==null){ c.fillStyle = "#51677a"; c.font = "400 38px "+F; c.fillText("ระดับน้ำ "+s.water_level.toFixed(2)+" ม.รทก."+(s.bank_level!=null ? " (ตลิ่ง "+(+s.bank_level).toFixed(2)+")" : ""), 80, y); y += 54; }
-  if(s.stale){ c.fillStyle = "#854d0e"; c.font = "700 40px "+F; c.fillText("⚠ สถานีนี้ข้อมูลไม่อัปเดต ใช้ประกอบอย่างระวัง", 80, y); }
+  if(s.stale){ c.fillStyle = "#854d0e"; c.font = "700 40px "+F; c.fillText(dailyStn(s) ? "สถานีนี้อ่านค่าวันละครั้ง ไม่ใช่ระดับน้ำตอนนี้" : "⚠ สถานีนี้ข้อมูลไม่อัปเดต ใช้ประกอบอย่างระวัง", 80, y); }
   c.fillStyle = "#51677a"; c.font = "400 30px "+F;
   cardWrap(c, "ข้อมูลจาก ThaiWater ใช้ประกอบการตัดสินใจเท่านั้น ไม่ใช่ประกาศทางการ ให้ยึดประกาศ ปภ. (โทร 1784)", W-160).slice(0,3).forEach(function(l,i){ c.fillText(l, 80, 1112+i*40); });
   c.fillStyle = "#0e5a78"; c.font = "700 32px "+F; c.fillText(link.replace(/^https?:\/\//,""), 60, 1262);
