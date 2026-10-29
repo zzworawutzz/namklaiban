@@ -548,12 +548,12 @@ def _station_c_as(page, **fields):
     page.route("**/stations", handler)
 
 
-def test_a_gauge_read_once_a_day_is_described_as_such_not_as_stuck(page, site):
+def test_a_rarely_reporting_station_is_described_as_such_not_as_stuck(page, site):
     _station_c_as(page, sparse=True, stale=True, age_min=600)
     open_page(page, site, "/?station=C")
     page.wait_for_selector("#detail .warn", timeout=15000)
     text = page.inner_text("#detail .warn")
-    assert "อ่านค่าวันละครั้ง" in text and "10 ชม." in text and "ไม่ใช่ระดับน้ำตอนนี้" in text, text
+    assert "รายงานไม่บ่อย" in text and "10 ชม." in text and "ไม่ใช่ระดับน้ำตอนนี้" in text, text
     assert "ไม่ได้อัปเดตเกิน 2 ชั่วโมง" not in page.inner_text("#detail")
 
 
@@ -564,8 +564,24 @@ def test_a_frequent_station_that_went_old_still_gets_the_stale_warning(page, sit
     assert "ไม่ได้อัปเดตเกิน 2 ชั่วโมง" in page.inner_text("#detail .warn")
 
 
-def test_a_once_a_day_gauge_silent_for_over_a_day_and_a_half_is_stale_again(page, site):
-    _station_c_as(page, sparse=True, stale=True, age_min=40 * 60)
-    open_page(page, site, "/?station=C")
+def test_a_station_silent_for_over_a_week_says_it_may_be_retired(page, site):
+    _station_c_as(page, sparse=True, stale=True, age_min=10 * 1440)
+    open_page(page, site, "/?station=C")                           # a shared link to it still opens
     page.wait_for_selector("#detail .warn", timeout=15000)
-    assert "ไม่ได้อัปเดตเกิน 2 ชั่วโมง" in page.inner_text("#detail .warn")
+    text = page.inner_text("#detail .warn")
+    assert "ไม่มีข้อมูลใหม่มา 10 วัน" in text and "อาจเลิกใช้งานแล้ว" in text, text
+
+
+def test_stations_silent_over_a_week_are_left_off_the_lists_but_a_chip_shows_them(page, site):
+    open_page(page, site)
+    page.wait_for_selector("#chips .chip", timeout=15000)
+    before = int(re.search(r"\((\d+)\)", page.inner_text("#prov option:first-child")).group(1))
+    assert page.locator("#chips .chip[data-f=retired]").count() == 0                     # nothing is retired in the normal data
+    page.unroute_all()
+    _station_c_as(page, sparse=True, stale=True, age_min=10 * 1440)
+    open_page(page, site)
+    page.wait_for_selector("#chips .chip[data-f=retired]", timeout=15000)
+    assert "เงียบเกิน 7 วัน 1" in page.inner_text("#chips .chip[data-f=retired]")
+    assert int(re.search(r"\((\d+)\)", page.inner_text("#prov option:first-child")).group(1)) == before - 1
+    page.click("#chips .chip[data-f=retired]")
+    assert page.get_attribute("#chips .chip[data-f=retired]", "aria-pressed") == "true"
