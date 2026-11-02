@@ -59,6 +59,7 @@ def test_prune_run_log_and_locks(pg):
     with db.connect() as c:
         ig.init_db(c)
         ig.save(c, real_rows())
+        c.execute("UPDATE readings SET ts = ?", ((datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),))   # the sample rows are dated 1 Oct 2026: keep them young however late the calendar is
         old = (datetime.now(timezone.utc) - timedelta(days=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
         c.execute("INSERT INTO readings VALUES('505018',?,1,50,'normal')", (old,))
         assert ig.prune(c, 31) == 1
@@ -114,6 +115,7 @@ def test_notify_with_subscription_on_postgres(pg):
 
 
 def test_cron_endpoint_auth_and_run(pg, monkeypatch):
+    monkeypatch.setattr(ig, "prune", lambda conn, keep_days=ig.KEEP_DAYS: 0)   # the sample readings are dated 1 Oct 2026: pruning is not what this test is about, and it would eat them once the calendar passes 31 days
     cl = TestClient(api.app)
     assert cl.get("/api/cron/ingest").status_code == 401                      # no secret configured
     monkeypatch.setenv("CRON_SECRET", "s3cret-s3cret-s3cret")

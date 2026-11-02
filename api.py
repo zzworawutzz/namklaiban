@@ -145,7 +145,9 @@ def health():
 
 MONITOR_MAX_READING_AGE_MIN = 180   # no new reading at all for this long: the source (or our reading of it) has stopped
 MONITOR_AGENCY_MIN_STATIONS = 20    # an agency this big...
-MONITOR_AGENCY_MIN_RECENT = 0.5     # ...with fewer than this share of its stations reporting within MONITOR_MAX_READING_AGE_MIN has gone quiet
+MONITOR_AGENCY_MIN_RECENT = 0.25    # ...with fewer than this share of its stations reporting within MONITOR_MAX_READING_AGE_MIN has gone quiet.
+                                    # 0.5 flapped: RID thins out around 02:00-05:00 Thai (49 % at 05:22 on 2 Nov 2026, 89 % by day) while a real
+                                    # outage leaves almost nothing (HII and FOP on 6 Oct 2026: under 2 %)
 
 
 @app.get("/health/monitor")

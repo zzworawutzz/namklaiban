@@ -284,3 +284,14 @@ def test_nearby_still_gives_trends_for_the_nearest_stations_but_a_long_list_fall
     assert len(short) == 2 and all("trend" in s for s in short)
     long_ = client.get("/stations/nearby", params={"lat": 14.35, "lng": 100.57, "limit": 20}).json()
     assert len(long_) >= 2 and [s["id"] for s in long_[:2]] == [s["id"] for s in short]
+
+
+def test_health_monitor_does_not_flap_when_an_agency_thins_out_at_night_but_still_catches_a_real_outage(client, monkeypatch):
+    """2 Nov 2026 05:22 Thai: 105 of 214 RID stations had reported in the last 3 h (49 %). That is RID's quiet hour, not an outage."""
+    _ingest_ran(5)
+    monkeypatch.setattr(api.core, "health_summary", lambda c, at, m: _summary(_fake_rows({"HII": (324, 318), "RID": (214, 105), "EGAT": (57, 57), "FOP": (91, 91)})))
+    r = client.get("/health/monitor")
+    assert r.status_code == 200 and r.json()["problems"] == [] and r.json()["agencies"]["RID"] == {"stations": 214, "recent": 105}
+    monkeypatch.setattr(api.core, "health_summary", lambda c, at, m: _summary(_fake_rows({"HII": (324, 318), "RID": (214, 40), "EGAT": (57, 57), "FOP": (91, 91)})))
+    r = client.get("/health/monitor")
+    assert r.status_code == 503 and "agency RID has gone quiet: 40 of 214" in " | ".join(r.json()["problems"])        # 19 % is not a night dip
