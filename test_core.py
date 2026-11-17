@@ -69,6 +69,8 @@ def test_prune_and_init_db_migrates_old_schema(tmp_path):
     cols = {r[1] for r in c.execute("PRAGMA table_info(stations)")}
     assert {"river", "basin", "watch_pct", "alert_pct"} <= cols
     ig.save(c, real_rows())
+    # the sample readings are dated Oct 2026: move them to yesterday so that "older than 45 days" does not depend on today's date
+    c.execute("UPDATE readings SET ts=?", ((datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),))
     old = (datetime.now(timezone.utc) - timedelta(days=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
     c.execute("INSERT INTO readings VALUES('505018',?,1,50,'normal')", (old,))
     assert ig.prune(c, 45) == 1

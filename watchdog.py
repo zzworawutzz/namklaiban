@@ -291,6 +291,83 @@ def check_silent(conn, at, send=None):
     return None
 
 
+# ---- how many stations each agency sends -------------------------------------------------------
+# An agency's stations can vanish from the feed (RID's 597 "1168*" stations did in Oct 2026) or a batch can appear. Neither is a
+# problem the other checks see, so the owner is told when an agency's share of the feed moves by 10% and at least 5 stations.
+# "In the feed" = saved by the latest ingest (ingest stamps updated_at). The new size is only believed once two runs in a row
+# agree, so one truncated response does not send two messages (the drop and the recovery).
+FEED_PREFIX, FEED_PENDING = "feedn:", "feedp:"
+FEED_MIN_CHANGE, FEED_CHANGE_SHARE = 5, 0.10
+
+
+def feed_counts(conn):
+    rows = conn.execute("SELECT source, COUNT(*) AS n FROM stations WHERE source <> '' AND "
+                        "updated_at = (SELECT MAX(updated_at) FROM stations) GROUP BY source").fetchall()
+    return {r["source"]: int(r["n"]) for r in rows}
+
+
+def _marks(conn, prefix):
+    out = {}
+    for r in conn.execute("SELECT name FROM alert_state WHERE name LIKE ?", (prefix + "%",)).fetchall():
+        agency, _, n = r["name"][len(prefix):].rpartition("=")
+        out[agency] = int(n)
+    return out
+
+
+def _set_mark(conn, prefix, agency, n, at):
+    conn.execute("DELETE FROM alert_state WHERE name LIKE ?", (prefix + agency + "=%",))
+    if n is not None:
+        conn.execute("INSERT INTO alert_state(name, ts) VALUES(?,?)", (f"{prefix}{agency}={n}", _iso(at)))
+
+
+def check_feed_changes(conn, at, send=None):
+    """Tell the owner when an agency sends clearly more or fewer stations than before. The first run only records the sizes.
+    Returns the list of agencies reported (empty when nothing was sent). Never raises."""
+    try:
+        target = os.environ.get("ADMIN_LINE_ID", "").strip()
+        now = feed_counts(conn)
+        base = _marks(conn, FEED_PREFIX)
+        if not now or problem(conn, at):
+            return []
+        if not base:   # first run: remember, say nothing
+            for a, n in now.items():
+                _set_mark(conn, FEED_PREFIX, a, n, at)
+            conn.commit()
+            return []
+        pending = _marks(conn, FEED_PENDING)
+        moved = []
+        for a in sorted(set(now) | set(base)):
+            n, b = now.get(a, 0), base.get(a, 0)
+            if abs(n - b) >= FEED_MIN_CHANGE and abs(n - b) >= b * FEED_CHANGE_SHARE:
+                if pending.get(a) == n:
+                    moved.append((a, b, n))
+                else:
+                    _set_mark(conn, FEED_PENDING, a, n, at)
+            else:
+                _set_mark(conn, FEED_PENDING, a, None, at)
+                if a not in base:
+                    _set_mark(conn, FEED_PREFIX, a, n, at)   # a small new agency: just remember it
+        if moved and target:
+            since = _iso(at - timedelta(hours=24))
+            new = conn.execute("SELECT COUNT(*) AS n FROM stations WHERE first_seen >= ?", (since,)).fetchone()["n"]
+            lines = [f"• {a}: {b} → {n} สถานี ({'+' if n > b else '−'}{abs(n - b)})" for a, b, n in moved]
+            tail = f"\nสถานีที่เพิ่งพบครั้งแรกใน 24 ชม.: {new} แห่ง" if new else ""
+            _sender(conn, at, send)(target, "📊 น้ำใกล้บ้านฉัน: จำนวนสถานีที่หน่วยงานส่งมาเปลี่ยน\n" + "\n".join(lines) + tail
+                                    + "\nตรวจที่ฟีด ThaiWater ว่าต้นทางเปลี่ยนจริงหรือไม่")
+        for a, b, n in moved:   # the new size becomes the reference, even when nobody can be messaged
+            _set_mark(conn, FEED_PREFIX, a, n, at)
+            _set_mark(conn, FEED_PENDING, a, None, at)
+        conn.commit()
+        return [a for a, _, _ in moved]
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        print(f"feed size check failed: {type(e).__name__}: {e}", file=sys.stderr)
+    return []
+
+
 # ---- monthly backup reminder -----------------------------------------------------------------
 # The follower list lives only in the database. backup_export.py (run on the owner's own computer) saves a copy; this
 # is the nudge to do it. First reminder 30 days after the first run, then every 30 days. BACKUP_REMIND=0 turns it off.

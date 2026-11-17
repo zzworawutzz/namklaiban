@@ -469,6 +469,7 @@ def cron_ingest(authorization: Optional[str] = Header(None)):
         watchdog.check_storage(c, now())
         watchdog.check_line_quota(c, now())
         watchdog.check_silent(c, now())
+        watchdog.check_feed_changes(c, now())
         watchdog.check_backup_reminder(c, now())
         watchdog.check_shelter_reminder(c, now())
     return {"stations": n_st, "new_readings": n_rd, "skipped": skipped, "pruned": pruned,

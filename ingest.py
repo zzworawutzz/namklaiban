@@ -33,7 +33,7 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS stations(
   id TEXT PRIMARY KEY, name TEXT NOT NULL, source TEXT, province TEXT,
   lat REAL NOT NULL, lng REAL NOT NULL, bank_level REAL, ground_level REAL,
-  updated_at TEXT, river TEXT, basin TEXT, watch_pct REAL, alert_pct REAL);
+  updated_at TEXT, river TEXT, basin TEXT, watch_pct REAL, alert_pct REAL, first_seen TEXT);
 CREATE TABLE IF NOT EXISTS readings(
   station_id TEXT NOT NULL REFERENCES stations(id), ts TEXT NOT NULL,
   water_level REAL, pct_of_bank REAL, status TEXT NOT NULL,
@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS line_pending(target TEXT PRIMARY KEY, level INTEGER N
 # Same tables for Postgres: REAL there is 4-byte float, which would blur coordinates.
 SCHEMA_PG = (SCHEMA.replace("REAL", "DOUBLE PRECISION")
              .replace("INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY"))
-NEW_STATION_COLS = {"river": "TEXT", "basin": "TEXT", "watch_pct": "REAL", "alert_pct": "REAL"}
+NEW_STATION_COLS = {"river": "TEXT", "basin": "TEXT", "watch_pct": "REAL", "alert_pct": "REAL", "first_seen": "TEXT"}
 NEW_SUB_COLS = {"digest": "INTEGER NOT NULL DEFAULT 1", "last_digest": "TEXT",
                 "notify_level": "TEXT NOT NULL DEFAULT 'all'", "quiet": "INTEGER NOT NULL DEFAULT 0",
                 "last_early": "TEXT", "last_report_alert": "TEXT", "snooze_until": "TEXT", "stale_notified": "TEXT", "was_over_bank": "INTEGER", "last_rain_alert": "TEXT"}
@@ -73,6 +73,8 @@ def init_db(conn):
     """Create tables and add columns introduced after a db file was first made."""
     if getattr(conn, "pg", False):
         conn.executescript(SCHEMA_PG)
+        for col, typ in NEW_STATION_COLS.items():
+            conn.execute(f"ALTER TABLE stations ADD COLUMN IF NOT EXISTS {col} {typ.replace('REAL', 'DOUBLE PRECISION')}")
         for col, typ in NEW_SUB_COLS.items():  # databases created before these columns existed
             conn.execute(f"ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS {col} {typ.replace('REAL', 'DOUBLE PRECISION')}")
         conn.commit()
@@ -205,9 +207,9 @@ def save(conn, rows, thresholds=None):
     if stations:
         conn.executemany(
             """INSERT INTO stations(id,name,source,province,lat,lng,bank_level,ground_level,updated_at,
-                                    river,basin,watch_pct,alert_pct)
+                                    river,basin,watch_pct,alert_pct,first_seen)
                VALUES(:id,:name,:source,:province,:lat,:lng,:bank_level,:ground_level,:u,
-                      :river,:basin,:watch_pct,:alert_pct)
+                      :river,:basin,:watch_pct,:alert_pct,:u)
                ON CONFLICT(id) DO UPDATE SET name=:name, source=:source, province=:province,
                lat=:lat, lng=:lng, bank_level=:bank_level, ground_level=:ground_level, updated_at=:u,
                river=:river, basin=:basin, watch_pct=:watch_pct, alert_pct=:alert_pct""", stations)

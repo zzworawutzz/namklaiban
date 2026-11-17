@@ -112,3 +112,111 @@ def test_storage_needs_admin_and_reads_real_size(tmp_path, monkeypatch):
     c = setup(tmp_path, monkeypatch, admin=None)
     assert watchdog.check_storage(c, AT, lambda t, m: 1 / 0, size_mb=500) is None
     assert watchdog.db_size_mb(c) > 0
+
+
+# ---- station counts per agency -------------------------------------------------------------------
+
+def feed(c, sizes, at):
+    """Pretend the latest ingest saved `sizes` = {agency: n} stations (the earlier ones keep their older updated_at)."""
+    c.execute("DELETE FROM stations")
+    stamp = at.strftime("%Y-%m-%dT%H:%M:%SZ")
+    for agency, n in sizes.items():
+        for i in range(n):
+            c.execute("INSERT INTO stations(id,name,source,lat,lng,updated_at,first_seen) VALUES(?,?,?,?,?,?,?)",
+                      (f"{agency}{i}", "x", agency, 14.0, 100.0, stamp, stamp))
+    c.commit()
+
+
+def feed_setup(tmp_path, monkeypatch, admin="UADMIN"):
+    c = setup(tmp_path, monkeypatch, admin)
+    run(c, AT - timedelta(minutes=5), True)
+    c.execute("DELETE FROM readings")   # keep the "no station reported" check out of these tests
+    c.execute("INSERT INTO readings(station_id,ts,water_level,pct_of_bank,status) SELECT id,?,1,10,'normal' FROM stations LIMIT 1",
+              ((AT - timedelta(minutes=10)).strftime("%Y-%m-%dT%H:%M:%SZ"),))
+    c.commit()
+    return c
+
+
+def test_feed_size_first_run_only_records(tmp_path, monkeypatch):
+    c, out = feed_setup(tmp_path, monkeypatch), []
+    feed(c, {"RID": 300, "HII": 320}, AT)
+    assert watchdog.check_feed_changes(c, AT, lambda t, m: out.append(m)) == [] and out == []
+    assert watchdog._marks(c, watchdog.FEED_PREFIX) == {"RID": 300, "HII": 320}
+
+
+def test_feed_size_small_moves_are_ignored(tmp_path, monkeypatch):
+    c, out = feed_setup(tmp_path, monkeypatch), []
+    feed(c, {"RID": 300, "HII": 320}, AT)
+    watchdog.check_feed_changes(c, AT, lambda t, m: out.append(m))
+    feed(c, {"RID": 296, "HII": 330}, AT + timedelta(minutes=15))   # -4 stations; +10 but only 3%
+    for i in (1, 2, 3):
+        assert watchdog.check_feed_changes(c, AT + timedelta(minutes=15 * i), lambda t, m: out.append(m)) == []
+    assert out == []
+
+
+def test_feed_drop_is_reported_after_two_runs_and_only_once(tmp_path, monkeypatch):
+    c, out = feed_setup(tmp_path, monkeypatch), []
+    send = lambda t, m: out.append((t, m))
+    feed(c, {"RID": 300, "HII": 320}, AT)
+    watchdog.check_feed_changes(c, AT, send)
+    feed(c, {"RID": 200, "HII": 320}, AT + timedelta(minutes=15))
+    assert watchdog.check_feed_changes(c, AT + timedelta(minutes=15), send) == [] and out == []   # seen once: wait
+    assert watchdog.check_feed_changes(c, AT + timedelta(minutes=30), send) == ["RID"]
+    assert out[0][0] == "UADMIN" and "RID: 300 → 200" in out[0][1] and "−100" in out[0][1] and "HII" not in out[0][1]
+    assert watchdog.check_feed_changes(c, AT + timedelta(minutes=45), send) == [] and len(out) == 1   # 200 is the reference now
+
+
+def test_one_bad_response_is_not_reported(tmp_path, monkeypatch):
+    c, out = feed_setup(tmp_path, monkeypatch), []
+    send = lambda t, m: out.append(m)
+    feed(c, {"RID": 300}, AT)
+    watchdog.check_feed_changes(c, AT, send)
+    feed(c, {"RID": 100}, AT + timedelta(minutes=15))
+    watchdog.check_feed_changes(c, AT + timedelta(minutes=15), send)
+    feed(c, {"RID": 300}, AT + timedelta(minutes=30))              # the next run is back to normal
+    assert watchdog.check_feed_changes(c, AT + timedelta(minutes=30), send) == [] and out == []
+    assert watchdog._marks(c, watchdog.FEED_PENDING) == {}
+
+
+def test_agency_vanishing_and_new_agency_reported(tmp_path, monkeypatch):
+    c, out = feed_setup(tmp_path, monkeypatch), []
+    send = lambda t, m: out.append(m)
+    feed(c, {"RID": 300, "HII": 320}, AT)
+    watchdog.check_feed_changes(c, AT, send)
+    for i in (1, 2):
+        feed(c, {"RID": 300, "NEW": 40}, AT + timedelta(minutes=15 * i))
+        done = watchdog.check_feed_changes(c, AT + timedelta(minutes=15 * i), send)
+    assert done == ["HII", "NEW"] and "HII: 320 → 0" in out[0] and "NEW: 0 → 40" in out[0] and "+40" in out[0]
+
+
+def test_new_stations_are_counted_in_the_message(tmp_path, monkeypatch):
+    c, out = feed_setup(tmp_path, monkeypatch), []
+    send = lambda t, m: out.append(m)
+    feed(c, {"RID": 300}, AT)
+    watchdog.check_feed_changes(c, AT, send)
+    for i in (1, 2):
+        feed(c, {"RID": 330}, AT + timedelta(minutes=15 * i))       # 330 rows all first seen just now
+        watchdog.check_feed_changes(c, AT + timedelta(minutes=15 * i), send)
+    assert "RID: 300 → 330" in out[0] and "เพิ่งพบครั้งแรกใน 24 ชม.: 330" in out[0]
+
+
+def test_feed_size_without_admin_id_still_moves_reference(tmp_path, monkeypatch):
+    c = feed_setup(tmp_path, monkeypatch, admin=None)
+    feed(c, {"RID": 300}, AT)
+    watchdog.check_feed_changes(c, AT)
+    for i in (1, 2):
+        feed(c, {"RID": 200}, AT + timedelta(minutes=15 * i))
+        done = watchdog.check_feed_changes(c, AT + timedelta(minutes=15 * i))
+    assert done == ["RID"] and watchdog._marks(c, watchdog.FEED_PREFIX) == {"RID": 200}
+
+
+def test_feed_size_is_silent_while_ingest_is_down(tmp_path, monkeypatch):
+    c, out = feed_setup(tmp_path, monkeypatch), []
+    feed(c, {"RID": 300}, AT)
+    watchdog.check_feed_changes(c, AT, lambda t, m: out.append(m))
+    run(c, AT - timedelta(minutes=1), False, "URLError: timed out")
+    run(c, AT - timedelta(minutes=2), False, "URLError: timed out")
+    c.execute("DELETE FROM ingest_runs WHERE ok=1")
+    c.commit()
+    feed(c, {"RID": 100}, AT)
+    assert watchdog.problem(c, AT) and watchdog.check_feed_changes(c, AT, lambda t, m: out.append(m)) == [] and out == []

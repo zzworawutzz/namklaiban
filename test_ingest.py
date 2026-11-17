@@ -1,6 +1,7 @@
 import sqlite3
 import pytest
 import ingest as ig
+from conftest import real_rows
 
 
 def row(**over):
@@ -80,3 +81,30 @@ def test_real_rows_match_api_storage_percent():
         assert abs(rd["pct_of_bank"] - float(raw["storage_percent"])) < 0.1
         assert rd["status"] == "alert" and st["source"] == "RID"
     assert ig.normalise(real_rows()[0])[0]["id"] == "505018"
+
+
+def test_first_seen_is_set_once_and_missing_for_stations_that_were_there_before(tmp_path):
+    c = sqlite3.connect(tmp_path / "f.db")
+    c.row_factory = sqlite3.Row
+    ig.init_db(c)
+    ig.save(c, real_rows())
+    first = {r["id"]: r["first_seen"] for r in c.execute("SELECT id, first_seen FROM stations")}
+    assert first and all(first.values())
+    some = next(iter(first))
+    c.execute("UPDATE stations SET first_seen=NULL WHERE id=?", (some,))   # a station saved before the column existed
+    c.execute("UPDATE stations SET updated_at='2000-01-01T00:00:00Z'")
+    c.commit()
+    ig.save(c, real_rows())
+    now = {r["id"]: r["first_seen"] for r in c.execute("SELECT id, first_seen FROM stations")}
+    assert now[some] is None                                                # unknown stays unknown
+    assert all(now[k] == first[k] for k in first if k != some)             # a later run never moves it
+
+
+def test_init_db_adds_first_seen_to_an_old_database(tmp_path):
+    c = sqlite3.connect(tmp_path / "old.db")
+    c.row_factory = sqlite3.Row
+    c.execute("CREATE TABLE stations(id TEXT PRIMARY KEY, name TEXT NOT NULL, source TEXT, province TEXT, lat REAL NOT NULL, "
+              "lng REAL NOT NULL, bank_level REAL, ground_level REAL, updated_at TEXT, river TEXT, basin TEXT, watch_pct REAL, alert_pct REAL)")
+    c.execute("INSERT INTO stations(id,name,lat,lng) VALUES('1','a',14,100)")
+    ig.init_db(c)
+    assert c.execute("SELECT first_seen FROM stations").fetchone()["first_seen"] is None
