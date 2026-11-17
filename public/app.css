@@ -197,7 +197,7 @@ h2{font-size:16px;margin:0 0 8px;font-weight:600}
 .iconbtn[aria-expanded=true],.iconbtn.on{background:var(--accent);color:var(--accent-ink)}
 .clearq{width:36px;height:36px;border:0;border-radius:10px;background:transparent;color:var(--muted);font-size:20px;line-height:1}
 .provpill{flex:none;position:relative;display:flex;align-items:center;gap:6px;height:36px;padding:0 10px 0 10px;border-radius:999px;font-weight:600;font-size:14px}
-.provpill select{appearance:none;-webkit-appearance:none;border:0;background:transparent;outline:none;font-weight:600;font-size:14px;max-width:170px;padding-right:16px;text-overflow:ellipsis}
+.provpill select{align-self:stretch;appearance:none;-webkit-appearance:none;border:0;background:transparent;outline:none;font-weight:600;font-size:14px;max-width:170px;padding-right:16px;text-overflow:ellipsis}
 .provpill .chev{position:absolute;right:10px;pointer-events:none;color:var(--muted)}
 .provpill svg{flex:none;color:var(--accent)}
 .provpill:focus-within{outline:3px solid var(--accent)}
