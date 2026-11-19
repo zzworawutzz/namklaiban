@@ -8,10 +8,12 @@ affect health, above that affects health. The feed's value is the latest hourly 
 24-hour average, so the page says so; it is information, never medical advice."""
 import gzip
 import json
+import ssl
 import sys
 import time
 import urllib.request
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from core import km
 
@@ -33,9 +35,26 @@ def level(pm):
             return n, label
 
 
+CHAIN = Path(__file__).parent / "air4thai_chain.pem"
+
+
+def tls_context():
+    """The normal trust store plus the two Let's Encrypt certificates that air4thai.pcd.go.th fails to send. Its server
+    sends a Sectigo chain that does not belong to its Let's Encrypt certificate: browsers and curl go and fetch the missing
+    link, Python on Vercel does not and stops with 'unable to get local issuer certificate'. The certificate is still fully
+    checked (chain and host name); the bundle only supplies the intermediates. If the file is unreadable the plain store is
+    used and the feed fails closed, as before."""
+    ctx = ssl.create_default_context()
+    try:
+        ctx.load_verify_locations(cafile=str(CHAIN))
+    except (OSError, ssl.SSLError) as e:
+        print(f"air4thai chain not loaded: {type(e).__name__}: {e}", file=sys.stderr)
+    return ctx
+
+
 def fetch():
     req = urllib.request.Request(URL, headers={"User-Agent": "nam-klai-baan-chan/0.1", "Accept-Encoding": "gzip"})
-    with urllib.request.urlopen(req, timeout=25) as r:
+    with urllib.request.urlopen(req, timeout=25, context=tls_context()) as r:
         raw = r.read()
         if r.headers.get("Content-Encoding") == "gzip":
             raw = gzip.decompress(raw)

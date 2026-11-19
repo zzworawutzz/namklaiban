@@ -37,6 +37,37 @@ def test_province_names_are_cleaned_up():
     assert air.province_of("แขวงคลองกุ่ม เขตบึงกุ่ม") == "กรุงเทพมหานคร" and air.province_of("") == ""
 
 
+def test_tls_context_adds_the_missing_intermediates_and_still_verifies():
+    import ssl
+    plain = ssl.create_default_context()
+    ctx = air.tls_context()
+    assert ctx.verify_mode == ssl.CERT_REQUIRED and ctx.check_hostname is True
+    names = " ".join(str(c.get("subject")) for c in ctx.get_ca_certs())
+    assert "YR1" in names and "Root YR" in names and len(ctx.get_ca_certs()) >= len(plain.get_ca_certs()) + 2
+
+
+def test_fetch_uses_that_context_and_a_missing_bundle_does_not_crash(monkeypatch, tmp_path):
+    import io
+    seen = {}
+
+    class Resp(io.BytesIO):
+        headers = {}
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    def fake_open(req, timeout=None, context=None):
+        seen["ctx"] = context
+        return Resp(b'{"stations": []}')
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("air_real", air.__file__)      # the conftest replaces air.fetch; load an untouched copy
+    real = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(real)
+    monkeypatch.setattr(real.urllib.request, "urlopen", fake_open)
+    assert real.fetch() == {"stations": []} and seen["ctx"].check_hostname is True
+    monkeypatch.setattr(real, "CHAIN", tmp_path / "nope.pem")
+    assert real.tls_context().verify_mode.name == "CERT_REQUIRED"
+
+
 def test_level_boundaries_follow_the_thai_bands():
     assert [air.level(v)[0] for v in (0, 15, 15.1, 25, 25.1, 37.5, 37.6, 75, 75.1, 300)] == [1, 1, 2, 2, 3, 3, 4, 4, 5, 5]
 
