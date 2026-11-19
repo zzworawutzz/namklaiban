@@ -337,6 +337,16 @@ def test_dam_card_lists_the_big_dams_of_the_basin_with_the_caveat(page, site):
     assert not errors
 
 
+def test_air_card_shows_measured_pm25_with_levels_and_the_caveat(page, site):
+    errors = watch(page)
+    open_page(page, site)
+    page.wait_for_selector("#airCard:not([hidden])", timeout=15000)
+    text = page.inner_text("#airCard")
+    assert "ฝุ่น PM2.5" in text and "22 " in text and "เฉลี่ยจาก 3 สถานี" in text and "สถานีฝุ่นสูง" in text and "31" in text, text
+    assert "ปานกลาง" in text and "ดีมาก" in text and "ไม่ใช่คำแนะนำทางการแพทย์" in text and "Air4Thai" in text, text
+    assert not errors
+
+
 def test_forecast_days_start_today_and_are_all_labelled_even_though_the_answer_also_lists_past_days(page, site):
     errors = watch(page)
     open_page(page, site)

@@ -121,6 +121,13 @@ def stub_outside_world(context):
         {"stations": 11, "mean_mm": 9.1, "over_35": 1, "max": {"name": "รร.วัดทดสอบ", "mm24": 62.0, "mm1": 12.0}, "top": [], "as_of": "2026-10-04T14:00:00Z",
          "three_day": {"stations": 11, "mean_mm": 40.2, "over_100": 2, "max": {"name": "ปตร.ฝนมาก", "mm3d": 188.0}, "start": "2026-10-02", "end": "2026-10-04"}})))
     context.route("**/api.open-meteo.com/v1/elevation*", lambda r: r.fulfill(status=200, content_type="application/json", body='{"elevation":[2.6]}'))   # registered after the forecast stub, so it wins
+    context.route("**/api/air?*", lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps(
+        {"nearby": [{"name": "สถานีฝุ่นทดสอบ", "distance_km": 8.2, "pm25": 41.3, "level": 4, "label": "เริ่มมีผลกระทบต่อสุขภาพ", "at": "2026-11-19T13:00:00Z"}]}
+        if "lat=" in r.request.url else
+        {"stations": 3, "mean": 22.4, "level": 2, "label": "ดี", "nearby": False, "as_of": "2026-11-19T13:00:00Z",
+         "max": {"name": "สถานีฝุ่นสูง", "pm25": 31.0, "level": 3, "label": "ปานกลาง", "at": "2026-11-19T13:00:00Z"},
+         "top": [{"name": "สถานีฝุ่นสูง", "pm25": 31.0, "level": 3, "label": "ปานกลาง", "at": "2026-11-19T13:00:00Z"},
+                 {"name": "สถานีฝุ่นต่ำ", "pm25": 9.0, "level": 1, "label": "ดีมาก", "at": "2026-11-19T12:00:00Z"}]})))
     context.route("**/api/dams*", lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps(
         {"as_of": "2026-10-05", "total": 6, "dams": [
             {"name": "เขื่อนทดสอบหนึ่ง", "province": "สระบุรี", "pct": 109.8, "released": 43.2, "basin": "ลุ่มน้ำป่าสัก", "change_7d": 13.3},
