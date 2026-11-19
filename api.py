@@ -23,6 +23,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+import air
 import areas
 import boundaries
 import budget
@@ -281,6 +282,25 @@ def rain_gauges(response: Response, province: Optional[str] = None,
     near = gauges.nearest(rows, lat, lng, limit)
     period = gauges.with_3d(near, rows3)
     return {"nearby": near, **({"three_day_period": period} if period else {})}
+
+
+@app.get("/api/air")
+def air_quality(response: Response, province: Optional[str] = Query(None, max_length=60),
+                lat: Optional[float] = Query(None, ge=-90, le=90), lng: Optional[float] = Query(None, ge=-180, le=180),
+                limit: int = Query(3, ge=1, le=10)):
+    """PM2.5 measured by Air4Thai (PCD) stations: a province summary, or the stations nearest to lat/lng."""
+    if province is None and (lat is None or lng is None):
+        raise HTTPException(422, "give province, or lat and lng")
+    rows = air.get()
+    if rows is None:
+        raise HTTPException(503, "ข้อมูลฝุ่นไม่พร้อมให้บริการตอนนี้")
+    response.headers["Cache-Control"] = "public, max-age=300, s-maxage=600, stale-while-revalidate=600"
+    if province is not None:
+        with conn() as c:
+            row = c.execute("SELECT AVG(lat) AS la, AVG(lng) AS lo FROM stations WHERE province = ?", (province,)).fetchone()
+        centre = (row["la"], row["lo"]) if row and row["la"] is not None else None
+        return air.for_province(rows, province, centre) or {"stations": 0}
+    return {"nearby": air.nearest(rows, lat, lng, limit)}
 
 
 @app.get("/api/dams")

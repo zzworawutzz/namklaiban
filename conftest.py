@@ -50,6 +50,14 @@ def _no_real_rain_gauges(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_real_air(monkeypatch):
+    """Tests never call Air4Thai: no air-quality stations unless a test supplies some."""
+    import air
+    air._cache.update(at=0.0, rows=None)
+    monkeypatch.setattr(air, "fetch", lambda: {"stations": []})
+
+
+@pytest.fixture(autouse=True)
 def _no_real_dams(monkeypatch):
     """Tests never call ThaiWater's dam feed: no dams unless a test supplies some."""
     import dams
