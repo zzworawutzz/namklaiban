@@ -547,7 +547,7 @@ function setOrigin(o){
 }
 function drawNear(o, s0){
   var el = $("nearCard");
-  if(!o || !s0){ el.hidden = true; el.innerHTML = ""; nearProv = ""; loadDams(); return; }
+  if(!o || !s0){ el.hidden = true; el.innerHTML = ""; nearProv = ""; loadDams(); loadAir(); return; }
   var s = byId[s0.id] || s0, d = kmBetween(o, s);
   nearProv = s.province || "";
   var who = o.kind==="home" ? "บ้านของคุณ" : o.kind==="area" ? (o.label || "พื้นที่ที่เลือก") : o.kind==="shared" ? "จุดที่แชร์" : "ตำแหน่งของคุณ";
@@ -563,7 +563,39 @@ function drawNear(o, s0){
     '<div class="sharept"><button type="button" class="linkbtn" id="btnSharePt">แชร์ลิงก์จุดนี้</button> <span class="note" id="sharePtMsg"></span></div>';
   el.hidden = false;
   if(o.kind!=="area") loadElevation(o, s, d);
-  loadDams();
+  loadDams(); loadAir();
+}
+/* ---------- PM2.5 measured by Air4Thai (PCD) stations, via our server ---------- */
+var airCache = {}, airSeq = 0;
+function airHtml(g, pt){
+  function chip(r){ return '<span class="lv lv'+r.level+'">'+esc(r.label)+'</span>'; }
+  var list, head;
+  if(pt.place){
+    list = (g && g.nearby) || [];
+    if(!list.length) return '<div class="eyebrow">ฝุ่น PM2.5</div><span class="note">ไม่มีสถานีวัดฝุ่นในรัศมี 50 กม. ที่รายงานเมื่อไม่นานมานี้</span>';
+    head = '<div class="eyebrow">ฝุ่น PM2.5 ใกล้คุณ</div>';
+  } else {
+    if(!g || !g.stations) return "";
+    list = g.top;
+    head = '<div class="eyebrow">ฝุ่น PM2.5 · จ.'+esc(pt.province)+'</div>'+
+      '<div class="big">'+Math.round(g.mean)+' <small>µg/ลบ.ม. เฉลี่ยจาก '+g.stations+' สถานี</small> '+chip(g)+'</div>'+
+      (g.nearby ? '<div class="note" style="margin:2px 0">จังหวัดนี้ไม่มีสถานีวัดฝุ่นของตัวเอง แสดงสถานีที่ใกล้ที่สุด</div>' : '');
+  }
+  return head+list.map(function(r){
+    return '<div class="dr"><span>'+esc(r.name)+'<small>'+(r.distance_km!=null ? r.distance_km+' กม. · ' : '')+'อัปเดต '+esc(hhmm(r.at))+' น.</small></span>'+
+           '<b>'+Math.round(r.pm25)+' <small style="display:inline">µg/ลบ.ม.</small></b> '+chip(r)+'</div>'; }).join("")+
+    '<p class="note" style="margin:6px 0 0">วัดจริงจากสถานีของกรมควบคุมมลพิษ (Air4Thai) เป็นค่ารายชั่วโมงล่าสุด ส่วนระดับสีอิงเกณฑ์ค่าเฉลี่ย 24 ชม. จึงเป็นข้อมูลประกอบเท่านั้น ไม่ใช่คำแนะนำทางการแพทย์</p>';
+}
+function hhmm(iso){ try { return new Date(iso).toLocaleTimeString("th-TH",{timeZone:"Asia/Bangkok",hour:"2-digit",minute:"2-digit",hour12:false}); } catch(e){ return ""; } }
+function loadAir(){
+  var card = $("airCard"), my = ++airSeq; if(!card) return;
+  var pt = origin ? {place:true, lat:origin.lat, lng:origin.lng} : (province ? {province:province} : null);
+  if(!pt){ card.hidden = true; return; }
+  var q = pt.place ? "lat="+pt.lat.toFixed(2)+"&lng="+pt.lng.toFixed(2) : "province="+encodeURIComponent(pt.province), hit = airCache[q];
+  function show(g){ if(my!==airSeq) return; var h = airHtml(g, pt); card.innerHTML = h; card.hidden = !h; }
+  if(hit && Date.now()-hit.t < 10*60000){ show(hit.g); return; }
+  getJSON("/api/air?"+q).then(function(g){ airCache[q] = {t:Date.now(), g:g}; show(g); })
+    .catch(function(){ if(my===airSeq) card.hidden = true; });   // no air data: the card simply is not shown
 }
 /* Large dams in the basin of the chosen place's province, or above it (ThaiWater, via our server). Context only: how full
    each reservoir is (share of its normal storage, can pass 100) and what it lets out. */
@@ -937,7 +969,7 @@ function rainClass(mm){ return mm<0.1 ? "ไม่มีฝน" : mm<=10 ? "ฝ�
 function refreshRain(){ clearTimeout(rainTimer); rainTimer = setTimeout(loadRain, 400); }
 function loadRain(){
   var pt = rainPoint(), card = $("rainCard"), my = ++rainSeq;
-  if(!origin) loadDams();
+  if(!origin){ loadDams(); loadAir(); }
   if(!pt){ card.hidden = true; return; }
   var key = pt.lat.toFixed(1)+","+pt.lng.toFixed(1), hit = rainCache[key];
   if(hit && Date.now()-hit.t < 30*60000){ drawRain(hit.j, pt); return; }
