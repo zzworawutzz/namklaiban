@@ -110,3 +110,16 @@ def test_api_province_nearby_and_unavailable(monkeypatch):
     n = c.get("/api/air?lat=13.73&lng=100.54&limit=2").json()["nearby"]
     assert [x["id"] for x in n] == ["c", "b"]
     assert c.get("/api/air?province=ไม่มี").json() == {"stations": 0}
+
+
+def test_api_lists_every_fresh_station_for_the_map(monkeypatch):
+    c = TestClient(api.app)
+    monkeypatch.setattr(air, "get", lambda: None)
+    assert c.get("/api/air/stations").status_code == 503
+    monkeypatch.setattr(air, "get", lambda: air.parse(PAYLOAD, NOW))
+    r = c.get("/api/air/stations")
+    j = r.json()
+    assert r.status_code == 200 and "max-age=300" in r.headers["cache-control"] and j["as_of"] == "2026-11-19T13:00:00Z"
+    assert [s["id"] for s in j["stations"]] == ["a", "b", "c"] and set(j["stations"][0]) == {"id", "name", "province", "lat", "lng", "pm25", "level", "label", "at"}
+    monkeypatch.setattr(air, "get", lambda: [])
+    assert c.get("/api/air/stations").json() == {"as_of": None, "stations": []}

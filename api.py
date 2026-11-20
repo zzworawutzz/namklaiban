@@ -303,6 +303,17 @@ def air_quality(response: Response, province: Optional[str] = Query(None, max_le
     return {"nearby": air.nearest(rows, lat, lng, limit)}
 
 
+@app.get("/api/air/stations")
+def air_stations(response: Response):
+    """Every air-quality station that reported PM2.5 recently (for the map layer): about 170 small rows."""
+    rows = air.get()
+    if rows is None:
+        raise HTTPException(503, "ข้อมูลฝุ่นไม่พร้อมให้บริการตอนนี้")
+    response.headers["Cache-Control"] = "public, max-age=300, s-maxage=600, stale-while-revalidate=600"
+    keep = ("id", "name", "province", "lat", "lng", "pm25", "level", "label", "at")
+    return {"as_of": max((r["at"] for r in rows), default=None), "stations": [{k: r[k] for k in keep} for r in rows]}
+
+
 @app.get("/api/dams")
 def dams_for_province(response: Response, province: str = Query(..., min_length=1, max_length=60), limit: int = Query(6, ge=1, le=20)):
     """Large dams (ThaiWater) in the basins of a province's stations and above them: how full and how much they release."""
