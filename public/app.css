@@ -286,6 +286,10 @@ button.linkbtn{border:0;color:var(--accent);font-family:inherit;cursor:pointer}
 .badge::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:currentColor}
 .badge.normal::before{background:var(--normal)}.badge.watch::before{background:var(--watch)}.badge.alert::before{background:var(--alert)}.badge.unknown::before{background:var(--unknown)}
 .badge.normal{background:var(--normal-bg);color:var(--normal-ink)}.badge.watch{background:var(--watch-bg);color:var(--watch-ink)}.badge.alert{background:var(--alert-bg);color:var(--alert-ink)}.badge.unknown{background:var(--unknown-bg);color:var(--unknown-ink)}
+.badge.airpill{border:0;cursor:pointer;font-family:inherit;min-height:28px}
+.badge.airpill::before{display:none}
+.badge.airpill.lv1{background:var(--accent-soft);color:var(--accent)}.badge.airpill.lv2{background:var(--normal-bg);color:var(--normal-ink)}.badge.airpill.lv3{background:var(--watch-bg);color:var(--watch-ink)}
+.badge.airpill.lv4{background:var(--alert-bg);color:var(--alert-ink)}.badge.airpill.lv5{background:var(--alert-bg);color:var(--alert-ink);box-shadow:inset 0 0 0 2px var(--alert-ink)}
 .head{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
 .big{font-size:34px;font-weight:700;line-height:1.1;margin:10px 0 4px}.big small{font-size:14px;font-weight:500;color:var(--muted)}
 .gauge{position:relative;height:12px;border-radius:7px;background:var(--line);overflow:hidden;margin:6px 0 10px}

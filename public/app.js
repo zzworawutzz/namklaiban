@@ -234,8 +234,17 @@ function drawPills(c){   // the status in a glance, also visible when the phone'
   if(c.alert) h += '<span class="badge alert">'+LABEL.alert+' '+c.alert+'</span>';
   if(c.watch) h += '<span class="badge watch">'+LABEL.watch+' '+c.watch+'</span>';
   if(!c.alert && !c.watch && c.normal) h += '<span class="badge normal">'+LABEL.normal+'</span>';
+  if(airPill) h += '<button type="button" class="badge airpill lv'+airPill.level+'" id="airPillBtn" aria-label="ฝุ่น PM2.5 '+airPill.pm+' ไมโครกรัมต่อลูกบาศก์เมตร '+esc(airPill.label)+' แตะเพื่อดูรายละเอียด">PM2.5 '+airPill.pm+' · '+esc(airPill.short)+'</button>';
   $("sumPills").innerHTML = h;
 }
+var airPill = null;   // {pm, level, label, short} of the place or province on screen, shown in the status pills so it needs no scrolling
+function setAirPill(p){ airPill = p; if(typeof counts==="function") drawPills(counts().c); }
+$("sumPills").addEventListener("click",function(e){
+  if(!(e.target.closest && e.target.closest("#airPillBtn"))) return;
+  var card = $("airCard"); if(!card || card.hidden) return;
+  if(isMobile() && sheetState!=="full") setSheet("full");
+  card.scrollIntoView({block:"start", behavior:"smooth"});
+});
 function drawOneLine(){ var el = $("oneLine"); if(el) el.textContent = oneLineText(stations.filter(inProv)); }
 var bootTimer = null;   // reveal the bottom of the panel shortly after the first data has been drawn
 function endBoot(){ clearTimeout(bootTimer); bootTimer = setTimeout(function(){ if(window.__unboot) window.__unboot(); }, 600); }
@@ -566,7 +575,7 @@ function drawNear(o, s0){
   loadDams(); loadAir();
 }
 /* ---------- PM2.5 measured by Air4Thai (PCD) stations, via our server ---------- */
-var airCache = {}, airSeq = 0;
+var airCache = {}, airSeq = 0, SHORT_AIR = {1:"ดีมาก", 2:"ดี", 3:"ปานกลาง", 4:"เริ่มมีผล", 5:"มีผล"};   // short words for the pill; the card spells out the full level
 function airHtml(g, pt){
   function chip(r){ return '<span class="lv lv'+r.level+'">'+esc(r.label)+'</span>'; }
   var list, head;
@@ -590,12 +599,17 @@ function hhmm(iso){ try { return new Date(iso).toLocaleTimeString("th-TH",{timeZ
 function loadAir(){
   var card = $("airCard"), my = ++airSeq; if(!card) return;
   var pt = origin ? {place:true, lat:origin.lat, lng:origin.lng} : (province ? {province:province} : null);
-  if(!pt){ card.hidden = true; return; }
+  if(!pt){ card.hidden = true; if(airPill) setAirPill(null); return; }
   var q = pt.place ? "lat="+pt.lat.toFixed(2)+"&lng="+pt.lng.toFixed(2) : "province="+encodeURIComponent(pt.province), hit = airCache[q];
-  function show(g){ if(my!==airSeq) return; var h = airHtml(g, pt); card.innerHTML = h; card.hidden = !h; }
+  function show(g){
+    if(my!==airSeq) return; var h = airHtml(g, pt); card.innerHTML = h; card.hidden = !h;
+    var r = pt.place ? ((g && g.nearby) || [])[0] : (g && g.stations ? {pm25:g.mean, level:g.level, label:g.label} : null);
+    setAirPill(h && r ? {pm:Math.round(r.pm25), level:r.level, label:r.label, short:SHORT_AIR[r.level]||r.label} : null);
+  }
   if(hit && Date.now()-hit.t < 10*60000){ show(hit.g); return; }
+  if(airPill) setAirPill(null);                       // not the previous place's number while this one loads
   getJSON("/api/air?"+q).then(function(g){ airCache[q] = {t:Date.now(), g:g}; show(g); })
-    .catch(function(){ if(my===airSeq) card.hidden = true; });   // no air data: the card simply is not shown
+    .catch(function(){ if(my===airSeq){ card.hidden = true; setAirPill(null); } });   // no air data: the card and the pill are simply not shown
 }
 /* Large dams in the basin of the chosen place's province, or above it (ThaiWater, via our server). Context only: how full
    each reservoir is (share of its normal storage, can pass 100) and what it lets out. */
