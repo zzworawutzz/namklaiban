@@ -360,6 +360,30 @@ def test_air_card_shows_measured_pm25_with_levels_and_the_caveat(page, site):
     assert not errors
 
 
+def test_air_layer_shows_pm25_tags_on_the_map_and_a_popup_with_the_caveat(page, site):
+    errors = watch(page)
+    open_page(page, site)
+    assert page.locator(".leaflet-marker-icon .pmk").count() == 0                                             # off until the user switches it on
+    page.click("#btnLayers")
+    page.check("#chkAir")
+    page.wait_for_selector(".leaflet-marker-icon .pmk", timeout=10000)
+    tags = page.eval_on_selector_all(".leaflet-marker-icon .pmk b", "els => els.map(e => e.textContent)")
+    assert sorted(tags) == ["31", "41", "9"], tags
+    assert page.locator('.qc[data-q="chkAir"]').get_attribute("aria-pressed") == "true"   # the quick chip mirrors the checkbox
+    assert page.inner_text("#lcount") == "1"
+    page.click("#btnLayers")                                                              # close the panel
+    page.locator('.leaflet-marker-icon[title*="สถานีฝุ่นหนึ่ง"]').click(force=True)
+    pop = page.inner_text(".leaflet-popup-content")
+    assert "สถานีฝุ่นหนึ่ง" in pop and "PM2.5 41 µg/ลบ.ม." in pop and "เริ่มมีผลกระทบต่อสุขภาพ" in pop and "Air4Thai" in pop and "ไม่ใช่คำแนะนำทางการแพทย์" in pop, pop
+    page.click('.qc[data-q="chkAir"]')                                                    # the chip switches it off again
+    for _ in range(25):
+        if page.locator(".leaflet-marker-icon .pmk").count() == 0:
+            break
+        page.wait_for_timeout(200)
+    assert page.locator(".leaflet-marker-icon .pmk").count() == 0 and not page.is_checked("#chkAir")
+    assert not errors
+
+
 def test_forecast_days_start_today_and_are_all_labelled_even_though_the_answer_also_lists_past_days(page, site):
     errors = watch(page)
     open_page(page, site)
