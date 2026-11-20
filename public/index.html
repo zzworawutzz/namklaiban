@@ -33,7 +33,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" integrity="sha384-c6Rcwz4e4CITMbu/NBmnNS8yN2sC3cUElMEMfP3vqqKFp7GOYaaBBCqmaWBjmkjb" crossorigin="anonymous">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css" integrity="sha384-uIZNAcoEHVWMk8LrCSX95DJk6FQzH6zG00LQC9BykRY1UKKpkDzDhbDLYQ1Ho3mI" crossorigin="anonymous">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="app.css?v=65">
+<link rel="stylesheet" href="app.css?v=66">
 </head>
 <body>
 <h1 class="sr">น้ำใกล้บ้านฉัน</h1>
@@ -57,7 +57,7 @@
         <g data-mode="dark" hidden><path d="M20 14.5A8 8 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z"/></g>
       </svg>
     </button>
-    <button class="iconbtn labelbtn glass" id="btnLayers" type="button" aria-label="ชั้นแผนที่ เปิดปิดน้ำท่วมดาวเทียม เรดาร์ฝน ศูนย์พักพิง" aria-expanded="false" aria-controls="layers" title="ชั้นแผนที่">
+    <button class="iconbtn labelbtn glass" id="btnLayers" type="button" aria-label="ชั้นแผนที่ เปิดปิดน้ำท่วมดาวเทียม เรดาร์ฝน ฝุ่น ศูนย์พักพิง" aria-expanded="false" aria-controls="layers" title="ชั้นแผนที่">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5z"/><path d="m3 13 9 5 9-5"/></svg>
       <span>ชั้นแผนที่</span><b class="lcount" id="lcount" hidden></b>
     </button>
@@ -93,6 +93,7 @@
     </select>
   </div>
   <label class="chk"><input type="checkbox" id="chkShl"><span><span class="shl sm"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 3 2 12h3v8h5v-5h4v5h5v-8h3z"/></svg></span>ศูนย์พักพิงชั่วคราว (ปภ.)<br><span class="note">แสดงตามพื้นที่ที่เลือก (จังหวัด / อำเภอ / ตำบล) ข้อมูลอาจไม่เป็นปัจจุบัน โทรสอบถามก่อนเดินทาง</span></span></label>
+  <label class="chk"><input type="checkbox" id="chkAir"><span>ฝุ่น PM2.5 (Air4Thai)<br><span class="note">ป้ายตัวเลข µg/ลบ.ม. ตามสถานีตรวจวัดของกรมควบคุมมลพิษทั่วประเทศ สีตามระดับ ข้อมูลประกอบ ไม่ใช่คำแนะนำทางการแพทย์</span></span></label>
   <label class="chk"><input type="checkbox" id="chkRadar"><span>เรดาร์ฝน (ย้อนหลัง 2 ชม.)<br><span class="note">ภาพจาก RainViewer ความละเอียดต่ำ ใช้ดูทิศทางฝนคร่าวๆ</span></span></label>
   <div id="radarCtl" hidden><button class="btn" id="radarPlay" type="button">▶ เล่น</button><span id="radarTime" aria-live="polite"></span></div>
   <label class="chk"><input type="checkbox" id="chkRpt" checked><span>จุดน้ำท่วมที่ผู้ใช้รายงาน<br><span class="note">ข้อมูลจากผู้ใช้ ยังไม่ผ่านการตรวจสอบ แสดง 12 ชม. ล่าสุด</span></span></label>
@@ -107,6 +108,7 @@
     <li><div class="mk alert" style="width:34px;height:34px"><span>105</span></div> เตือนภัย (≥90%) วงกลมใหญ่ สีแดง มีวงกระเพื่อม</li>
     <li><div class="mk unknown" style="width:26px;height:26px"><span>–</span></div> ไม่มีเกณฑ์เทียบ / ไม่มีข้อมูลในช่วงนั้น</li>
     <li><div class="mk normal stale" style="width:26px;height:26px"><span>52</span></div> เส้นประรอบจุด = ข้อมูลเก่าเกิน 2 ชม. (สถานีที่เงียบเกิน 7 วันถูกซ่อน กดชิป เงียบเกิน 7 วัน เพื่อดู)</li>
+    <li><span class="pmk lv2 lgd"><b>18</b></span> ป้ายสี่เหลี่ยมมนมีตัวเลข = ฝุ่น PM2.5 (µg/ลบ.ม.) เมื่อเปิดชั้นฝุ่น สีฟ้า ดีมาก · เขียว ดี · เหลือง ปานกลาง · ส้ม เริ่มมีผลต่อสุขภาพ · แดง มีผลต่อสุขภาพ</li>
     <li><div class="cl normal" style="width:34px;height:34px;font-size:13px"><span>6</span></div> <span>พื้นดำขอบสี = กลุ่มสถานี ตัวเลขคือ<b>จำนวนสถานี</b> (ไม่ใช่ %) สีขอบคือสถานะที่แรงสุดในกลุ่ม แตะเพื่อซูมเข้า</span></li>
   </ul>
 </div>
@@ -206,6 +208,6 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" integrity="sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js" integrity="sha384-eXVCORTRlv4FUUgS/xmOyr66XBVraen8ATNLMESp92FKXLAMiKkerixTiBvXriZr" crossorigin="anonymous"></script>
-<script src="app.js?v=65"></script>
+<script src="app.js?v=66"></script>
 </body>
 </html>

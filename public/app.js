@@ -1196,6 +1196,37 @@ function showNearShelters(o){
   }).catch(function(){});
 }
 
+/* ---------- PM2.5 on the map (Air4Thai stations, via our API; a layer the user switches on) ---------- */
+var airLayer = L.layerGroup().addTo(map), airData = null, airAt = 0, airTimer = null;
+function syncAirSize(){ map.getContainer().classList.toggle("zair", map.getZoom() < 9); }   // zoomed far out: plain coloured tags, numbers would overlap
+map.on("zoomend", syncAirSize); syncAirSize();
+function airPopup(s){
+  var when = hhmm(s.at);
+  return '<div class="shp"><b>'+esc(s.name)+'</b><div class="note">'+(s.province ? 'จ.'+esc(s.province) : "")+'</div>'+
+    '<div style="margin:4px 0"><b>PM2.5 '+Math.round(s.pm25)+' µg/ลบ.ม.</b> <span class="lv lv'+s.level+'">'+esc(s.label)+'</span></div>'+
+    '<div class="note">วัดจริง อัปเดต '+esc(when)+' น. จากสถานีของกรมควบคุมมลพิษ (Air4Thai) ค่ารายชั่วโมง ส่วนสีอิงเกณฑ์ค่าเฉลี่ย 24 ชม. ข้อมูลประกอบ ไม่ใช่คำแนะนำทางการแพทย์</div></div>';
+}
+function drawAir(){
+  airLayer.clearLayers();
+  if(!$("chkAir").checked || !airData) return;
+  airData.forEach(function(s){
+    L.marker([s.lat,s.lng],{icon:L.divIcon({className:"",html:'<div class="pmk lv'+s.level+'"><b>'+Math.round(s.pm25)+'</b></div>',iconSize:[34,22],iconAnchor:[17,11]}),
+      title:"PM2.5 "+Math.round(s.pm25)+" µg/ลบ.ม. "+s.label+" · "+s.name, keyboard:true, zIndexOffset:-500}).bindPopup(airPopup(s)).addTo(airLayer);
+  });
+}
+function loadAirLayer(){
+  if(!$("chkAir").checked) return;
+  if(airData && Date.now()-airAt < 10*60000){ drawAir(); return; }
+  getJSON("/api/air/stations").then(function(j){
+    airData = j.stations || []; airAt = Date.now(); drawAir();
+    if(!airData.length) toast("ยังไม่มีข้อมูลฝุ่นจากสถานีตรวจวัดตอนนี้");
+  }).catch(function(){ if($("chkAir").checked){ $("chkAir").checked = false; syncQuick(); syncLayerCount(); drawAir(); toast("โหลดข้อมูลฝุ่นไม่ได้"); } });
+}
+$("chkAir").addEventListener("change", function(){
+  clearInterval(airTimer);
+  if($("chkAir").checked){ loadAirLayer(); airTimer = setInterval(loadAirLayer, 10*60000); } else drawAir();
+});
+
 /* ---------- rain radar (RainViewer, past 2 h) ---------- */
 var radarFrames = null, radarLayer = null, radarIdx = 0, radarTimer = null;
 function radarShow(i){
@@ -1547,7 +1578,7 @@ $("tam").addEventListener("change", function(){
 });
 
 /* ---------- quick layer chips (mirror the checkboxes in the layers panel) ---------- */
-var QUICK = [["chkFlood","🛰","ดาวเทียม","น้ำท่วมจากดาวเทียม"],["chkRadar","🌧","ฝน","เรดาร์ฝน"],["chkShl","🏠","พักพิง","ศูนย์พักพิง"]];
+var QUICK = [["chkFlood","🛰","ดาวเทียม","น้ำท่วมจากดาวเทียม"],["chkRadar","🌧","ฝน","เรดาร์ฝน"],["chkAir","😷","ฝุ่น","ฝุ่น PM2.5"],["chkShl","🏠","พักพิง","ศูนย์พักพิง"]];
 function syncQuick(){
   var clr = rtRoutes ? '<button type="button" class="chip qc clr" data-clear="route" title="ลบเส้นทางที่ตรวจไว้ออกจากแผนที่">✕ ล้างเส้นทาง</button>' : "";
   $("qchips").innerHTML = clr + QUICK.filter(function(q){ return q[0]!=="chkFlood" || !$("floodBox").hidden; }).map(function(q){
@@ -1555,12 +1586,12 @@ function syncQuick(){
   }).join("");
 }
 /* number of extra map layers switched on, shown on the "ชั้นแผนที่" button (the user-reports layer is on by default, so it is not counted) */
-var LAYER_IDS = ["chkRiver","chkFlood","chkShl","chkRadar"];
+var LAYER_IDS = ["chkRiver","chkFlood","chkShl","chkRadar","chkAir"];
 function syncLayerCount(){
   var n = LAYER_IDS.filter(function(id){ return $(id).checked && (id!=="chkFlood" || !$("floodBox").hidden); }).length;
   var el = $("lcount"), btn = $("btnLayers");
   el.hidden = !n; el.textContent = n;
-  btn.setAttribute("aria-label", "ชั้นแผนที่" + (n ? " เปิดอยู่ "+n+" ชั้น" : "") + " เปิดปิดน้ำท่วมดาวเทียม เรดาร์ฝน ศูนย์พักพิง");
+  btn.setAttribute("aria-label", "ชั้นแผนที่" + (n ? " เปิดอยู่ "+n+" ชั้น" : "") + " เปิดปิดน้ำท่วมดาวเทียม เรดาร์ฝน ฝุ่น ศูนย์พักพิง");
 }
 LAYER_IDS.forEach(function(id){ $(id).addEventListener("change", syncLayerCount); });
 syncLayerCount();

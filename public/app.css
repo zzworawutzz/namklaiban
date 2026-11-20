@@ -377,3 +377,13 @@ svg.chart{width:100%;height:auto;display:block}
 /* ---- main action: report flooding is solid, the rest stay outlined ---- */
 .rpbtn#btnReport{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .fab .rpbtn#btnReport,.actrow.top .rpbtn#btnReport{background:var(--accent);color:var(--accent-ink)}
+
+/* PM2.5 tags on the map: rounded rectangles with the number, so they are not mistaken for the round/square water markers */
+.pmk{min-width:34px;height:22px;padding:0 6px;box-sizing:border-box;border-radius:7px;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;font-size:12px;line-height:1;color:#fff}
+.pmk b{font-weight:700}
+.pmk.lv1{background:#0369a1}.pmk.lv2{background:#047857}.pmk.lv3{background:#facc15;color:#3b2a00}.pmk.lv4{background:#c2410c}.pmk.lv5{background:#991b1b}
+.zair .pmk{min-width:14px;width:14px;height:14px;padding:0;border-radius:5px}.zair .pmk b{display:none}
+.pmk.lgd{display:inline-flex;vertical-align:middle;margin-right:4px}
+.shp .lv{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}
+.shp .lv1{background:var(--accent-soft);color:var(--accent)}.shp .lv2{background:var(--normal-bg);color:var(--normal-ink)}.shp .lv3{background:var(--watch-bg);color:var(--watch-ink)}
+.shp .lv4{background:var(--alert-bg);color:var(--alert-ink)}.shp .lv5{background:var(--alert-bg);color:var(--alert-ink);box-shadow:inset 0 0 0 2px var(--alert-ink)}
