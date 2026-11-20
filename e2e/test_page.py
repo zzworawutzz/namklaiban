@@ -344,6 +344,19 @@ def test_air_card_shows_measured_pm25_with_levels_and_the_caveat(page, site):
     text = page.inner_text("#airCard")
     assert "ฝุ่น PM2.5" in text and "22 " in text and "เฉลี่ยจาก 3 สถานี" in text and "สถานีฝุ่นสูง" in text and "31" in text, text
     assert "ปานกลาง" in text and "ดีมาก" in text and "ไม่ใช่คำแนะนำทางการแพทย์" in text and "Air4Thai" in text, text
+    pill = page.locator("#airPillBtn")                                                  # the same number in the status pills at the top, no scrolling needed
+    assert pill.inner_text() == "PM2.5 22 · ดี", pill.inner_text()
+    assert "แตะเพื่อดูรายละเอียด" in pill.get_attribute("aria-label")
+    top = page.evaluate("document.getElementById('airPillBtn').getBoundingClientRect().top - document.getElementById('sumTitle').getBoundingClientRect().top")
+    assert -5 < top < 120, top                                                          # next to the province title
+    page.evaluate("document.getElementById('sheetBody').scrollTop = 0")
+    pill.click()
+    for _ in range(25):                                                                 # smooth scrolling takes a moment (no wait_for_function: the page's CSP forbids eval)
+        top = page.evaluate("document.getElementById('airCard').getBoundingClientRect().top")
+        if 0 <= top < 760:
+            break
+        page.wait_for_timeout(200)
+    assert 0 <= top < 760, top                                                          # the card is on screen after the tap
     assert not errors
 
 
