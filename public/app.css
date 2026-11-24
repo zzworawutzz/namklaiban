@@ -382,8 +382,18 @@ svg.chart{width:100%;height:auto;display:block}
 .pmk{min-width:34px;height:22px;padding:0 6px;box-sizing:border-box;border-radius:7px;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;font-size:12px;line-height:1;color:#fff}
 .pmk b{font-weight:700}
 .pmk.lv1{background:#0369a1}.pmk.lv2{background:#047857}.pmk.lv3{background:#facc15;color:#3b2a00}.pmk.lv4{background:#c2410c}.pmk.lv5{background:#991b1b}
-.zair .pmk{min-width:14px;width:14px;height:14px;padding:0;border-radius:5px}.zair .pmk b{display:none}
 .pmk.lgd{display:inline-flex;vertical-align:middle;margin-right:4px}
 .shp .lv{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}
 .shp .lv1{background:var(--accent-soft);color:var(--accent)}.shp .lv2{background:var(--normal-bg);color:var(--normal-ink)}.shp .lv3{background:var(--watch-bg);color:var(--watch-ink)}
 .shp .lv4{background:var(--alert-bg);color:var(--alert-ink)}.shp .lv5{background:var(--alert-bg);color:var(--alert-ink);box-shadow:inset 0 0 0 2px var(--alert-ink)}
+.pmk.sm{min-width:28px;height:18px;padding:0 4px;font-size:11px;border-width:1.5px;border-radius:6px}
+.pmk.pmc{min-width:52px;height:24px;gap:5px;border-radius:8px;box-shadow:0 0 0 2px rgba(255,255,255,.55),0 1px 5px rgba(0,0,0,.5)}
+.pmk.pmc i{font-style:normal;font-size:10px;font-weight:600;opacity:.9;border-left:1px solid currentColor;padding-left:5px}
+/* the scale in the PM2.5 card: five bands, a pin where today's value falls */
+.aqbar{position:relative;margin:10px 4px 22px}
+.aqseg{display:flex;height:10px;border-radius:5px;overflow:hidden}
+.aqseg i{flex:1}
+.aqseg .s1{background:#0369a1}.aqseg .s2{background:#047857}.aqseg .s3{background:#facc15}.aqseg .s4{background:#c2410c}.aqseg .s5{background:#991b1b}
+.aqpin{position:absolute;top:-6px;width:0;height:0;margin-left:-7px;border-left:7px solid transparent;border-right:7px solid transparent;border-top:9px solid var(--ink);filter:drop-shadow(0 0 1.5px var(--surface)) drop-shadow(0 0 1.5px var(--surface))}
+.aqtk{position:absolute;left:0;right:0;top:13px;height:12px;font-size:11px;color:var(--muted)}
+.aqtk span{position:absolute;transform:translateX(-50%)}

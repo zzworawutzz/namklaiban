@@ -576,19 +576,30 @@ function drawNear(o, s0){
 }
 /* ---------- PM2.5 measured by Air4Thai (PCD) stations, via our server ---------- */
 var airCache = {}, airSeq = 0, SHORT_AIR = {1:"ดีมาก", 2:"ดี", 3:"ปานกลาง", 4:"เริ่มมีผล", 5:"มีผล"};   // short words for the pill; the card spells out the full level
+/* The five Thai bands as five equal segments; the pin sits where the value falls inside its band (the last band is capped at 150). */
+var AIR_EDGES = [0, 15, 25, 37.5, 75, 150];
+function airPos(v){
+  v = Math.max(0, +v||0);
+  for(var i=0;i<5;i++) if(v <= AIR_EDGES[i+1] || i===4) return Math.min(100, (i + Math.min(1, (v-AIR_EDGES[i])/(AIR_EDGES[i+1]-AIR_EDGES[i])))*20);
+}
+function airBar(v){
+  return '<div class="aqbar" aria-hidden="true"><div class="aqseg"><i class="s1"></i><i class="s2"></i><i class="s3"></i><i class="s4"></i><i class="s5"></i></div>'+
+    '<span class="aqpin" style="left:'+airPos(v).toFixed(1)+'%"></span>'+
+    '<div class="aqtk"><span style="left:20%">15</span><span style="left:40%">25</span><span style="left:60%">37.5</span><span style="left:80%">75</span></div></div>';
+}
 function airHtml(g, pt){
   function chip(r){ return '<span class="lv lv'+r.level+'">'+esc(r.label)+'</span>'; }
   var list, head;
   if(pt.place){
     list = (g && g.nearby) || [];
     if(!list.length) return '<div class="eyebrow">ฝุ่น PM2.5</div><span class="note">ไม่มีสถานีวัดฝุ่นในรัศมี 50 กม. ที่รายงานเมื่อไม่นานมานี้</span>';
-    head = '<div class="eyebrow">ฝุ่น PM2.5 ใกล้คุณ</div>';
+    head = '<div class="eyebrow">ฝุ่น PM2.5 ใกล้คุณ</div>'+airBar(list[0].pm25);
   } else {
     if(!g || !g.stations) return "";
     list = g.top;
     head = '<div class="eyebrow">ฝุ่น PM2.5 · จ.'+esc(pt.province)+'</div>'+
       '<div class="big">'+Math.round(g.mean)+' <small>µg/ลบ.ม. เฉลี่ยจาก '+g.stations+' สถานี</small> '+chip(g)+'</div>'+
-      (g.nearby ? '<div class="note" style="margin:2px 0">จังหวัดนี้ไม่มีสถานีวัดฝุ่นของตัวเอง แสดงสถานีที่ใกล้ที่สุด</div>' : '');
+      airBar(g.mean)+(g.nearby ? '<div class="note" style="margin:2px 0">จังหวัดนี้ไม่มีสถานีวัดฝุ่นของตัวเอง แสดงสถานีที่ใกล้ที่สุด</div>' : '');
   }
   return head+list.map(function(r){
     return '<div class="dr"><span>'+esc(r.name)+'<small>'+(r.distance_km!=null ? r.distance_km+' กม. · ' : '')+'อัปเดต '+esc(hhmm(r.at))+' น.</small></span>'+
@@ -1197,9 +1208,13 @@ function showNearShelters(o){
 }
 
 /* ---------- PM2.5 on the map (Air4Thai stations, via our API; a layer the user switches on) ---------- */
-var airLayer = L.layerGroup().addTo(map), airData = null, airAt = 0, airTimer = null;
-function syncAirSize(){ map.getContainer().classList.toggle("zair", map.getZoom() < 9); }   // zoomed far out: plain coloured tags, numbers would overlap
-map.on("zoomend", syncAirSize); syncAirSize();
+function airClusterIcon(c){   // a group of stations: the worst reading in it, coloured by its level, with the count; zoom in to split it
+  var kids = c.getAllChildMarkers(), worst = kids.reduce(function(a,m){ return m.options.pm > a.options.pm ? m : a; }, kids[0]);
+  return L.divIcon({className:"", iconSize:[52,24], iconAnchor:[26,12],
+    html:'<div class="pmk pmc lv'+worst.options.lvl+'"><b>'+Math.round(worst.options.pm)+'</b><i>'+kids.length+'</i></div>'});
+}
+var airLayer = L.markerClusterGroup({showCoverageOnHover:false, maxClusterRadius:38, disableClusteringAtZoom:12, spiderfyOnMaxZoom:false, iconCreateFunction:airClusterIcon}).addTo(map),
+    airData = null, airAt = 0, airTimer = null;
 function airPopup(s){
   var when = hhmm(s.at);
   return '<div class="shp"><b>'+esc(s.name)+'</b><div class="note">'+(s.province ? 'จ.'+esc(s.province) : "")+'</div>'+
@@ -1209,10 +1224,12 @@ function airPopup(s){
 function drawAir(){
   airLayer.clearLayers();
   if(!$("chkAir").checked || !airData) return;
-  airData.forEach(function(s){
-    L.marker([s.lat,s.lng],{icon:L.divIcon({className:"",html:'<div class="pmk lv'+s.level+'"><b>'+Math.round(s.pm25)+'</b></div>',iconSize:[34,22],iconAnchor:[17,11]}),
-      title:"PM2.5 "+Math.round(s.pm25)+" µg/ลบ.ม. "+s.label+" · "+s.name, keyboard:true, zIndexOffset:-500}).bindPopup(airPopup(s)).addTo(airLayer);
-  });
+  airLayer.addLayers(airData.map(function(s){
+    var big = s.level>=3;                                   // fair/good readings are small and quiet; the ones worth a look are larger and on top
+    return L.marker([s.lat,s.lng],{icon:L.divIcon({className:"", html:'<div class="pmk lv'+s.level+(big ? "" : " sm")+'"><b>'+Math.round(s.pm25)+'</b></div>',
+        iconSize:big ? [34,22] : [28,18], iconAnchor:big ? [17,11] : [14,9]}),
+      title:"PM2.5 "+Math.round(s.pm25)+" µg/ลบ.ม. "+s.label+" · "+s.name, keyboard:true, zIndexOffset:-600+s.level*100, pm:s.pm25, lvl:s.level}).bindPopup(airPopup(s));
+  }));
 }
 function loadAirLayer(){
   if(!$("chkAir").checked) return;
