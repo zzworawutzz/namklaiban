@@ -603,7 +603,7 @@ function airHtml(g, pt){
   }
   return head+list.map(function(r){
     return '<div class="dr"><span>'+esc(r.name)+'<small>'+(r.distance_km!=null ? r.distance_km+' กม. · ' : '')+'อัปเดต '+esc(hhmm(r.at))+' น.</small></span>'+
-           '<b>'+Math.round(r.pm25)+' <small style="display:inline">µg/ลบ.ม.</small></b> '+chip(r)+'</div>'; }).join("")+
+           '<span class="pv"><b>'+Math.round(r.pm25)+' <small style="display:inline">µg/ลบ.ม.</small></b>'+chip(r)+'</span></div>'; }).join("")+
     '<p class="note" style="margin:6px 0 0">วัดจริงจากสถานีของกรมควบคุมมลพิษ (Air4Thai) เป็นค่ารายชั่วโมงล่าสุด ส่วนระดับสีอิงเกณฑ์ค่าเฉลี่ย 24 ชม. จึงเป็นข้อมูลประกอบเท่านั้น ไม่ใช่คำแนะนำทางการแพทย์</p>';
 }
 function hhmm(iso){ try { return new Date(iso).toLocaleTimeString("th-TH",{timeZone:"Asia/Bangkok",hour:"2-digit",minute:"2-digit",hour12:false}); } catch(e){ return ""; } }
@@ -1210,7 +1210,7 @@ function showNearShelters(o){
 /* ---------- PM2.5 on the map (Air4Thai stations, via our API; a layer the user switches on) ---------- */
 function airClusterIcon(c){   // a group of stations: the worst reading in it, coloured by its level, with the count; zoom in to split it
   var kids = c.getAllChildMarkers(), worst = kids.reduce(function(a,m){ return m.options.pm > a.options.pm ? m : a; }, kids[0]);
-  return L.divIcon({className:"", iconSize:[52,24], iconAnchor:[26,12],
+  return L.divIcon({className:"", iconSize:[52,24], iconAnchor:[26,-16],     // hangs below the group's centre: the water group sits exactly there and would cover it
     html:'<div class="pmk pmc lv'+worst.options.lvl+'"><b>'+Math.round(worst.options.pm)+'</b><i>'+kids.length+'</i></div>'});
 }
 var airLayer = L.markerClusterGroup({showCoverageOnHover:false, maxClusterRadius:38, disableClusteringAtZoom:12, spiderfyOnMaxZoom:false, iconCreateFunction:airClusterIcon}).addTo(map),

@@ -397,3 +397,6 @@ svg.chart{width:100%;height:auto;display:block}
 .aqpin{position:absolute;top:-6px;width:0;height:0;margin-left:-7px;border-left:7px solid transparent;border-right:7px solid transparent;border-top:9px solid var(--ink);filter:drop-shadow(0 0 1.5px var(--surface)) drop-shadow(0 0 1.5px var(--surface))}
 .aqtk{position:absolute;left:0;right:0;top:13px;height:12px;font-size:11px;color:var(--muted)}
 .aqtk span{position:absolute;transform:translateX(-50%)}
+.air .dr>span:first-child{min-width:0;overflow-wrap:anywhere}
+.air .dr .pv{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex:none;max-width:132px;text-align:right}
+.air .dr .pv .lv{white-space:normal;line-height:1.25}
