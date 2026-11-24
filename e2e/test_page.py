@@ -344,6 +344,9 @@ def test_air_card_shows_measured_pm25_with_levels_and_the_caveat(page, site):
     text = page.inner_text("#airCard")
     assert "ฝุ่น PM2.5" in text and "22 " in text and "เฉลี่ยจาก 3 สถานี" in text and "สถานีฝุ่นสูง" in text and "31" in text, text
     assert "ปานกลาง" in text and "ดีมาก" in text and "ไม่ใช่คำแนะนำทางการแพทย์" in text and "Air4Thai" in text, text
+    pin = float(page.eval_on_selector("#airCard .aqpin", "e => parseFloat(e.style.left)"))     # the scale: 22.4 sits in the second band (15-25), a bit under its middle
+    assert 33 < pin < 37, pin
+    assert page.locator("#airCard .aqbar").get_attribute("aria-hidden") == "true"             # decorative: the same facts are already written out
     pill = page.locator("#airPillBtn")                                                  # the same number in the status pills at the top, no scrolling needed
     assert pill.inner_text() == "PM2.5 22 · ดี", pill.inner_text()
     assert "แตะเพื่อดูรายละเอียด" in pill.get_attribute("aria-label")
@@ -381,6 +384,32 @@ def test_air_layer_shows_pm25_tags_on_the_map_and_a_popup_with_the_caveat(page, 
             break
         page.wait_for_timeout(200)
     assert page.locator(".leaflet-marker-icon .pmk").count() == 0 and not page.is_checked("#chkAir")
+    assert not errors
+
+
+def test_air_tags_close_together_merge_into_one_that_shows_the_worst_reading_and_split_on_zoom(page, site, context):
+    def st(i, lat, lng, pm, level, label):
+        return {"id": i, "name": "สถานี"+i, "province": "ปทุมธานี", "lat": lat, "lng": lng, "pm25": pm, "level": level, "label": label, "at": "2026-11-19T13:00:00Z"}
+    import json
+    body = json.dumps({"as_of": "2026-11-19T13:00:00Z", "stations": [st("a", 14.0300, 100.7300, 41.3, 4, "เริ่มมีผลกระทบต่อสุขภาพ"), st("b", 14.0302, 100.7302, 12.0, 1, "ดีมาก"),
+                                                                    st("c", 14.0301, 100.7301, 19.0, 2, "ดี"), st("far", 14.60, 100.90, 8.0, 1, "ดีมาก")]})
+    context.route("**/api/air/stations", lambda r: r.fulfill(status=200, content_type="application/json", body=body))   # registered last, so it wins over the default stub
+    errors = watch(page)
+    open_page(page, site)
+    page.click("#btnLayers")
+    page.check("#chkAir")
+    page.wait_for_selector(".leaflet-marker-icon .pmk.pmc", timeout=10000)
+    cluster = page.locator(".leaflet-marker-icon .pmk.pmc")
+    assert cluster.count() == 1 and cluster.inner_text().replace("\n", " ").strip() == "41 3", cluster.inner_text()     # the worst of the three, and how many
+    assert "lv4" in cluster.get_attribute("class")                                                              # coloured by that worst reading
+    page.click("#btnLayers")
+    for _ in range(6):                                                                                          # tapping a group zooms in until it splits
+        if page.locator(".leaflet-marker-icon .pmk.pmc").count() == 0:
+            break
+        page.locator(".leaflet-marker-icon .pmk.pmc").first.click(force=True)
+        page.wait_for_timeout(700)
+    assert page.locator(".leaflet-marker-icon .pmk.pmc").count() == 0
+    assert page.locator(".leaflet-marker-icon .pmk.sm").count() >= 2                                              # the quiet readings are the smaller tags
     assert not errors
 
 
