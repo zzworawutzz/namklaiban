@@ -94,12 +94,14 @@ def test_silent_group_is_reported_once_and_again_when_back(tmp_path, monkeypatch
     for i in range(12):
         add_station(c, f"h{i}", "HII", f"P{i % 4}", 0.5)                  # a healthy agency
     for i in range(3):
-        add_station(c, f"r{i}", "RID", "สุราษฎร์ธานี", 9)                 # one province's RID stations all quiet
+        add_station(c, f"r{i}", "GPS", "สุราษฎร์ธานี", 9)                 # one province's stations of another agency all quiet
     for i in range(5):
-        add_station(c, f"e{i}", "RID", "นครสวรรค์", 0.5)
+        add_station(c, f"e{i}", "GPS", "นครสวรรค์", 0.5)
+    for i in range(6):
+        add_station(c, f"d{i}", "RID", "พระนครศรีอยุธยา", 9)              # RID goes quiet every night: not reported per province
     ingest_ok(c)
-    assert watchdog.silent_groups(c, AT) == ["RID จ.สุราษฎร์ธานี (3 สถานี)"]
-    assert watchdog.check_silent(c, AT, send) == "silent" and "RID จ.สุราษฎร์ธานี" in out[0]
+    assert watchdog.silent_groups(c, AT) == ["GPS จ.สุราษฎร์ธานี (3 สถานี)"]
+    assert watchdog.check_silent(c, AT, send) == "silent" and "GPS จ.สุราษฎร์ธานี" in out[0] and "RID" not in out[0]
     assert watchdog.check_silent(c, AT + timedelta(hours=1), send) is None      # no repeat
     c.execute("INSERT INTO readings VALUES('r0',?,1.0,50,'normal')", (core.iso(AT + timedelta(hours=1)),))
     c.execute("INSERT INTO readings VALUES('r1',?,1.0,50,'normal')", (core.iso(AT + timedelta(hours=1)),))
@@ -166,16 +168,16 @@ def test_watch_provinces_limits_silent_alerts_to_the_owners_own_provinces(tmp_pa
     for i in range(12):
         add_station(c, f"h{i}", "HII", f"P{i % 4}", 0.5)
     for i in range(3):
-        add_station(c, f"r{i}", "RID", "สุราษฎร์ธานี", 9)
+        add_station(c, f"r{i}", "GPS", "สุราษฎร์ธานี", 9)
     for i in range(3):
-        add_station(c, f"s{i}", "RID", "นครปฐม", 9)
+        add_station(c, f"s{i}", "GPS", "นครปฐม", 9)
     for i in range(30):
-        add_station(c, f"e{i}", "RID", "นครสวรรค์", 0.5)
+        add_station(c, f"e{i}", "GPS", "นครสวรรค์", 0.5)
     ingest_ok(c)
-    assert watchdog.silent_groups(c, AT) == ["RID จ.นครปฐม (3 สถานี)", "RID จ.สุราษฎร์ธานี (3 สถานี)"]   # nothing set: everywhere
+    assert watchdog.silent_groups(c, AT) == ["GPS จ.นครปฐม (3 สถานี)", "GPS จ.สุราษฎร์ธานี (3 สถานี)"]   # nothing set: everywhere
     assert watchdog.check_silent(c, AT, send) == "silent"
     monkeypatch.setenv("WATCH_PROVINCES", "นครปฐม, ปทุมธานี")
-    assert watchdog.silent_groups(c, AT) == ["RID จ.นครปฐม (3 สถานี)"]
+    assert watchdog.silent_groups(c, AT) == ["GPS จ.นครปฐม (3 สถานี)"]
     out.clear()
     assert watchdog.check_silent(c, AT + timedelta(hours=1), send) is None and out == []   # Surat Thani was dropped quietly, no "back" message
     monkeypatch.setenv("WATCH_PROVINCES", "ปทุมธานี")
@@ -187,7 +189,7 @@ def test_the_owners_own_alerts_are_counted_in_the_send_log(tmp_path, monkeypatch
     for i in range(12):
         add_station(c, f"h{i}", "HII", f"P{i % 4}", 0.5)
     for i in range(3):
-        add_station(c, f"r{i}", "RID", "สุราษฎร์ธานี", 9)
+        add_station(c, f"r{i}", "GPS", "สุราษฎร์ธานี", 9)
     ingest_ok(c)
     assert watchdog.check_silent(c, AT, lambda t, m: None) == "silent"
     rows = c.execute("SELECT kind, ok FROM send_log").fetchall()

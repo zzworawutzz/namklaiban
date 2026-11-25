@@ -209,6 +209,9 @@ SILENT_H = 6
 SILENT_MIN_STATIONS = 3          # a province needs this many stations from one agency to count as a group
 AGENCY_MIN_STATIONS, AGENCY_SILENT_SHARE = 10, 0.25
 SILENT_PREFIX = "silent:"
+# RID's stations go quiet overnight and come back in the morning (every night "6 stations of RID in Ayutthaya" would alert and
+# recover), so one province of RID is not reported; RID as a whole still is, through the agency-wide share above.
+PROVINCE_ALERT_EXEMPT = {"RID"}
 SILENT_LIST_MAX = 6
 
 
@@ -244,7 +247,7 @@ def silent_groups(conn, at):
         if n >= AGENCY_MIN_STATIONS and quiet / n >= AGENCY_SILENT_SHARE:
             out.append(f"หน่วยงาน {src} ({quiet} จาก {n} สถานี)")
     for (src, prov), (n, quiet) in by_prov.items():
-        if prov and n >= SILENT_MIN_STATIONS and quiet == n:
+        if prov and src not in PROVINCE_ALERT_EXEMPT and n >= SILENT_MIN_STATIONS and quiet == n:
             out.append(f"{src} จ.{prov} ({n} สถานี)")
     return sorted(out)
 
